@@ -201,6 +201,90 @@ export class MemStorage implements IStorage {
       };
       this.students.set(student.id, student);
     });
+
+    // Create demo posts
+    const demoPosts = [
+      {
+        studentId: studentId,
+        mediaUrl: "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&h=600",
+        mediaType: "image",
+        caption: "Amazing game last night! 🏀 Scored the winning shot with 2 seconds left on the clock. Nothing beats that feeling when hard work pays off! #Basketball #GameWinner #WashingtonEagles"
+      },
+      {
+        studentId: students[0].userId, // Marcus
+        mediaUrl: "https://images.unsplash.com/photo-1574626165906-9d6ef1fc4edc?auto=format&fit=crop&w=800&h=600",
+        mediaType: "image",
+        caption: "Training hard every day 💪 Working on my three-point shots. Coach says consistency is key! #BasketballLife #Training #NeverGiveUp"
+      },
+      {
+        studentId: students[1].userId, // Emma
+        mediaUrl: "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?auto=format&fit=crop&w=800&h=600",
+        mediaType: "image",
+        caption: "First goal of the season! ⚽ Team played amazing today. So proud of how far we've come this year. #Soccer #TeamWork #Goals"
+      },
+      {
+        studentId: studentId,
+        mediaUrl: "https://images.unsplash.com/photo-1627224031668-699709182015?auto=format&fit=crop&w=800&h=600",
+        mediaType: "video",
+        caption: "Highlight reel from yesterday's practice 🎥 Working on my handles and court vision. Thanks to Coach Johnson for the extra training! #Basketball #Skills #Dedication"
+      },
+      {
+        studentId: students[0].userId, // Marcus
+        mediaUrl: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&h=600",
+        mediaType: "image",
+        caption: "Team dinner after our big win! 🍕 Chemistry on and off the court is what makes us strong. Love this team! #TeamBonding #Basketball #Brotherhood"
+      }
+    ];
+
+    demoPosts.forEach(postData => {
+      const postId = randomUUID();
+      const post: Post = {
+        id: postId,
+        studentId: postData.studentId,
+        mediaUrl: postData.mediaUrl,
+        mediaType: postData.mediaType,
+        caption: postData.caption,
+        createdAt: new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)), // Random time within last week
+      };
+      this.posts.set(postId, post);
+
+      // Add some demo likes and comments
+      const numLikes = Math.floor(Math.random() * 50) + 10;
+      const numComments = Math.floor(Math.random() * 8) + 1;
+      
+      for (let i = 0; i < numLikes; i++) {
+        const likeId = randomUUID();
+        const like: Like = {
+          id: likeId,
+          postId: postId,
+          userId: Math.random() > 0.5 ? viewerId : schoolAdminId,
+          createdAt: new Date(),
+        };
+        this.likes.set(likeId, like);
+      }
+
+      for (let i = 0; i < numComments; i++) {
+        const commentId = randomUUID();
+        const comments = [
+          "Great shot! 🔥",
+          "Keep it up! You're doing amazing",
+          "So proud of you!",
+          "This is why you're the best player on the team",
+          "Can't wait to see you play next week",
+          "Your hard work is paying off!",
+          "Inspiring performance! 👏",
+          "Way to go! Keep pushing yourself"
+        ];
+        const comment: Comment = {
+          id: commentId,
+          postId: postId,
+          userId: Math.random() > 0.5 ? viewerId : schoolAdminId,
+          content: comments[Math.floor(Math.random() * comments.length)],
+          createdAt: new Date(),
+        };
+        this.comments.set(commentId, comment);
+      }
+    });
   }
 
   async getUser(id: string): Promise<User | undefined> {
