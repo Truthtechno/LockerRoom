@@ -58,7 +58,7 @@ export default function Profile() {
               {/* Profile Picture */}
               <img
                 className="w-32 h-32 rounded-full border-4 border-card shadow-lg mx-auto sm:mx-0"
-                src={studentProfile.profilePic}
+                src={studentProfile.profilePic || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"}
                 alt={`${studentProfile.user.name} profile`}
               />
               

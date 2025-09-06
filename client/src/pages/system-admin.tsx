@@ -5,11 +5,18 @@ import { Building2, Users, FileText, DollarSign, BarChart3, Settings, UserPlus, 
 import { Loader2 } from "lucide-react";
 
 export default function SystemAdmin() {
-  const { data: systemStats, isLoading } = useQuery({
+  const { data: systemStats, isLoading } = useQuery<{
+    totalSchools: number;
+    activeStudents: number;
+    contentUploads: number;
+    monthlyRevenue: number;
+    premiumSchools: number;
+    standardSchools: number;
+  }>({
     queryKey: ["/api/system/stats"],
   });
 
-  const { data: schools } = useQuery({
+  const { data: schools } = useQuery<any[]>({
     queryKey: ["/api/schools"],
   });
 

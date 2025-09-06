@@ -7,10 +7,10 @@ import { useAuth } from "@/hooks/use-auth";
 
 // Pages
 import Login from "@/pages/login";
-import Feed from "@/pages/feed";
-import Profile from "@/pages/profile";
-import SchoolAdmin from "@/pages/school-admin";
-import SystemAdmin from "@/pages/system-admin";
+import Feed from "./pages/feed";
+import Profile from "./pages/profile";
+import SchoolAdmin from "./pages/school-admin";
+import SystemAdmin from "./pages/system-admin";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ 

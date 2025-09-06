@@ -206,6 +206,8 @@ export class MemStorage implements IStorage {
     const user: User = { 
       ...insertUser, 
       id,
+      role: insertUser.role || "viewer",
+      schoolId: insertUser.schoolId || null,
       createdAt: new Date()
     };
     this.users.set(id, user);
@@ -234,6 +236,8 @@ export class MemStorage implements IStorage {
     const school: School = { 
       ...insertSchool, 
       id,
+      subscriptionPlan: insertSchool.subscriptionPlan || "standard",
+      maxStudents: insertSchool.maxStudents || 100,
       createdAt: new Date()
     };
     this.schools.set(id, school);
@@ -266,7 +270,17 @@ export class MemStorage implements IStorage {
 
   async createStudent(insertStudent: InsertStudent): Promise<Student> {
     const id = randomUUID();
-    const student: Student = { ...insertStudent, id };
+    const student: Student = { 
+      ...insertStudent, 
+      id,
+      roleNumber: insertStudent.roleNumber || null,
+      dateOfBirth: insertStudent.dateOfBirth || null,
+      position: insertStudent.position || null,
+      sport: insertStudent.sport || null,
+      profilePic: insertStudent.profilePic || null,
+      bio: insertStudent.bio || null,
+      coverPhoto: insertStudent.coverPhoto || null
+    };
     this.students.set(id, student);
     return student;
   }
@@ -365,6 +379,7 @@ export class MemStorage implements IStorage {
     const post: Post = { 
       ...insertPost, 
       id,
+      caption: insertPost.caption || null,
       createdAt: new Date()
     };
     this.posts.set(id, post);
@@ -443,7 +458,7 @@ export class MemStorage implements IStorage {
       totalStudents: schoolStudents.length,
       totalPosts: schoolPosts.length,
       totalEngagement: totalLikes + totalComments + totalSaves,
-      activeSports: [...new Set(schoolStudents.map(s => s.sport).filter(Boolean))].length,
+      activeSports: Array.from(new Set(schoolStudents.map(s => s.sport).filter(Boolean))).length,
     };
   }
 

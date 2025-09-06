@@ -8,12 +8,17 @@ import { Loader2 } from "lucide-react";
 export default function SchoolAdmin() {
   const { user } = useAuth();
   
-  const { data: schoolStats, isLoading } = useQuery({
+  const { data: schoolStats, isLoading } = useQuery<{
+    totalStudents: number;
+    totalPosts: number;
+    totalEngagement: number;
+    activeSports: number;
+  }>({
     queryKey: ["/api/schools", user?.schoolId, "stats"],
     enabled: !!user?.schoolId,
   });
 
-  const { data: students } = useQuery({
+  const { data: students } = useQuery<any[]>({
     queryKey: ["/api/schools", user?.schoolId, "students"],
     enabled: !!user?.schoolId,
   });
