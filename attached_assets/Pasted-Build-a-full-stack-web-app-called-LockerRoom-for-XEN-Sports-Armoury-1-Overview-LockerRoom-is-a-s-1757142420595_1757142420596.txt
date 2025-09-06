@@ -1,0 +1,92 @@
+Build a full-stack web app called LockerRoom for XEN Sports Armoury.
+
+1. Overview
+
+LockerRoom is a school-based sports social platform similar to Instagram but focused on students.
+	•	Students can upload videos/images of their games and highlights.
+	•	Users (friends, parents, colleagues, public) can view, like, comment, and save content.
+	•	Each student has a profile page showing their stats (views, likes, comments, saves).
+	•	Schools manage their students via a School Admin portal.
+	•	XEN Sports Armoury manages the entire ecosystem via a System Admin portal.
+
+2. User Roles & Permissions
+	•	System Admin (XEN)
+	•	Dashboard with global stats: number of schools, students, uploaded content.
+	•	Manage school subscriptions (limit how many students they can enroll).
+	•	Manage platform users (admins, managers, support, finance).
+	•	Approve or suspend schools.
+	•	Trigger system updates.
+	•	School Admin
+	•	Register their school.
+	•	Enroll students with a one-time password → students set their own password.
+	•	Manage student profiles.
+	•	View school stats (uploads, engagement).
+	•	Student
+	•	Create and edit their profile (name, role number, date of birth, position).
+	•	Upload videos/images (to be stored via Cloudinary).
+	•	View personal feed + stats (likes, comments, saves).
+	•	Interact with others’ posts (like, comment, save).
+	•	Public Viewer (Friends/Parents)
+	•	Browse student/public profiles.
+	•	Like, comment, and save posts.
+	•	No admin privileges.
+
+3. Demo Accounts
+	•	System Admin demo: admin@lockerroom.com / Admin123!
+	•	School Admin demo: school@lockerroom.com / School123!
+	•	Student demo: student@lockerroom.com / Student123!
+	•	Public demo: viewer@lockerroom.com / Viewer123!
+
+4. Core Features
+	•	Authentication (OTP → password reset → login).
+	•	User profile management.
+	•	Post creation (image/video upload, captions, tags).
+	•	Feed with like/comment/save functionality.
+	•	Stats dashboard for students and schools.
+	•	Admin dashboards for system and school roles.
+
+5. Database (Supabase-ready schema)
+	•	users → id, name, email, role (system_admin, school_admin, student, viewer), school_id.
+	•	schools → id, name, subscription_plan, max_students.
+	•	students → id, user_id, role_number, dob, profile_pic, bio.
+	•	posts → id, student_id, media_url (Cloudinary), caption, created_at.
+	•	likes → id, post_id, user_id.
+	•	comments → id, post_id, user_id, content, created_at.
+	•	saves → id, post_id, user_id.
+	•	subscriptions → id, school_id, plan_type, expiry_date.
+
+6. Media (Cloudinary-ready)
+	•	Integrate upload endpoints for images/videos via Cloudinary.
+	•	Apply auto-compression and adaptive streaming (q_auto, f_auto).
+	•	Limit max upload size (e.g., 100MB).
+
+7. Frontend Requirements
+	•	Tech stack: React (or Next.js).
+	•	Pages: Login/Register, Student Feed, Student Profile, School Dashboard, System Dashboard.
+	•	UI: Responsive, modern, Instagram-like layout.
+	•	Stats visualized with simple charts (e.g., Recharts).
+	•	Theme: XEN colors (Black #000000, Gold #ffaa00, White #FFFFFF, Grey #808080).
+	•	Use clean typography and grid-based layout.
+
+8. Backend Requirements
+	•	Node.js + Express (or Fastify).
+	•	RESTful API endpoints: auth, user, posts, comments, likes, saves, stats, schools, subscriptions.
+	•	JWT authentication.
+	•	Supabase as database (Postgres).
+
+9. Deliverables
+	•	A working full-stack project with authentication, roles, dashboards, and feed system.
+	•	Demo accounts preloaded.
+	•	Ready to link with Supabase (DB) and Cloudinary (media).
+	•	Simple deployment setup (Docker or Replit hosting).
+
+10. Stretch Features (optional if time permits)
+	•	Notification system (when someone likes/comments).
+	•	Search/browse by school or student.
+	•	Student ranking leaderboard (most liked content).
+	•	Mobile-friendly PWA setup (can be added to home screen).
+
+Notes
+	•	Focus on a clean MVP first (upload, feed, likes, comments, dashboards).
+	•	Write clean, modular code with clear separation of frontend and backend.
+	•	Use mock data where real integrations are not yet wired.
