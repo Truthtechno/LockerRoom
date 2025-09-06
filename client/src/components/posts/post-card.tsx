@@ -78,16 +78,16 @@ export default function PostCard({ post }: PostCardProps) {
           <div className="flex items-center space-x-3">
             <img
               className="h-12 w-12 rounded-full"
-              src={post.student.user.name === "Marcus Rodriguez" 
+              src={post.student?.user?.name === "Marcus Rodriguez" 
                 ? "https://images.unsplash.com/photo-1546525848-3ce03ca516f6?auto=format&fit=crop&w=400&h=400"
                 : "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"
               }
               alt="Student athlete"
             />
             <div>
-              <h3 className="font-semibold text-foreground">{post.student.user.name}</h3>
+              <h3 className="font-semibold text-foreground">{post.student?.user?.name || 'Unknown Student'}</h3>
               <p className="text-sm text-muted-foreground">
-                {post.student.sport} • #{post.student.roleNumber} • 2 hours ago
+                {post.student?.sport || 'Sports'} • #{post.student?.roleNumber || 'N/A'} • 2 hours ago
               </p>
             </div>
           </div>
@@ -168,8 +168,8 @@ export default function PostCard({ post }: PostCardProps) {
                 alt="Commenter"
               />
               <div className="flex-1">
-                <span className="font-medium text-foreground">{post.comments[0].user.name}</span>
-                <span className="text-muted-foreground ml-2">{post.comments[0].content}</span>
+                <span className="font-medium text-foreground">{post.comments[0]?.user?.name || 'Anonymous'}</span>
+                <span className="text-muted-foreground ml-2">{post.comments[0]?.content || ''}</span>
               </div>
             </div>
             {post.commentsCount > 1 && (
