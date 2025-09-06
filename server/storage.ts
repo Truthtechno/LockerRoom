@@ -14,9 +14,19 @@ import {
   type Save,
   type InsertSave,
   type PostWithDetails,
-  type StudentWithStats
+  type StudentWithStats,
+  users,
+  schools,
+  students,
+  posts,
+  likes,
+  comments,
+  saves
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import { eq, desc, sql } from 'drizzle-orm';
 
 export interface IStorage {
   // User operations
@@ -482,4 +492,384 @@ export class MemStorage implements IStorage {
   }
 }
 
+// Create database connection
+let db: any = null;
+let isDbConnected = false;
+
+try {
+  const sql_client = neon(process.env.DATABASE_URL!);
+  db = drizzle(sql_client);
+  isDbConnected = true;
+} catch (error) {
+  console.warn('Database connection failed, falling back to memory storage:', error);
+  isDbConnected = false;
+}
+
+export class PostgresStorage implements IStorage {
+  constructor() {
+    if (isDbConnected) {
+      this.initializeDemoData();
+    }
+  }
+
+  private async initializeDemoData() {
+    try {
+      // Check if demo data already exists
+      const existingUsers = await db.select().from(users).limit(1);
+      if (existingUsers.length > 0) {
+        return; // Demo data already exists
+      }
+
+      // Create demo school
+      const [school] = await db.insert(schools).values({
+        name: "Washington High School",
+        subscriptionPlan: "premium",
+        maxStudents: 500,
+      }).returning();
+
+      // Create demo users
+      const demoUsers = [
+        {
+          name: "James Wilson",
+          email: "admin@lockerroom.com",
+          password: "Admin123!",
+          role: "system_admin",
+          schoolId: null,
+        },
+        {
+          name: "Dr. Sarah Mitchell",
+          email: "school@lockerroom.com",
+          password: "School123!",
+          role: "school_admin",
+          schoolId: school.id,
+        },
+        {
+          name: "Alex Johnson",
+          email: "student@lockerroom.com",
+          password: "Student123!",
+          role: "student",
+          schoolId: school.id,
+        },
+        {
+          name: "John Viewer",
+          email: "viewer@lockerroom.com",
+          password: "Viewer123!",
+          role: "viewer",
+          schoolId: null,
+        },
+      ];
+
+      const createdUsers = await db.insert(users).values(demoUsers).returning();
+      const studentUser = createdUsers.find(u => u.role === "student")!;
+
+      // Create demo student profile
+      await db.insert(students).values({
+        userId: studentUser.id,
+        roleNumber: "23",
+        dateOfBirth: "2006-03-15",
+        position: "Point Guard",
+        sport: "Basketball",
+        profilePic: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400",
+        bio: "🏀 Point Guard | Team Captain | State Championship 2024 bound\n📍 Washington High Eagles\n🎯 \"Hard work beats talent when talent doesn't work hard\"\n📧 Contact: alexj@whs.edu",
+        coverPhoto: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&h=400",
+      });
+
+      // Create additional demo students
+      const additionalUsers = [
+        {
+          name: "Marcus Rodriguez",
+          email: "marcus@whs.edu",
+          password: "Demo123!",
+          role: "student",
+          schoolId: school.id,
+        },
+        {
+          name: "Emma Thompson",
+          email: "emma@whs.edu",
+          password: "Demo123!",
+          role: "student",
+          schoolId: school.id,
+        },
+      ];
+
+      const additionalCreatedUsers = await db.insert(users).values(additionalUsers).returning();
+      
+      const additionalStudents = [
+        {
+          userId: additionalCreatedUsers[0].id,
+          roleNumber: "15",
+          dateOfBirth: "2006-01-01",
+          position: "Forward",
+          sport: "Basketball",
+          profilePic: "https://images.unsplash.com/photo-1546525848-3ce03ca516f6?auto=format&fit=crop&w=400&h=400",
+          bio: "Basketball player at Washington High School",
+          coverPhoto: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&h=400",
+        },
+        {
+          userId: additionalCreatedUsers[1].id,
+          roleNumber: "7",
+          dateOfBirth: "2006-01-01",
+          position: "Midfielder",
+          sport: "Soccer",
+          profilePic: "https://images.unsplash.com/photo-1546525848-3ce03ca516f6?auto=format&fit=crop&w=400&h=400",
+          bio: "Soccer player at Washington High School",
+          coverPhoto: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&h=400",
+        },
+      ];
+
+      await db.insert(students).values(additionalStudents);
+    } catch (error) {
+      console.error('Error initializing demo data:', error);
+    }
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result[0];
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    return user;
+  }
+
+  async getSchool(id: string): Promise<School | undefined> {
+    const result = await db.select().from(schools).where(eq(schools.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getSchools(): Promise<School[]> {
+    return await db.select().from(schools);
+  }
+
+  async createSchool(insertSchool: InsertSchool): Promise<School> {
+    const [school] = await db.insert(schools).values(insertSchool).returning();
+    return school;
+  }
+
+  async updateSchool(id: string, updates: Partial<School>): Promise<School | undefined> {
+    const [school] = await db.update(schools).set(updates).where(eq(schools.id, id)).returning();
+    return school;
+  }
+
+  async getStudent(id: string): Promise<Student | undefined> {
+    const result = await db.select().from(students).where(eq(students.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getStudentByUserId(userId: string): Promise<Student | undefined> {
+    const result = await db.select().from(students).where(eq(students.userId, userId)).limit(1);
+    return result[0];
+  }
+
+  async getStudentsBySchool(schoolId: string): Promise<Student[]> {
+    const schoolUsers = await db.select().from(users).where(eq(users.schoolId, schoolId));
+    const userIds = schoolUsers.map(u => u.id);
+    if (userIds.length === 0) return [];
+    
+    const result = await db.select().from(students).where(sql`${students.userId} = ANY(${userIds})`);
+    return result;
+  }
+
+  async createStudent(insertStudent: InsertStudent): Promise<Student> {
+    const [student] = await db.insert(students).values(insertStudent).returning();
+    return student;
+  }
+
+  async updateStudent(id: string, updates: Partial<Student>): Promise<Student | undefined> {
+    const [student] = await db.update(students).set(updates).where(eq(students.id, id)).returning();
+    return student;
+  }
+
+  async getStudentWithStats(userId: string): Promise<StudentWithStats | undefined> {
+    const student = await this.getStudentByUserId(userId);
+    if (!student) return undefined;
+
+    const user = await this.getUser(userId);
+    if (!user) return undefined;
+
+    const school = user.schoolId ? await this.getSchool(user.schoolId) : undefined;
+    
+    const studentPosts = await db.select().from(posts).where(eq(posts.studentId, student.id));
+    const postsCount = studentPosts.length;
+    
+    let totalLikes = 0;
+    let totalViews = 0;
+    let totalSaves = 0;
+    let totalComments = 0;
+
+    for (const post of studentPosts) {
+      const postLikes = await db.select().from(likes).where(eq(likes.postId, post.id));
+      const postComments = await db.select().from(comments).where(eq(comments.postId, post.id));
+      const postSaves = await db.select().from(saves).where(eq(saves.postId, post.id));
+      
+      totalLikes += postLikes.length;
+      totalComments += postComments.length;
+      totalSaves += postSaves.length;
+      totalViews += Math.floor(Math.random() * 1000) + 100; // Mock views
+    }
+
+    return {
+      ...student,
+      user,
+      school,
+      postsCount,
+      totalLikes,
+      totalViews,
+      totalSaves,
+      totalComments,
+    };
+  }
+
+  async getPost(id: string): Promise<Post | undefined> {
+    const result = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getPosts(): Promise<PostWithDetails[]> {
+    const allPosts = await db.select().from(posts).orderBy(desc(posts.createdAt));
+    
+    const postsWithDetails: PostWithDetails[] = [];
+    
+    for (const post of allPosts) {
+      const student = await db.select().from(students).where(eq(students.id, post.studentId)).limit(1);
+      if (!student[0]) continue;
+      
+      const user = await db.select().from(users).where(eq(users.id, student[0].userId)).limit(1);
+      if (!user[0]) continue;
+      
+      const postLikes = await db.select().from(likes).where(eq(likes.postId, post.id));
+      const postComments = await db.select().from(comments).where(eq(comments.postId, post.id));
+      const postSaves = await db.select().from(saves).where(eq(saves.postId, post.id));
+      
+      const commentsWithUsers = [];
+      for (const comment of postComments) {
+        const commentUser = await db.select().from(users).where(eq(users.id, comment.userId)).limit(1);
+        if (commentUser[0]) {
+          commentsWithUsers.push({ ...comment, user: commentUser[0] });
+        }
+      }
+
+      postsWithDetails.push({
+        ...post,
+        student: { ...student[0], user: user[0] },
+        likes: postLikes,
+        comments: commentsWithUsers,
+        saves: postSaves,
+        likesCount: postLikes.length,
+        commentsCount: postComments.length,
+        savesCount: postSaves.length,
+        viewsCount: Math.floor(Math.random() * 2000) + 100,
+      });
+    }
+    
+    return postsWithDetails;
+  }
+
+  async getPostsByStudent(studentId: string): Promise<PostWithDetails[]> {
+    const allPosts = await this.getPosts();
+    return allPosts.filter(post => post.studentId === studentId);
+  }
+
+  async createPost(insertPost: InsertPost): Promise<Post> {
+    const [post] = await db.insert(posts).values(insertPost).returning();
+    return post;
+  }
+
+  async likePost(insertLike: InsertLike): Promise<Like> {
+    const [like] = await db.insert(likes).values(insertLike).returning();
+    return like;
+  }
+
+  async unlikePost(postId: string, userId: string): Promise<void> {
+    await db.delete(likes).where(sql`${likes.postId} = ${postId} AND ${likes.userId} = ${userId}`);
+  }
+
+  async commentOnPost(insertComment: InsertComment): Promise<Comment> {
+    const [comment] = await db.insert(comments).values(insertComment).returning();
+    return comment;
+  }
+
+  async savePost(insertSave: InsertSave): Promise<Save> {
+    const [save] = await db.insert(saves).values(insertSave).returning();
+    return save;
+  }
+
+  async unsavePost(postId: string, userId: string): Promise<void> {
+    await db.delete(saves).where(sql`${saves.postId} = ${postId} AND ${saves.userId} = ${userId}`);
+  }
+
+  async getSchoolStats(schoolId: string): Promise<any> {
+    const schoolStudents = await this.getStudentsBySchool(schoolId);
+    const studentIds = schoolStudents.map(s => s.id);
+    
+    if (studentIds.length === 0) {
+      return {
+        totalStudents: 0,
+        totalPosts: 0,
+        totalEngagement: 0,
+        activeSports: 0,
+      };
+    }
+    
+    const schoolPosts = await db.select().from(posts).where(sql`${posts.studentId} = ANY(${studentIds})`);
+    
+    let totalLikes = 0;
+    let totalComments = 0;
+    let totalSaves = 0;
+
+    for (const post of schoolPosts) {
+      const postLikes = await db.select().from(likes).where(eq(likes.postId, post.id));
+      const postComments = await db.select().from(comments).where(eq(comments.postId, post.id));
+      const postSaves = await db.select().from(saves).where(eq(saves.postId, post.id));
+      
+      totalLikes += postLikes.length;
+      totalComments += postComments.length;
+      totalSaves += postSaves.length;
+    }
+
+    return {
+      totalStudents: schoolStudents.length,
+      totalPosts: schoolPosts.length,
+      totalEngagement: totalLikes + totalComments + totalSaves,
+      activeSports: Array.from(new Set(schoolStudents.map(s => s.sport).filter(Boolean))).length,
+    };
+  }
+
+  async getSystemStats(): Promise<any> {
+    const allSchools = await db.select().from(schools);
+    const allUsers = await db.select().from(users);
+    const allPosts = await db.select().from(posts);
+    
+    const students = allUsers.filter(user => user.role === "student").length;
+    const premiumSchools = allSchools.filter(school => school.subscriptionPlan === "premium").length;
+    const standardSchools = allSchools.filter(school => school.subscriptionPlan === "standard").length;
+    
+    const monthlyRevenue = (premiumSchools * 150) + (standardSchools * 75);
+
+    return {
+      totalSchools: allSchools.length,
+      activeStudents: students,
+      contentUploads: allPosts.length,
+      monthlyRevenue,
+      premiumSchools,
+      standardSchools,
+    };
+  }
+}
+
+// Use memory storage for now due to connection issues
+// TODO: Switch to PostgreSQL when database connection is stable
 export const storage = new MemStorage();
+
+// MemStorage class is already exported above
