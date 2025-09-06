@@ -1,0 +1,149 @@
+import { sql } from "drizzle-orm";
+import { pgTable, text, varchar, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  role: text("role").notNull().default("viewer"), // system_admin, school_admin, student, viewer
+  schoolId: varchar("school_id"),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const schools = pgTable("schools", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  subscriptionPlan: text("subscription_plan").notNull().default("standard"), // standard, premium
+  maxStudents: integer("max_students").notNull().default(100),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const students = pgTable("students", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  roleNumber: text("role_number"),
+  dateOfBirth: text("date_of_birth"),
+  position: text("position"),
+  sport: text("sport"),
+  profilePic: text("profile_pic"),
+  bio: text("bio"),
+  coverPhoto: text("cover_photo"),
+});
+
+export const posts = pgTable("posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id").notNull(),
+  mediaUrl: text("media_url").notNull(),
+  mediaType: text("media_type").notNull(), // image, video
+  caption: text("caption"),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const likes = pgTable("likes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const comments = pgTable("comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const saves = pgTable("saves", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  schoolId: varchar("school_id").notNull(),
+  planType: text("plan_type").notNull(),
+  expiryDate: timestamp("expiry_date").notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+// Insert schemas
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSchoolSchema = createInsertSchema(schools).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertStudentSchema = createInsertSchema(students).omit({
+  id: true,
+});
+
+export const insertPostSchema = createInsertSchema(posts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertLikeSchema = createInsertSchema(likes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCommentSchema = createInsertSchema(comments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSaveSchema = createInsertSchema(saves).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types
+export type User = typeof users.$inferSelect;
+export type School = typeof schools.$inferSelect;
+export type Student = typeof students.$inferSelect;
+export type Post = typeof posts.$inferSelect;
+export type Like = typeof likes.$inferSelect;
+export type Comment = typeof comments.$inferSelect;
+export type Save = typeof saves.$inferSelect;
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertSchool = z.infer<typeof insertSchoolSchema>;
+export type InsertStudent = z.infer<typeof insertStudentSchema>;
+export type InsertPost = z.infer<typeof insertPostSchema>;
+export type InsertLike = z.infer<typeof insertLikeSchema>;
+export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type InsertSave = z.infer<typeof insertSaveSchema>;
+
+// Extended types for joins
+export type PostWithDetails = Post & {
+  student: Student & { user: User };
+  likes: Like[];
+  comments: (Comment & { user: User })[];
+  saves: Save[];
+  likesCount: number;
+  commentsCount: number;
+  savesCount: number;
+  viewsCount: number;
+  isLiked?: boolean;
+  isSaved?: boolean;
+};
+
+export type StudentWithStats = Student & {
+  user: User;
+  school?: School;
+  postsCount: number;
+  totalLikes: number;
+  totalViews: number;
+  totalSaves: number;
+  totalComments: number;
+};
