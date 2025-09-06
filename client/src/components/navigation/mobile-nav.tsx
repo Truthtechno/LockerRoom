@@ -26,8 +26,8 @@ export default function MobileNav() {
       <div className="grid grid-cols-5 py-2">
         {navigation.filter(item => !item.studentOnly || user?.role === "student").map((item) => (
           <Link key={item.name} href={item.href}>
-            <a
-              className={`flex flex-col items-center py-2 px-1 transition-colors ${
+            <div
+              className={`flex flex-col items-center py-2 px-1 transition-colors cursor-pointer ${
                 item.active ? "text-accent" : "text-muted-foreground"
               }`}
               data-testid={`mobile-nav-${item.name.toLowerCase()}`}
@@ -44,7 +44,7 @@ export default function MobileNav() {
                 <item.icon className="w-6 h-6" />
               )}
               <span className="text-xs mt-1">{item.name}</span>
-            </a>
+            </div>
           </Link>
         ))}
         
