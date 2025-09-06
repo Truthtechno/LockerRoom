@@ -1,7 +1,22 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
+import { v2 as cloudinary } from "cloudinary";
 import { storage } from "./storage";
-import { insertUserSchema, insertPostSchema, insertCommentSchema } from "@shared/schema";
+import { insertUserSchema, insertPostSchema, insertCommentSchema, insertFollowSchema } from "@shared/schema";
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Configure multer for file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -243,16 +258,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // File upload placeholder (ready for Cloudinary integration)
-  app.post("/api/upload", async (req, res) => {
+  // Cloudinary file upload
+  app.post("/api/upload", upload.single('file'), async (req, res) => {
     try {
-      // TODO: Implement Cloudinary upload
-      // For now, return a placeholder URL
-      const { file } = req.body;
-      const mockUrl = "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&h=600";
-      res.json({ url: mockUrl });
+      if (!req.file) {
+        return res.status(400).json({ message: "No file provided" });
+      }
+
+      // Upload to Cloudinary with transformations
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder: "lockerroom",
+            transformation: [
+              { width: 800, crop: "scale" },
+              { quality: "auto:good" },
+              { fetch_format: "auto" }
+            ],
+            resource_type: "auto"
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        ).end(req.file.buffer);
+      });
+
+      res.json({ 
+        url: (result as any).secure_url,
+        public_id: (result as any).public_id,
+        format: (result as any).format,
+        resource_type: (result as any).resource_type
+      });
     } catch (error) {
+      console.error('Upload error:', error);
       res.status(500).json({ message: "Upload failed" });
+    }
+  });
+
+  // Follow/Unfollow routes
+  app.post("/api/students/:studentId/follow", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "User ID required" });
+      }
+
+      // Check if already following
+      const isAlreadyFollowing = await storage.isFollowing(userId, studentId);
+      if (isAlreadyFollowing) {
+        return res.status(400).json({ message: "Already following this student" });
+      }
+
+      const follow = await storage.followStudent({ followerId: userId, followingId: studentId });
+      res.json(follow);
+    } catch (error) {
+      console.error('Follow error:', error);
+      res.status(400).json({ message: "Failed to follow student" });
+    }
+  });
+
+  app.delete("/api/students/:studentId/follow", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "User ID required" });
+      }
+
+      await storage.unfollowStudent(userId, studentId);
+      res.json({ message: "Unfollowed successfully" });
+    } catch (error) {
+      console.error('Unfollow error:', error);
+      res.status(400).json({ message: "Failed to unfollow student" });
+    }
+  });
+
+  app.get("/api/students/:studentId/followers", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const followers = await storage.getFollowers(studentId);
+      res.json(followers);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch followers" });
+    }
+  });
+
+  app.get("/api/users/:userId/following", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const following = await storage.getFollowing(userId);
+      res.json(following);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch following" });
+    }
+  });
+
+  // Search routes
+  app.get("/api/search/students", async (req, res) => {
+    try {
+      const { q: query, userId } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ message: "Search query required" });
+      }
+
+      const results = await storage.searchStudents(query, userId as string);
+      res.json(results);
+    } catch (error) {
+      console.error('Search error:', error);
+      res.status(500).json({ message: "Search failed" });
+    }
+  });
+
+  // Public signup route (enhanced from existing register)
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse({
+        ...req.body,
+        role: "viewer" // Force public users to be viewers
+      });
+      
+      const existingUser = await storage.getUserByEmail(userData.email);
+      
+      if (existingUser) {
+        return res.status(400).json({ message: "Email already registered" });
+      }
+
+      const user = await storage.createUser(userData);
+      res.json({ 
+        user: { 
+          id: user.id, 
+          name: user.name, 
+          email: user.email, 
+          role: user.role,
+          schoolId: user.schoolId 
+        },
+        message: "Account created successfully! You can now search and follow student athletes."
+      });
+    } catch (error) {
+      console.error('Signup error:', error);
+      res.status(400).json({ message: "Registration failed. Please check your information." });
     }
   });
 

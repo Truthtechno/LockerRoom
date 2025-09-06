@@ -72,6 +72,13 @@ export const subscriptions = pgTable("subscriptions", {
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
+export const follows = pgTable("follows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  followerId: varchar("follower_id").notNull(), // User who is following
+  followingId: varchar("following_id").notNull(), // Student being followed
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -107,6 +114,11 @@ export const insertSaveSchema = createInsertSchema(saves).omit({
   createdAt: true,
 });
 
+export const insertFollowSchema = createInsertSchema(follows).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type School = typeof schools.$inferSelect;
@@ -115,6 +127,7 @@ export type Post = typeof posts.$inferSelect;
 export type Like = typeof likes.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
 export type Save = typeof saves.$inferSelect;
+export type Follow = typeof follows.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
@@ -123,6 +136,7 @@ export type InsertPost = z.infer<typeof insertPostSchema>;
 export type InsertLike = z.infer<typeof insertLikeSchema>;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type InsertSave = z.infer<typeof insertSaveSchema>;
+export type InsertFollow = z.infer<typeof insertFollowSchema>;
 
 // Extended types for joins
 export type PostWithDetails = Post & {
@@ -146,4 +160,14 @@ export type StudentWithStats = Student & {
   totalViews: number;
   totalSaves: number;
   totalComments: number;
+  followersCount: number;
+  followingCount: number;
+  isFollowing?: boolean;
+};
+
+export type StudentSearchResult = Student & {
+  user: User;
+  school?: School;
+  followersCount: number;
+  isFollowing?: boolean;
 };

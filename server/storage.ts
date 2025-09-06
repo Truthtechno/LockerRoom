@@ -13,15 +13,19 @@ import {
   type InsertComment,
   type Save,
   type InsertSave,
+  type Follow,
+  type InsertFollow,
   type PostWithDetails,
   type StudentWithStats,
+  type StudentSearchResult,
   users,
   schools,
   students,
   posts,
   likes,
   comments,
-  saves
+  saves,
+  follows
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { neon } from '@neondatabase/serverless';
@@ -62,6 +66,14 @@ export interface IStorage {
   savePost(save: InsertSave): Promise<Save>;
   unsavePost(postId: string, userId: string): Promise<void>;
   
+  // Follow operations
+  followStudent(follow: InsertFollow): Promise<Follow>;
+  unfollowStudent(followerId: string, followingId: string): Promise<void>;
+  getFollowers(studentId: string): Promise<User[]>;
+  getFollowing(userId: string): Promise<Student[]>;
+  isFollowing(followerId: string, followingId: string): Promise<boolean>;
+  searchStudents(query: string, currentUserId?: string): Promise<StudentSearchResult[]>;
+  
   // Stats operations
   getSchoolStats(schoolId: string): Promise<any>;
   getSystemStats(): Promise<any>;
@@ -75,6 +87,7 @@ export class MemStorage implements IStorage {
   private likes: Map<string, Like> = new Map();
   private comments: Map<string, Comment> = new Map();
   private saves: Map<string, Save> = new Map();
+  private follows: Map<string, Follow> = new Map();
 
   constructor() {
     this.initializeDemoData();
@@ -416,6 +429,9 @@ export class MemStorage implements IStorage {
       totalViews += Math.floor(Math.random() * 1000) + 100; // Mock views
     });
 
+    const followersCount = Array.from(this.follows.values()).filter(follow => follow.followingId === student.id).length;
+    const followingCount = Array.from(this.follows.values()).filter(follow => follow.followerId === userId).length;
+
     return {
       ...student,
       user,
@@ -425,6 +441,8 @@ export class MemStorage implements IStorage {
       totalViews,
       totalSaves,
       totalComments,
+      followersCount,
+      followingCount,
     };
   }
 
@@ -573,6 +591,72 @@ export class MemStorage implements IStorage {
       premiumSchools,
       standardSchools,
     };
+  }
+
+  async followStudent(insertFollow: InsertFollow): Promise<Follow> {
+    const id = randomUUID();
+    const follow: Follow = { 
+      ...insertFollow, 
+      id,
+      createdAt: new Date()
+    };
+    this.follows.set(id, follow);
+    return follow;
+  }
+
+  async unfollowStudent(followerId: string, followingId: string): Promise<void> {
+    const follow = Array.from(this.follows.values()).find(
+      follow => follow.followerId === followerId && follow.followingId === followingId
+    );
+    if (follow) {
+      this.follows.delete(follow.id);
+    }
+  }
+
+  async getFollowers(studentId: string): Promise<User[]> {
+    const followRecords = Array.from(this.follows.values()).filter(follow => follow.followingId === studentId);
+    return followRecords.map(follow => this.users.get(follow.followerId)!).filter(Boolean);
+  }
+
+  async getFollowing(userId: string): Promise<Student[]> {
+    const followRecords = Array.from(this.follows.values()).filter(follow => follow.followerId === userId);
+    return followRecords.map(follow => 
+      Array.from(this.students.values()).find(student => student.id === follow.followingId)
+    ).filter(Boolean) as Student[];
+  }
+
+  async isFollowing(followerId: string, followingId: string): Promise<boolean> {
+    return Array.from(this.follows.values()).some(
+      follow => follow.followerId === followerId && follow.followingId === followingId
+    );
+  }
+
+  async searchStudents(query: string, currentUserId?: string): Promise<StudentSearchResult[]> {
+    const searchTerm = query.toLowerCase();
+    const results: StudentSearchResult[] = [];
+
+    for (const student of this.students.values()) {
+      const user = this.users.get(student.userId);
+      if (!user) continue;
+
+      // Search in name, sport, position
+      const searchableText = `${user.name} ${student.sport || ''} ${student.position || ''}`.toLowerCase();
+      if (searchableText.includes(searchTerm)) {
+        const school = user.schoolId ? this.schools.get(user.schoolId) : undefined;
+        const followersCount = Array.from(this.follows.values()).filter(follow => follow.followingId === student.id).length;
+        const isFollowing = currentUserId ? await this.isFollowing(currentUserId, student.id) : false;
+
+        results.push({
+          ...student,
+          user,
+          school,
+          followersCount,
+          isFollowing,
+        });
+      }
+    }
+
+    return results.sort((a, b) => b.followersCount - a.followersCount); // Sort by popularity
   }
 }
 
@@ -949,6 +1033,108 @@ export class PostgresStorage implements IStorage {
       premiumSchools,
       standardSchools,
     };
+  }
+
+  async followStudent(insertFollow: InsertFollow): Promise<Follow> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    const [follow] = await db.insert(follows).values(insertFollow).returning();
+    return follow;
+  }
+
+  async unfollowStudent(followerId: string, followingId: string): Promise<void> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    await db.delete(follows)
+      .where(sql`${follows.followerId} = ${followerId} AND ${follows.followingId} = ${followingId}`);
+  }
+
+  async getFollowers(studentId: string): Promise<User[]> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    const result = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        password: users.password,
+        role: users.role,
+        schoolId: users.schoolId,
+        createdAt: users.createdAt,
+      })
+      .from(follows)
+      .innerJoin(users, eq(follows.followerId, users.id))
+      .where(eq(follows.followingId, studentId));
+    return result;
+  }
+
+  async getFollowing(userId: string): Promise<Student[]> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    const result = await db
+      .select({
+        id: students.id,
+        userId: students.userId,
+        roleNumber: students.roleNumber,
+        dateOfBirth: students.dateOfBirth,
+        position: students.position,
+        sport: students.sport,
+        profilePic: students.profilePic,
+        bio: students.bio,
+        coverPhoto: students.coverPhoto,
+      })
+      .from(follows)
+      .innerJoin(students, eq(follows.followingId, students.id))
+      .where(eq(follows.followerId, userId));
+    return result;
+  }
+
+  async isFollowing(followerId: string, followingId: string): Promise<boolean> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    const result = await db
+      .select({ id: follows.id })
+      .from(follows)
+      .where(sql`${follows.followerId} = ${followerId} AND ${follows.followingId} = ${followingId}`)
+      .limit(1);
+    return result.length > 0;
+  }
+
+  async searchStudents(query: string, currentUserId?: string): Promise<StudentSearchResult[]> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    const searchTerm = `%${query.toLowerCase()}%`;
+    
+    const result = await db
+      .select({
+        student: students,
+        user: users,
+        school: schools,
+        followersCount: sql<number>`COUNT(${follows.id})`.as('followersCount'),
+      })
+      .from(students)
+      .innerJoin(users, eq(students.userId, users.id))
+      .leftJoin(schools, eq(users.schoolId, schools.id))
+      .leftJoin(follows, eq(follows.followingId, students.id))
+      .where(
+        sql`LOWER(${users.name}) LIKE ${searchTerm} OR 
+            LOWER(${students.sport}) LIKE ${searchTerm} OR 
+            LOWER(${students.position}) LIKE ${searchTerm}`
+      )
+      .groupBy(students.id, users.id, schools.id)
+      .orderBy(sql`COUNT(${follows.id}) DESC`);
+
+    // Check if current user is following each student
+    const resultsWithFollowStatus = await Promise.all(
+      result.map(async (row) => {
+        const isFollowing = currentUserId ? 
+          await this.isFollowing(currentUserId, row.student.id) : false;
+        
+        return {
+          ...row.student,
+          user: row.user,
+          school: row.school || undefined,
+          followersCount: row.followersCount,
+          isFollowing,
+        };
+      })
+    );
+
+    return resultsWithFollowStatus;
   }
 }
 
