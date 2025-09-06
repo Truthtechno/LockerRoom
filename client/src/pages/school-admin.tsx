@@ -1,12 +1,45 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import StatsCard from "@/components/stats/stats-card";
-import { Users, FileText, Heart, Trophy, UserPlus, BarChart3, Settings } from "lucide-react";
+import { Users, FileText, Heart, Trophy, UserPlus, BarChart3, Settings, LogOut } from "lucide-react";
 import { Loader2 } from "lucide-react";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SchoolAdmin() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const handleLogout = () => {
+    logout();
+    updateUser(null);
+    setLocation("/login");
+  };
+
+  const handleAddStudent = () => {
+    toast({
+      title: "Add Student",
+      description: "Student enrollment feature coming soon!",
+    });
+  };
+
+  const handleViewReports = () => {
+    toast({
+      title: "Reports",
+      description: "Advanced reporting dashboard coming soon!",
+    });
+  };
+
+  const handleManageSettings = () => {
+    toast({
+      title: "Settings",
+      description: "School settings panel coming soon!",
+    });
+  };
   
   const { data: schoolStats, isLoading } = useQuery<{
     totalStudents: number;
@@ -49,6 +82,7 @@ export default function SchoolAdmin() {
             
             <div className="flex items-center space-x-4">
               <Button 
+                onClick={handleAddStudent}
                 className="bg-accent hover:bg-accent/90 text-accent-foreground"
                 data-testid="button-add-student"
               >
@@ -56,12 +90,23 @@ export default function SchoolAdmin() {
                 Add Student
               </Button>
               <div className="flex items-center space-x-3">
-                <img
-                  className="h-8 w-8 rounded-full"
-                  src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&h=400"
-                  alt="Admin profile"
-                />
-                <span className="text-sm font-medium text-foreground">{user?.name}</span>
+                <ThemeToggle />
+                <Button
+                  onClick={handleLogout}
+                  variant="outline"
+                  size="icon"
+                  data-testid="admin-logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+                <div className="flex items-center space-x-3">
+                  <img
+                    className="h-8 w-8 rounded-full"
+                    src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&h=400"
+                    alt="Admin profile"
+                  />
+                  <span className="text-sm font-medium text-foreground">{user?.name}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -195,6 +240,7 @@ export default function SchoolAdmin() {
               <h2 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
               <div className="space-y-3">
                 <Button
+                  onClick={handleAddStudent}
                   className="w-full justify-start bg-accent hover:bg-accent/90 text-accent-foreground"
                   data-testid="button-add-new-student"
                 >
@@ -202,6 +248,7 @@ export default function SchoolAdmin() {
                   Add New Student
                 </Button>
                 <Button
+                  onClick={handleViewReports}
                   variant="secondary"
                   className="w-full justify-start"
                   data-testid="button-view-reports"
@@ -210,6 +257,7 @@ export default function SchoolAdmin() {
                   View Reports
                 </Button>
                 <Button
+                  onClick={handleManageSettings}
                   variant="secondary"
                   className="w-full justify-start"
                   data-testid="button-manage-settings"

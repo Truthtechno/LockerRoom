@@ -3,13 +3,26 @@ import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import CreatePost from "@/components/posts/create-post";
 import PostCard from "@/components/posts/post-card";
-import { Loader2 } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
+import { logout } from "@/lib/auth";
+import { Loader2, LogOut } from "lucide-react";
+import { useLocation } from "wouter";
 import type { PostWithDetails } from "@shared/schema";
 
 export default function Feed() {
   const { data: posts, isLoading, error } = useQuery<PostWithDetails[]>({
     queryKey: ["/api/posts"],
   });
+  const { user, updateUser } = useAuth();
+  const [, setLocation] = useLocation();
+
+  const handleLogout = () => {
+    logout();
+    updateUser(null);
+    setLocation("/login");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -25,6 +38,18 @@ export default function Feed() {
                 <span className="text-primary-foreground font-bold">LR</span>
               </div>
               <span className="ml-2 text-lg font-bold text-foreground">LockerRoom</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <ThemeToggle />
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                size="icon"
+                className="w-8 h-8"
+                data-testid="mobile-header-logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         </div>

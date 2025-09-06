@@ -1,10 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import StatsCard from "@/components/stats/stats-card";
-import { Building2, Users, FileText, DollarSign, BarChart3, Settings, UserPlus, Shield } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { logout } from "@/lib/auth";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { Building2, Users, FileText, DollarSign, BarChart3, Settings, UserPlus, Shield, LogOut } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
 export default function SystemAdmin() {
+  const { user, updateUser } = useAuth();
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
   const { data: systemStats, isLoading } = useQuery<{
     totalSchools: number;
     activeStudents: number;
@@ -19,6 +28,40 @@ export default function SystemAdmin() {
   const { data: schools } = useQuery<any[]>({
     queryKey: ["/api/schools"],
   });
+
+  const handleLogout = () => {
+    logout();
+    updateUser(null);
+    setLocation("/login");
+  };
+
+  const handleReviewApplications = () => {
+    toast({
+      title: "School Applications",
+      description: "School review system coming soon!",
+    });
+  };
+
+  const handlePlatformAnalytics = () => {
+    toast({
+      title: "Analytics",
+      description: "Advanced platform analytics coming soon!",
+    });
+  };
+
+  const handleSystemConfig = () => {
+    toast({
+      title: "Configuration",
+      description: "System configuration panel coming soon!",
+    });
+  };
+
+  const handleManageAdmins = () => {
+    toast({
+      title: "Admin Management",
+      description: "Administrator management system coming soon!",
+    });
+  };
 
   if (isLoading) {
     return (
@@ -50,12 +93,23 @@ export default function SystemAdmin() {
                 <span className="text-sm text-foreground">System Online</span>
               </div>
               <div className="flex items-center space-x-3">
-                <img
-                  className="h-8 w-8 rounded-full"
-                  src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&h=400"
-                  alt="System admin"
-                />
-                <span className="text-sm font-medium text-foreground">James Wilson</span>
+                <ThemeToggle />
+                <Button
+                  onClick={handleLogout}
+                  variant="outline"
+                  size="icon"
+                  data-testid="system-admin-logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+                <div className="flex items-center space-x-3">
+                  <img
+                    className="h-8 w-8 rounded-full"
+                    src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&h=400"
+                    alt="System admin"
+                  />
+                  <span className="text-sm font-medium text-foreground">{user?.name}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -196,6 +250,7 @@ export default function SystemAdmin() {
               <h2 className="text-lg font-semibold text-foreground mb-4">System Management</h2>
               <div className="space-y-3">
                 <Button
+                  onClick={handleReviewApplications}
                   className="w-full justify-between bg-accent hover:bg-accent/90 text-accent-foreground"
                   data-testid="button-review-applications"
                 >
@@ -207,6 +262,7 @@ export default function SystemAdmin() {
                 </Button>
                 
                 <Button
+                  onClick={handlePlatformAnalytics}
                   variant="secondary"
                   className="w-full justify-start"
                   data-testid="button-platform-analytics"
@@ -216,6 +272,7 @@ export default function SystemAdmin() {
                 </Button>
                 
                 <Button
+                  onClick={handleSystemConfig}
                   variant="secondary"
                   className="w-full justify-start"
                   data-testid="button-system-config"
@@ -225,6 +282,7 @@ export default function SystemAdmin() {
                 </Button>
                 
                 <Button
+                  onClick={handleManageAdmins}
                   variant="secondary"
                   className="w-full justify-start"
                   data-testid="button-manage-admins"

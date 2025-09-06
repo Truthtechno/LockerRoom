@@ -2,12 +2,28 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import StatsCard from "@/components/stats/stats-card";
+import { useToast } from "@/hooks/use-toast";
 import { Heart, Eye, MessageCircle, Bookmark, Edit3, Share } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import type { StudentWithStats, PostWithDetails } from "@shared/schema";
 
 export default function Profile() {
   const { user } = useAuth();
+  const { toast } = useToast();
+
+  const handleEditProfile = () => {
+    toast({
+      title: "Edit Profile",
+      description: "Profile editing feature coming soon!",
+    });
+  };
+
+  const handleShareProfile = () => {
+    toast({
+      title: "Share Profile",
+      description: "Profile sharing feature coming soon!",
+    });
+  };
   
   const { data: studentProfile, isLoading: profileLoading } = useQuery<StudentWithStats>({
     queryKey: ["/api/students/profile", user?.id],
@@ -93,6 +109,7 @@ export default function Profile() {
 
               <div className="flex flex-col sm:items-end space-y-3 mt-4 sm:mt-0">
                 <Button 
+                  onClick={handleEditProfile}
                   className="bg-accent hover:bg-accent/90 text-accent-foreground"
                   data-testid="button-edit-profile"
                 >
@@ -100,6 +117,7 @@ export default function Profile() {
                   Edit Profile
                 </Button>
                 <Button 
+                  onClick={handleShareProfile}
                   variant="secondary"
                   data-testid="button-share-profile"
                 >

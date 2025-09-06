@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Home, User, BarChart3, Settings, LogOut } from "lucide-react";
 
 export default function Sidebar() {
@@ -58,8 +59,12 @@ export default function Sidebar() {
             })}
           </nav>
 
-          {/* Logout Button */}
-          <div className="px-4 py-4">
+          {/* Theme Toggle and Logout */}
+          <div className="px-4 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">Theme</span>
+              <ThemeToggle />
+            </div>
             <Button
               onClick={handleLogout}
               variant="outline"
