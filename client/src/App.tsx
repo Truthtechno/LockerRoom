@@ -8,8 +8,10 @@ import { useAuth } from "@/hooks/use-auth";
 
 // Pages
 import Login from "@/pages/login";
+import Signup from "@/pages/signup";
 import Feed from "./pages/feed";
 import Profile from "./pages/profile";
+import SearchPage from "./pages/search";
 import SchoolAdmin from "./pages/school-admin";
 import SystemAdmin from "./pages/system-admin";
 import NotFound from "@/pages/not-found";
@@ -48,10 +50,17 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
       
       <Route path="/feed">
         <ProtectedRoute>
           <Feed />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/search">
+        <ProtectedRoute>
+          <SearchPage />
         </ProtectedRoute>
       </Route>
       
