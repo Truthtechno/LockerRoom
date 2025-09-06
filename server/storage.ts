@@ -94,11 +94,11 @@ export class MemStorage implements IStorage {
   }
 
   private initializeDemoData() {
-    // Create demo school
+    // Create demo soccer academy
     const schoolId = randomUUID();
     const school: School = {
       id: schoolId,
-      name: "Washington High School",
+      name: "Elite Soccer Academy",
       subscriptionPlan: "premium",
       maxStudents: 500,
       createdAt: new Date(),
@@ -121,7 +121,7 @@ export class MemStorage implements IStorage {
     const schoolAdminId = randomUUID();
     const schoolAdmin: User = {
       id: schoolAdminId,
-      name: "Dr. Sarah Mitchell",
+      name: "Coach Maria Santos",
       email: "school@lockerroom.com",
       password: "School123!",
       role: "school_admin",
@@ -133,7 +133,7 @@ export class MemStorage implements IStorage {
     const studentUserId = randomUUID();
     const studentUser: User = {
       id: studentUserId,
-      name: "Alex Johnson",
+      name: "Diego Rodriguez",
       email: "student@lockerroom.com",
       password: "Student123!",
       role: "student",
@@ -159,13 +159,13 @@ export class MemStorage implements IStorage {
     const student: Student = {
       id: studentId,
       userId: studentUserId,
-      roleNumber: "23",
+      roleNumber: "10",
       dateOfBirth: "2006-03-15",
-      position: "Point Guard",
-      sport: "Basketball",
-      profilePic: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400",
-      bio: "🏀 Point Guard | Team Captain | State Championship 2024 bound\n📍 Washington High Eagles\n🎯 \"Hard work beats talent when talent doesn't work hard\"\n📧 Contact: alexj@whs.edu",
-      coverPhoto: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&h=400",
+      position: "Attacking Midfielder",
+      sport: "Soccer",
+      profilePic: "https://images.unsplash.com/photo-1594736797933-d0281ba35a95?auto=format&fit=crop&w=400&h=400",
+      bio: "⚽ Attacking Midfielder | Team Captain | Regional Champions 2024\n📍 Elite Soccer Academy\n🎯 \"Skill and passion combined create magic\"\n📧 Contact: diego@elitesoccer.edu",
+      coverPhoto: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1920&h=400",
     };
     this.students.set(studentId, student);
 
@@ -173,19 +173,19 @@ export class MemStorage implements IStorage {
     const students = [
       {
         userId: randomUUID(),
-        name: "Marcus Rodriguez",
-        email: "marcus@whs.edu",
-        roleNumber: "15",
-        sport: "Basketball",
-        position: "Forward"
+        name: "Sofia Martinez",
+        email: "sofia@elitesoccer.edu",
+        roleNumber: "9",
+        sport: "Soccer",
+        position: "Striker"
       },
       {
         userId: randomUUID(),
-        name: "Emma Thompson",
-        email: "emma@whs.edu",
-        roleNumber: "7",
+        name: "Lucas Silva",
+        email: "lucas@elitesoccer.edu",
+        roleNumber: "4",
         sport: "Soccer",
-        position: "Midfielder"
+        position: "Defender"
       }
     ];
 
@@ -208,9 +208,9 @@ export class MemStorage implements IStorage {
         dateOfBirth: "2006-01-01",
         position: data.position,
         sport: data.sport,
-        profilePic: "https://images.unsplash.com/photo-1546525848-3ce03ca516f6?auto=format&fit=crop&w=400&h=400",
-        bio: `${data.sport} player at Washington High School`,
-        coverPhoto: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&h=400",
+        profilePic: "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?auto=format&fit=crop&w=400&h=400",
+        bio: `${data.sport} player at Elite Soccer Academy`,
+        coverPhoto: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1920&h=400",
       };
       this.students.set(student.id, student);
     });
@@ -219,33 +219,33 @@ export class MemStorage implements IStorage {
     const demoPosts = [
       {
         studentId: studentId,
-        mediaUrl: "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&h=600",
+        mediaUrl: "https://images.unsplash.com/photo-1579952363873-27d3bfad9c0d?auto=format&fit=crop&w=800&h=600",
         mediaType: "image",
-        caption: "Amazing game last night! 🏀 Scored the winning shot with 2 seconds left on the clock. Nothing beats that feeling when hard work pays off! #Basketball #GameWinner #WashingtonEagles"
+        caption: "Amazing match last night! ⚽ Scored the winning goal in the 89th minute. Nothing beats that feeling when hard work pays off! #Soccer #GameWinner #EliteSoccerAcademy"
       },
       {
-        studentId: students[0].userId, // Marcus
-        mediaUrl: "https://images.unsplash.com/photo-1574626165906-9d6ef1fc4edc?auto=format&fit=crop&w=800&h=600",
+        studentId: students[0].userId, // Sofia
+        mediaUrl: "https://images.unsplash.com/photo-1560272564-c83b66b1ad12?auto=format&fit=crop&w=800&h=600",
         mediaType: "image",
-        caption: "Training hard every day 💪 Working on my three-point shots. Coach says consistency is key! #BasketballLife #Training #NeverGiveUp"
+        caption: "Training hard every day 💪 Working on my finishing in the box. Coach Santos says precision is key! #SoccerLife #Training #NeverGiveUp"
       },
       {
-        studentId: students[1].userId, // Emma
+        studentId: students[1].userId, // Lucas
         mediaUrl: "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?auto=format&fit=crop&w=800&h=600",
         mediaType: "image",
-        caption: "First goal of the season! ⚽ Team played amazing today. So proud of how far we've come this year. #Soccer #TeamWork #Goals"
+        caption: "Clean sheet today! 🥅 Defense worked perfectly as a unit. So proud of how far we've come this season. #Soccer #TeamWork #Defense"
       },
       {
         studentId: studentId,
-        mediaUrl: "https://images.unsplash.com/photo-1627224031668-699709182015?auto=format&fit=crop&w=800&h=600",
-        mediaType: "video",
-        caption: "Highlight reel from yesterday's practice 🎥 Working on my handles and court vision. Thanks to Coach Johnson for the extra training! #Basketball #Skills #Dedication"
+        mediaUrl: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=800&h=600",
+        mediaType: "image",
+        caption: "Highlight reel from yesterday's practice 🎥 Working on my passing and vision. Thanks to Coach Santos for the extra training! #Soccer #Skills #Dedication"
       },
       {
-        studentId: students[0].userId, // Marcus
-        mediaUrl: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&h=600",
+        studentId: students[0].userId, // Sofia
+        mediaUrl: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=800&h=600",
         mediaType: "image",
-        caption: "Team dinner after our big win! 🍕 Chemistry on and off the court is what makes us strong. Love this team! #TeamBonding #Basketball #Brotherhood"
+        caption: "Team celebration after our big win! 🎉 Chemistry on and off the field is what makes us strong. Love this team! #TeamBonding #Soccer #Family"
       }
     ];
 
@@ -279,14 +279,16 @@ export class MemStorage implements IStorage {
       for (let i = 0; i < numComments; i++) {
         const commentId = randomUUID();
         const comments = [
-          "Great shot! 🔥",
+          "Great goal! ⚽🔥",
           "Keep it up! You're doing amazing",
           "So proud of you!",
           "This is why you're the best player on the team",
-          "Can't wait to see you play next week",
+          "Can't wait to see you play next match",
           "Your hard work is paying off!",
           "Inspiring performance! 👏",
-          "Way to go! Keep pushing yourself"
+          "Way to go! Keep pushing yourself",
+          "Beautiful technique! 🙌",
+          "That touch was incredible!"
         ];
         const comment: Comment = {
           id: commentId,
@@ -690,7 +692,7 @@ export class PostgresStorage implements IStorage {
 
       // Create demo school
       const [school] = await db.insert(schools).values({
-        name: "Washington High School",
+        name: "Elite Soccer Academy",
         subscriptionPlan: "premium",
         maxStudents: 500,
       }).returning();
@@ -705,14 +707,14 @@ export class PostgresStorage implements IStorage {
           schoolId: null,
         },
         {
-          name: "Dr. Sarah Mitchell",
+          name: "Coach Maria Santos",
           email: "school@lockerroom.com",
           password: "School123!",
           role: "school_admin",
           schoolId: school.id,
         },
         {
-          name: "Alex Johnson",
+          name: "Diego Rodriguez",
           email: "student@lockerroom.com",
           password: "Student123!",
           role: "student",
@@ -733,27 +735,27 @@ export class PostgresStorage implements IStorage {
       // Create demo student profile
       await db.insert(students).values({
         userId: studentUser.id,
-        roleNumber: "23",
+        roleNumber: "10",
         dateOfBirth: "2006-03-15",
-        position: "Point Guard",
-        sport: "Basketball",
-        profilePic: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400",
-        bio: "🏀 Point Guard | Team Captain | State Championship 2024 bound\n📍 Washington High Eagles\n🎯 \"Hard work beats talent when talent doesn't work hard\"\n📧 Contact: alexj@whs.edu",
-        coverPhoto: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&h=400",
+        position: "Attacking Midfielder",
+        sport: "Soccer",
+        profilePic: "https://images.unsplash.com/photo-1594736797933-d0281ba35a95?auto=format&fit=crop&w=400&h=400",
+        bio: "⚽ Attacking Midfielder | Team Captain | Regional Champions 2024\n📍 Elite Soccer Academy\n🎯 \"Skill and passion combined create magic\"\n📧 Contact: diego@elitesoccer.edu",
+        coverPhoto: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1920&h=400",
       });
 
       // Create additional demo students
       const additionalUsers = [
         {
-          name: "Marcus Rodriguez",
-          email: "marcus@whs.edu",
+          name: "Sofia Martinez",
+          email: "sofia@elitesoccer.edu",
           password: "Demo123!",
           role: "student",
           schoolId: school.id,
         },
         {
-          name: "Emma Thompson",
-          email: "emma@whs.edu",
+          name: "Lucas Silva",
+          email: "lucas@elitesoccer.edu",
           password: "Demo123!",
           role: "student",
           schoolId: school.id,
@@ -765,23 +767,23 @@ export class PostgresStorage implements IStorage {
       const additionalStudents = [
         {
           userId: additionalCreatedUsers[0].id,
-          roleNumber: "15",
+          roleNumber: "9",
           dateOfBirth: "2006-01-01",
-          position: "Forward",
-          sport: "Basketball",
-          profilePic: "https://images.unsplash.com/photo-1546525848-3ce03ca516f6?auto=format&fit=crop&w=400&h=400",
-          bio: "Basketball player at Washington High School",
-          coverPhoto: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&h=400",
+          position: "Striker",
+          sport: "Soccer",
+          profilePic: "https://images.unsplash.com/photo-1551698618-1dfe5d97d256?auto=format&fit=crop&w=400&h=400",
+          bio: "Soccer striker at Elite Soccer Academy",
+          coverPhoto: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1920&h=400",
         },
         {
           userId: additionalCreatedUsers[1].id,
-          roleNumber: "7",
+          roleNumber: "4",
           dateOfBirth: "2006-01-01",
-          position: "Midfielder",
+          position: "Defender",
           sport: "Soccer",
-          profilePic: "https://images.unsplash.com/photo-1546525848-3ce03ca516f6?auto=format&fit=crop&w=400&h=400",
-          bio: "Soccer player at Washington High School",
-          coverPhoto: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1920&h=400",
+          profilePic: "https://images.unsplash.com/photo-1594736797933-d0281ba35a95?auto=format&fit=crop&w=400&h=400",
+          bio: "Soccer defender at Elite Soccer Academy",
+          coverPhoto: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1920&h=400",
         },
       ];
 
