@@ -1,0 +1,45 @@
+LockerRoom system with the following requirements. I want you to generate a complete, professional, full-stack solution and provide testing feedback.
+
+Core Requirements:
+	1.	User Signup & Authentication:
+	•	Create a signup portal for public viewers.
+	•	Public users should be able to create an account, log in, and search for student accounts by name.
+	•	Implement proper validation and secure authentication.
+	2.	Public Feed:
+	•	Display posts from students in a feed format, similar to Instagram.
+	•	Public viewers should be able to follow/unfollow students.
+	•	Display student profile info and media (images/videos).
+	3.	Media Uploads:
+	•	Integrate Cloudinary for image and video uploads with the following settings:
+	•	Upload Preset: lockerroom_upload (unsigned)
+	•	Folder: lockerroom
+	•	Transformation: c_scale,w_800,q_auto:good,f_auto,vc_auto
+	•	Backend Node.js code should handle uploads from student accounts.
+	•	Frontend should allow direct unsigned uploads using <input type="file">.
+	•	Ensure uploaded media URLs are stored in the database.
+	4.	Database Integration:
+	•	Connect to Supabase for storing user accounts, student posts, followers, and media URLs.
+	•	Ensure all database operations (create, read, update, delete) are functional.
+	5.	Testing & Feedback:
+	•	Test all connections (Supabase & Cloudinary) to ensure everything is responding.
+	•	Perform test cases for:
+	•	Account creation
+	•	Login/logout
+	•	Media upload (images/videos)
+	•	Searching student accounts
+	•	Following/unfollowing students
+	•	Feed display and media loading
+	•	Submit a comprehensive report detailing:
+	•	What is functioning as expected
+	•	Any errors or failures encountered
+	•	General usability feedback and suggestions for improvement
+
+Deliverables:
+	•	Fully functional signup portal with authentication
+	•	Public feed with search and follow/unfollow functionality
+	•	Backend Node.js code for media uploads to Cloudinary
+	•	Frontend browser integration for direct unsigned uploads
+	•	Supabase database schema for users, posts, and followers
+	•	Testing report with detailed feedback on all functionalities
+
+Ensure the solution is professional, clean, and scalable. Include comments in the code to explain functionality for future maintenance.
