@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Heart, MessageCircle, Bookmark, MoreHorizontal, Send } from "lucide-react";
+import { Heart, MessageCircle, Bookmark, MoreHorizontal, Send, UserPlus, UserCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import type { PostWithDetails } from "@shared/schema";
 
@@ -20,6 +20,24 @@ export default function PostCard({ post }: PostCardProps) {
   const [isSaved, setIsSaved] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [newComment, setNewComment] = useState("");
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  // Check if following the student
+  const { data: followStatus } = useQuery({
+    queryKey: ["/api/students/follow-status", post.student?.id, user?.id],
+    queryFn: async () => {
+      if (!user || !post.student?.id) return false;
+      const response = await fetch(`/api/students/${post.student.id}/is-following?userId=${user.id}`);
+      return response.json();
+    },
+    enabled: !!user && !!post.student?.id,
+  });
+
+  useEffect(() => {
+    if (followStatus !== undefined) {
+      setIsFollowing(followStatus);
+    }
+  }, [followStatus]);
 
   const likeMutation = useMutation({
     mutationFn: async () => {
@@ -88,6 +106,32 @@ export default function PostCard({ post }: PostCardProps) {
     },
   });
 
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      const method = isFollowing ? "DELETE" : "POST";
+      await fetch(`/api/students/${post.student?.id}/follow`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id }),
+      });
+    },
+    onSuccess: () => {
+      setIsFollowing(!isFollowing);
+      queryClient.invalidateQueries({ queryKey: ["/api/students/follow-status"] });
+      toast({
+        title: isFollowing ? "Unfollowed" : "Following",
+        description: `You are ${isFollowing ? 'no longer following' : 'now following'} ${post.student?.user?.name}`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update follow status",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLike = () => {
     if (!user) return;
     likeMutation.mutate();
@@ -122,6 +166,18 @@ export default function PostCard({ post }: PostCardProps) {
     }
   };
 
+  const handleFollow = () => {
+    if (!user || !post.student?.id) {
+      toast({
+        title: "Login required",
+        description: "Please log in to follow student athletes.",
+        variant: "destructive",
+      });
+      return;
+    }
+    followMutation.mutate();
+  };
+
   return (
     <div className="bg-card border border-border rounded-xl mb-6 shadow-sm post-card transition-all duration-200">
       {/* Post Header */}
@@ -143,9 +199,35 @@ export default function PostCard({ post }: PostCardProps) {
               </p>
             </div>
           </div>
-          <button className="p-2 text-muted-foreground hover:bg-muted rounded-lg">
-            <MoreHorizontal className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {user && user.role === 'viewer' && (
+              <Button
+                onClick={handleFollow}
+                disabled={followMutation.isPending}
+                variant={isFollowing ? "outline" : "default"}
+                size="sm"
+                className={isFollowing ? "bg-background hover:bg-muted" : "bg-accent hover:bg-accent/90"}
+                data-testid={`follow-button-post-${post.id}`}
+              >
+                {followMutation.isPending ? (
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : isFollowing ? (
+                  <>
+                    <UserCheck className="w-4 h-4 mr-1" />
+                    Following
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-4 h-4 mr-1" />
+                    Follow
+                  </>
+                )}
+              </Button>
+            )}
+            <button className="p-2 text-muted-foreground hover:bg-muted rounded-lg">
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
 
