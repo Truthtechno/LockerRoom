@@ -20,7 +20,7 @@ import { logout } from "@/lib/auth";
 import { useLocation } from "wouter";
 import type { StudentWithStats } from "@shared/schema";
 
-export default function StudentSettings() {
+export default function Settings() {
   const { user, updateUser } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -33,6 +33,12 @@ export default function StudentSettings() {
     phone: "",
     position: "",
     roleNumber: "",
+  });
+
+  const [viewerProfileData, setViewerProfileData] = useState({
+    name: "",
+    bio: "",
+    phone: "",
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -51,13 +57,20 @@ export default function StudentSettings() {
     allowDirectMessages: true,
   });
 
-  const { data: studentProfile, isLoading } = useQuery<StudentWithStats>({
+  const { data: studentProfile, isLoading: studentLoading } = useQuery<StudentWithStats>({
     queryKey: ["/api/students/profile", user?.id],
-    enabled: !!user?.id,
+    enabled: !!user?.id && user?.role === "student",
   });
 
+  const { data: userProfile, isLoading: userLoading } = useQuery({
+    queryKey: ["/api/users/me", user?.id],
+    enabled: !!user?.id && user?.role === "viewer",
+  });
+
+  const isLoading = user?.role === "student" ? studentLoading : userLoading;
+
   useEffect(() => {
-    if (studentProfile) {
+    if (user?.role === "student" && studentProfile) {
       setProfileData({
         name: studentProfile.name || "",
         bio: studentProfile.bio || "",
@@ -65,19 +78,33 @@ export default function StudentSettings() {
         position: studentProfile.position || "",
         roleNumber: studentProfile.roleNumber || "",
       });
+    } else if (user?.role === "viewer" && userProfile) {
+      setViewerProfileData({
+        name: user.name || "",
+        bio: "",
+        phone: "",
+      });
     }
-  }, [studentProfile]);
+  }, [studentProfile, userProfile, user]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async (updates: any) => {
-      return apiRequest(`/api/students/profile/${user?.id}`, "PUT", updates);
+      if (user?.role === "student") {
+        return apiRequest(`/api/students/profile/${user?.id}`, "PUT", updates);
+      } else if (user?.role === "viewer") {
+        return apiRequest(`/api/users/${user?.id}`, "PUT", updates);
+      }
     },
     onSuccess: () => {
       toast({
         title: "Profile updated",
         description: "Your profile has been updated successfully!",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/students/profile"] });
+      if (user?.role === "student") {
+        queryClient.invalidateQueries({ queryKey: ["/api/students/profile"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      }
     },
     onError: () => {
       toast({
@@ -89,7 +116,8 @@ export default function StudentSettings() {
   });
 
   const handleProfileSave = () => {
-    updateProfileMutation.mutate(profileData);
+    const dataToUpdate = user?.role === "student" ? profileData : viewerProfileData;
+    updateProfileMutation.mutate(dataToUpdate);
   };
 
   const handleLogout = () => {
@@ -104,6 +132,21 @@ export default function StudentSettings() {
       title: "Notification settings saved",
       description: "Your notification preferences have been updated.",
     });
+  };
+
+  const updateViewerNotificationSettings = (key: string, value: boolean) => {
+    const updatedSettings = { ...notificationSettings, [key]: value };
+    
+    // For viewers, simplify notification types
+    if (user?.role === "viewer") {
+      setNotificationSettings({
+        ...updatedSettings,
+        postLikes: false, // Viewers don't post content
+        teamUpdates: false, // Viewers aren't on teams
+      });
+    } else {
+      setNotificationSettings(updatedSettings);
+    }
   };
 
   const savePrivacySettings = () => {
@@ -125,10 +168,10 @@ export default function StudentSettings() {
     );
   }
 
-  if (!studentProfile) {
+  if (user?.role === "student" && !studentProfile && !studentLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-destructive">Profile not found</p>
+        <p className="text-destructive">Student profile not found</p>
       </div>
     );
   }
@@ -150,7 +193,7 @@ export default function StudentSettings() {
             </div>
             <Badge variant="outline" className="flex items-center">
               <User className="w-4 h-4 mr-2" />
-              Student
+              {user?.role === "student" ? "Student" : "Viewer"}
             </Badge>
           </div>
         </div>
@@ -164,19 +207,25 @@ export default function StudentSettings() {
                 Profile Information
               </CardTitle>
               <CardDescription>
-                Update your personal information and sports details
+                {user?.role === "student" 
+                  ? "Update your personal information and sports details"
+                  : "Update your personal information and preferences"
+                }
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Profile Picture */}
               <div className="flex items-center space-x-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage src={studentProfile?.profilePic || ""} alt={studentProfile?.name || "Profile"} />
-                  <AvatarFallback>{studentProfile?.name?.slice(0, 2).toUpperCase() || "U"}</AvatarFallback>
+                  <AvatarImage 
+                    src={user?.role === "student" ? studentProfile?.profilePic || "" : ""} 
+                    alt={user?.name || "Profile"} 
+                  />
+                  <AvatarFallback>{user?.name?.slice(0, 2).toUpperCase() || "U"}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-medium">{studentProfile?.name}</h3>
-                  <p className="text-sm text-muted-foreground">{studentProfile?.email}</p>
+                  <h3 className="font-medium">{user?.name}</h3>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
                   <Button variant="outline" size="sm" className="mt-2">
                     <Camera className="w-4 h-4 mr-2" />
                     Change Photo
@@ -187,68 +236,109 @@ export default function StudentSettings() {
               <Separator />
 
               {/* Profile Form */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    value={profileData.name}
-                    onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                    data-testid="input-settings-name"
-                  />
-                </div>
+              {user?.role === "student" ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Full Name</Label>
+                      <Input
+                        id="name"
+                        value={profileData.name}
+                        onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                        data-testid="input-settings-name"
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    value={profileData.phone}
-                    onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                    placeholder="+1 (555) 123-4567"
-                    data-testid="input-settings-phone"
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input
+                        id="phone"
+                        value={profileData.phone}
+                        onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                        placeholder="+1 (555) 123-4567"
+                        data-testid="input-settings-phone"
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="position">Position</Label>
-                  <Select value={profileData.position} onValueChange={(value) => setProfileData({ ...profileData, position: value })}>
-                    <SelectTrigger data-testid="select-settings-position">
-                      <SelectValue placeholder="Select position" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="goalkeeper">Goalkeeper</SelectItem>
-                      <SelectItem value="defender">Defender</SelectItem>
-                      <SelectItem value="midfielder">Midfielder</SelectItem>
-                      <SelectItem value="attacking-midfielder">Attacking Midfielder</SelectItem>
-                      <SelectItem value="forward">Forward</SelectItem>
-                      <SelectItem value="striker">Striker</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="position">Position</Label>
+                      <Select value={profileData.position} onValueChange={(value) => setProfileData({ ...profileData, position: value })}>
+                        <SelectTrigger data-testid="select-settings-position">
+                          <SelectValue placeholder="Select position" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="goalkeeper">Goalkeeper</SelectItem>
+                          <SelectItem value="defender">Defender</SelectItem>
+                          <SelectItem value="midfielder">Midfielder</SelectItem>
+                          <SelectItem value="attacking-midfielder">Attacking Midfielder</SelectItem>
+                          <SelectItem value="forward">Forward</SelectItem>
+                          <SelectItem value="striker">Striker</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="roleNumber">Jersey Number</Label>
-                  <Input
-                    id="roleNumber"
-                    value={profileData.roleNumber}
-                    onChange={(e) => setProfileData({ ...profileData, roleNumber: e.target.value })}
-                    placeholder="10"
-                    data-testid="input-settings-jersey"
-                  />
-                </div>
-              </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="roleNumber">Jersey Number</Label>
+                      <Input
+                        id="roleNumber"
+                        value={profileData.roleNumber}
+                        onChange={(e) => setProfileData({ ...profileData, roleNumber: e.target.value })}
+                        placeholder="10"
+                        data-testid="input-settings-jersey"
+                      />
+                    </div>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="bio">Bio</Label>
-                <Textarea
-                  id="bio"
-                  value={profileData.bio}
-                  onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                  placeholder="Tell everyone about yourself, your achievements, and goals..."
-                  rows={4}
-                  data-testid="textarea-settings-bio"
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bio">Bio</Label>
+                    <Textarea
+                      id="bio"
+                      value={profileData.bio}
+                      onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
+                      placeholder="Tell everyone about yourself, your achievements, and goals..."
+                      rows={4}
+                      data-testid="textarea-settings-bio"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="viewer-name">Full Name</Label>
+                      <Input
+                        id="viewer-name"
+                        value={viewerProfileData.name}
+                        onChange={(e) => setViewerProfileData({ ...viewerProfileData, name: e.target.value })}
+                        data-testid="input-settings-name"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="viewer-phone">Phone Number</Label>
+                      <Input
+                        id="viewer-phone"
+                        value={viewerProfileData.phone}
+                        onChange={(e) => setViewerProfileData({ ...viewerProfileData, phone: e.target.value })}
+                        placeholder="+1 (555) 123-4567"
+                        data-testid="input-settings-phone"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="viewer-bio">Bio</Label>
+                    <Textarea
+                      id="viewer-bio"
+                      value={viewerProfileData.bio}
+                      onChange={(e) => setViewerProfileData({ ...viewerProfileData, bio: e.target.value })}
+                      placeholder="Tell everyone about yourself and your interests..."
+                      rows={4}
+                      data-testid="textarea-settings-bio"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-end">
                 <Button 
@@ -293,17 +383,19 @@ export default function StudentSettings() {
                   </Select>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Show Performance Stats</Label>
-                    <p className="text-sm text-muted-foreground">Display your stats on your profile</p>
+                {user?.role === "student" && (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Show Performance Stats</Label>
+                      <p className="text-sm text-muted-foreground">Display your stats on your profile</p>
+                    </div>
+                    <Switch
+                      checked={privacySettings.showStats}
+                      onCheckedChange={(checked) => setPrivacySettings({ ...privacySettings, showStats: checked })}
+                      data-testid="switch-show-stats"
+                    />
                   </div>
-                  <Switch
-                    checked={privacySettings.showStats}
-                    onCheckedChange={(checked) => setPrivacySettings({ ...privacySettings, showStats: checked })}
-                    data-testid="switch-show-stats"
-                  />
-                </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <div>
@@ -320,7 +412,9 @@ export default function StudentSettings() {
                 <div className="flex items-center justify-between">
                   <div>
                     <Label>Allow Direct Messages</Label>
-                    <p className="text-sm text-muted-foreground">Let other students message you</p>
+                    <p className="text-sm text-muted-foreground">
+                      {user?.role === "student" ? "Let other students message you" : "Let students message you"}
+                    </p>
                   </div>
                   <Switch
                     checked={privacySettings.allowDirectMessages}
@@ -358,53 +452,97 @@ export default function StudentSettings() {
                 </h4>
 
                 <div className="space-y-3 pl-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Post Likes</Label>
-                      <p className="text-sm text-muted-foreground">When someone likes your posts</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.postLikes}
-                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postLikes: checked })}
-                      data-testid="switch-post-likes"
-                    />
-                  </div>
+                  {user?.role === "student" && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Post Likes</Label>
+                          <p className="text-sm text-muted-foreground">When someone likes your posts</p>
+                        </div>
+                        <Switch
+                          checked={notificationSettings.postLikes}
+                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postLikes: checked })}
+                          data-testid="switch-post-likes"
+                        />
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Comments</Label>
-                      <p className="text-sm text-muted-foreground">When someone comments on your posts</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.postComments}
-                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postComments: checked })}
-                      data-testid="switch-post-comments"
-                    />
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Comments</Label>
+                          <p className="text-sm text-muted-foreground">When someone comments on your posts</p>
+                        </div>
+                        <Switch
+                          checked={notificationSettings.postComments}
+                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postComments: checked })}
+                          data-testid="switch-post-comments"
+                        />
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>New Followers</Label>
-                      <p className="text-sm text-muted-foreground">When someone follows you</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.newFollowers}
-                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, newFollowers: checked })}
-                      data-testid="switch-new-followers"
-                    />
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>New Followers</Label>
+                          <p className="text-sm text-muted-foreground">When someone follows you</p>
+                        </div>
+                        <Switch
+                          checked={notificationSettings.newFollowers}
+                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, newFollowers: checked })}
+                          data-testid="switch-new-followers"
+                        />
+                      </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Team Updates</Label>
-                      <p className="text-sm text-muted-foreground">Academy and team announcements</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.teamUpdates}
-                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, teamUpdates: checked })}
-                      data-testid="switch-team-updates"
-                    />
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Team Updates</Label>
+                          <p className="text-sm text-muted-foreground">Academy and team announcements</p>
+                        </div>
+                        <Switch
+                          checked={notificationSettings.teamUpdates}
+                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, teamUpdates: checked })}
+                          data-testid="switch-team-updates"
+                        />
+                      </div>
+                    </>
+                  )}
+                  
+                  {user?.role === "viewer" && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Student Activity</Label>
+                          <p className="text-sm text-muted-foreground">When students you follow post new content</p>
+                        </div>
+                        <Switch
+                          checked={notificationSettings.newFollowers}
+                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, newFollowers: checked })}
+                          data-testid="switch-student-activity"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Comment Replies</Label>
+                          <p className="text-sm text-muted-foreground">When someone replies to your comments</p>
+                        </div>
+                        <Switch
+                          checked={notificationSettings.postComments}
+                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postComments: checked })}
+                          data-testid="switch-comment-replies"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Academy Updates</Label>
+                          <p className="text-sm text-muted-foreground">General announcements from XEN Sports Armoury</p>
+                        </div>
+                        <Switch
+                          checked={notificationSettings.teamUpdates}
+                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, teamUpdates: checked })}
+                          data-testid="switch-academy-updates"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <Separator />

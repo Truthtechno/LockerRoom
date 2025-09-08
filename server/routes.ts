@@ -107,6 +107,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/users/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const updateData = req.body;
+      
+      const updatedUser = await storage.updateUser(userId, updateData);
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        schoolId: updatedUser.schoolId
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
   // Student routes
   app.get("/api/students/profile/:userId", async (req, res) => {
     try {
