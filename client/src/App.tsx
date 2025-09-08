@@ -14,6 +14,8 @@ import Profile from "./pages/profile";
 import SearchPage from "./pages/search";
 import StudentStats from "./pages/stats";
 import StudentSettings from "./pages/settings";
+import Saved from "./pages/saved";
+import Following from "./pages/following";
 import SchoolAdmin from "./pages/school-admin";
 import SystemAdmin from "./pages/system-admin";
 import SchoolApplications from "./pages/admin/school-applications";
@@ -87,8 +89,20 @@ function Router() {
       </Route>
       
       <Route path="/settings">
-        <ProtectedRoute requiredRole="student">
+        <ProtectedRoute>
           <StudentSettings />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/saved">
+        <ProtectedRoute>
+          <Saved />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/following">
+        <ProtectedRoute>
+          <Following />
         </ProtectedRoute>
       </Route>
       

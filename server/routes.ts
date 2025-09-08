@@ -230,6 +230,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/users/:userId/saved-posts", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const savedPosts = await storage.getUserSavedPosts(userId);
+      res.json(savedPosts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch saved posts" });
+    }
+  });
+
   // School routes
   app.get("/api/schools", async (req, res) => {
     try {
@@ -366,6 +376,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(following);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch following" });
+    }
+  });
+
+  app.get("/api/students/:studentId/is-following", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const { userId } = req.query;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "User ID required" });
+      }
+
+      const isFollowing = await storage.isFollowing(userId as string, studentId);
+      res.json(isFollowing);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check follow status" });
     }
   });
 

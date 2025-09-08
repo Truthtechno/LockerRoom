@@ -86,6 +86,7 @@ export interface IStorage {
   commentOnPost(comment: InsertComment): Promise<Comment>;
   savePost(save: InsertSave): Promise<Save>;
   unsavePost(postId: string, userId: string): Promise<void>;
+  getUserSavedPosts(userId: string): Promise<PostWithDetails[]>;
   
   // Follow operations
   followStudent(follow: InsertFollow): Promise<Follow>;
@@ -614,6 +615,24 @@ export class MemStorage implements IStorage {
     if (save) {
       this.saves.delete(save.id);
     }
+  }
+
+  async getUserSavedPosts(userId: string): Promise<PostWithDetails[]> {
+    const savedPostIds = Array.from(this.saves.values())
+      .filter(save => save.userId === userId)
+      .map(save => save.postId);
+    
+    const posts: PostWithDetails[] = [];
+    for (const postId of savedPostIds) {
+      const post = this.posts.get(postId);
+      if (post) {
+        const details = await this.getPostDetails(post);
+        posts.push(details);
+      }
+    }
+    
+    // Sort by creation date, newest first
+    return posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   async getSchoolStats(schoolId: string): Promise<any> {

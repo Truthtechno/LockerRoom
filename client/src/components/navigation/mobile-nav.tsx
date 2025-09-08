@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Search, Plus, BarChart3, User, LogOut, Settings } from "lucide-react";
+import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { logout } from "@/lib/auth";
 
@@ -13,18 +13,38 @@ export default function MobileNav() {
     setLocation("/login");
   };
 
-  const navigation = [
-    { name: "Feed", href: "/feed", icon: Home, active: location === "/feed" },
-    { name: "Search", href: "/search", icon: Search, active: location === "/search" },
-    { name: "Create", href: "/create", icon: Plus, active: location === "/create", studentOnly: true },
-    { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats", studentOnly: true },
-    { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings", studentOnly: true },
-  ];
+  const getNavigation = () => {
+    if (user?.role === "student") {
+      return [
+        { name: "Feed", href: "/feed", icon: Home, active: location === "/feed" },
+        { name: "Search", href: "/search", icon: Search, active: location === "/search" },
+        { name: "Create", href: "/create", icon: Plus, active: location === "/create" },
+        { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
+      ];
+    } else if (user?.role === "viewer") {
+      return [
+        { name: "Feed", href: "/feed", icon: Home, active: location === "/feed" },
+        { name: "Search", href: "/search", icon: Search, active: location === "/search" },
+        { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
+        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+      ];
+    } else {
+      return [
+        { name: "Feed", href: "/feed", icon: Home, active: location === "/feed" },
+        { name: "Search", href: "/search", icon: Search, active: location === "/search" },
+        { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
+      ];
+    }
+  };
+
+  const navigation = getNavigation();
 
   return (
     <div className="mobile-nav lg:hidden bg-card border-t border-border">
-      <div className="grid grid-cols-5 py-2">
-        {navigation.filter(item => !item.studentOnly || user?.role === "student").map((item) => (
+      <div className={`grid py-2 ${navigation.length === 4 ? 'grid-cols-4' : 'grid-cols-5'}`}>
+        {navigation.map((item) => (
           <Link key={item.name} href={item.href}>
             <div
               className={`flex flex-col items-center py-2 px-1 transition-colors cursor-pointer ${
@@ -47,16 +67,6 @@ export default function MobileNav() {
             </div>
           </Link>
         ))}
-        
-        {/* Logout button for mobile */}
-        <button
-          onClick={handleLogout}
-          className="flex flex-col items-center py-2 px-1 transition-colors text-muted-foreground hover:text-accent"
-          data-testid="mobile-logout"
-        >
-          <LogOut className="w-6 h-6" />
-          <span className="text-xs mt-1">Logout</span>
-        </button>
       </div>
     </div>
   );

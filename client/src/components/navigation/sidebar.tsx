@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { Home, User, BarChart3, Settings, LogOut } from "lucide-react";
+import { Home, User, BarChart3, Settings, LogOut, Bookmark, Users } from "lucide-react";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
@@ -15,12 +15,35 @@ export default function Sidebar() {
     setLocation("/login");
   };
 
-  const navigation = [
-    { name: "Feed", href: "/feed", icon: Home, active: location === "/feed" },
-    { name: "Profile", href: "/profile", icon: User, active: location === "/profile", studentOnly: true },
-    { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
-    { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
-  ];
+  const getNavigation = () => {
+    const baseNav = [
+      { name: "Feed", href: "/feed", icon: Home, active: location === "/feed" },
+    ];
+    
+    if (user?.role === "student") {
+      return [
+        ...baseNav,
+        { name: "Profile", href: "/profile", icon: User, active: location === "/profile" },
+        { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
+      ];
+    } else if (user?.role === "viewer") {
+      return [
+        ...baseNav,
+        { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
+        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
+      ];
+    } else {
+      return [
+        ...baseNav,
+        { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
+      ];
+    }
+  };
+
+  const navigation = getNavigation();
 
   if (!user) return null;
 
@@ -38,25 +61,21 @@ export default function Sidebar() {
 
           {/* Navigation */}
           <nav className="mt-8 flex-1 px-4 space-y-2">
-            {navigation.map((item) => {
-              if (item.studentOnly && user.role !== "student") return null;
-              
-              return (
-                <Link key={item.name} href={item.href}>
-                  <a
-                    className={`group flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-                      item.active
-                        ? "bg-accent/20 text-accent-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                    data-testid={`nav-${item.name.toLowerCase()}`}
-                  >
-                    <item.icon className="w-5 h-5 mr-3" />
-                    {item.name}
-                  </a>
-                </Link>
-              );
-            })}
+            {navigation.map((item) => (
+              <Link key={item.name} href={item.href}>
+                <a
+                  className={`group flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                    item.active
+                      ? "bg-accent/20 text-accent-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                  data-testid={`nav-${item.name.toLowerCase()}`}
+                >
+                  <item.icon className="w-5 h-5 mr-3" />
+                  {item.name}
+                </a>
+              </Link>
+            ))}
           </nav>
 
           {/* Theme Toggle and Logout */}
