@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Heart, MessageCircle, Bookmark, MoreHorizontal } from "lucide-react";
+import { Heart, MessageCircle, Bookmark, MoreHorizontal, Send } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import type { PostWithDetails } from "@shared/schema";
 
@@ -17,6 +18,8 @@ export default function PostCard({ post }: PostCardProps) {
   const queryClient = useQueryClient();
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [newComment, setNewComment] = useState("");
 
   const likeMutation = useMutation({
     mutationFn: async () => {
@@ -60,6 +63,31 @@ export default function PostCard({ post }: PostCardProps) {
     },
   });
 
+  const commentMutation = useMutation({
+    mutationFn: async (content: string) => {
+      await apiRequest("POST", `/api/posts/${post.id}/comment`, { 
+        userId: user?.id, 
+        content 
+      });
+    },
+    onSuccess: () => {
+      setNewComment("");
+      setShowCommentInput(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      toast({
+        title: "Comment added",
+        description: "Your comment has been posted successfully!",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to post comment. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleLike = () => {
     if (!user) return;
     likeMutation.mutate();
@@ -68,6 +96,30 @@ export default function PostCard({ post }: PostCardProps) {
   const handleSave = () => {
     if (!user) return;
     saveMutation.mutate();
+  };
+
+  const handleComment = () => {
+    if (!user) {
+      toast({
+        title: "Login required",
+        description: "Please log in to comment on posts.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowCommentInput(!showCommentInput);
+  };
+
+  const handleSubmitComment = () => {
+    if (!newComment.trim() || !user) return;
+    commentMutation.mutate(newComment.trim());
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmitComment();
+    }
   };
 
   return (
@@ -133,6 +185,7 @@ export default function PostCard({ post }: PostCardProps) {
             </button>
             
             <button
+              onClick={handleComment}
               className="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors"
               data-testid={`button-comment-${post.id}`}
             >
@@ -177,6 +230,40 @@ export default function PostCard({ post }: PostCardProps) {
                 View all {post.commentsCount} comments
               </button>
             )}
+          </div>
+        )}
+
+        {/* Comment Input */}
+        {showCommentInput && user && (
+          <div className="mt-4 flex items-center space-x-3">
+            <img
+              className="h-8 w-8 rounded-full"
+              src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&h=400"
+              alt="Your profile"
+            />
+            <div className="flex-1 flex items-center space-x-2">
+              <Input
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Add a comment..."
+                className="flex-1"
+                data-testid={`input-comment-${post.id}`}
+              />
+              <Button
+                onClick={handleSubmitComment}
+                disabled={!newComment.trim() || commentMutation.isPending}
+                size="sm"
+                className="bg-accent hover:bg-accent/90"
+                data-testid={`button-submit-comment-${post.id}`}
+              >
+                {commentMutation.isPending ? (
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </div>
