@@ -1373,10 +1373,182 @@ export class PostgresStorage implements IStorage {
 
     return resultsWithFollowStatus;
   }
+
+  // School application operations
+  async getSchoolApplications(): Promise<SchoolApplication[]> {
+    if (!isDbConnected) return [];
+    return await db.select().from(schoolApplications).orderBy(desc(schoolApplications.createdAt));
+  }
+
+  async getSchoolApplication(id: string): Promise<SchoolApplication | undefined> {
+    if (!isDbConnected) return undefined;
+    const result = await db.select().from(schoolApplications).where(eq(schoolApplications.id, id));
+    return result[0];
+  }
+
+  async createSchoolApplication(application: InsertSchoolApplication): Promise<SchoolApplication> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    const [created] = await db.insert(schoolApplications).values(application).returning();
+    return created;
+  }
+
+  async updateSchoolApplication(id: string, application: Partial<SchoolApplication>): Promise<SchoolApplication | undefined> {
+    if (!isDbConnected) return undefined;
+    const [updated] = await db.update(schoolApplications)
+      .set(application)
+      .where(eq(schoolApplications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async approveSchoolApplication(id: string, reviewerId: string): Promise<School | undefined> {
+    if (!isDbConnected) return undefined;
+    
+    const application = await this.getSchoolApplication(id);
+    if (!application) return undefined;
+    
+    // Create the school
+    const [school] = await db.insert(schools).values({
+      name: application.schoolName,
+      subscriptionPlan: application.planType as "standard" | "premium",
+      maxStudents: application.expectedStudents || 100,
+    }).returning();
+    
+    // Update application status
+    await this.updateSchoolApplication(id, {
+      status: "approved",
+      reviewedBy: reviewerId,
+      reviewedAt: new Date(),
+    });
+    
+    // Log analytics
+    await this.logAnalyticsEvent({
+      eventType: "school_onboarded",
+      entityId: school.id,
+      entityType: "school",
+      metadata: JSON.stringify({ approvedBy: reviewerId }),
+    });
+    
+    return school;
+  }
+
+  async rejectSchoolApplication(id: string, reviewerId: string, notes?: string): Promise<SchoolApplication | undefined> {
+    return await this.updateSchoolApplication(id, {
+      status: "rejected",
+      reviewedBy: reviewerId,
+      reviewedAt: new Date(),
+      notes: notes,
+    });
+  }
+
+  // System settings operations
+  async getSystemSettings(): Promise<SystemSetting[]> {
+    if (!isDbConnected) return [];
+    return await db.select().from(systemSettings).orderBy(systemSettings.category, systemSettings.key);
+  }
+
+  async getSystemSetting(key: string): Promise<SystemSetting | undefined> {
+    if (!isDbConnected) return undefined;
+    const result = await db.select().from(systemSettings).where(eq(systemSettings.key, key));
+    return result[0];
+  }
+
+  async createOrUpdateSystemSetting(setting: InsertSystemSetting): Promise<SystemSetting> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const existing = await this.getSystemSetting(setting.key);
+    if (existing) {
+      const [updated] = await db.update(systemSettings)
+        .set({ ...setting, updatedAt: new Date() })
+        .where(eq(systemSettings.key, setting.key))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(systemSettings).values(setting).returning();
+      return created;
+    }
+  }
+
+  async deleteSystemSetting(key: string): Promise<void> {
+    if (!isDbConnected) return;
+    await db.delete(systemSettings).where(eq(systemSettings.key, key));
+  }
+
+  // Admin role operations
+  async getAdminRoles(): Promise<AdminRole[]> {
+    if (!isDbConnected) return [];
+    return await db.select().from(adminRoles).orderBy(desc(adminRoles.createdAt));
+  }
+
+  async getAdminRole(userId: string): Promise<AdminRole | undefined> {
+    if (!isDbConnected) return undefined;
+    const result = await db.select().from(adminRoles).where(eq(adminRoles.userId, userId));
+    return result[0];
+  }
+
+  async createAdminRole(role: InsertAdminRole): Promise<AdminRole> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    const [created] = await db.insert(adminRoles).values(role).returning();
+    return created;
+  }
+
+  async updateAdminRole(userId: string, role: Partial<AdminRole>): Promise<AdminRole | undefined> {
+    if (!isDbConnected) return undefined;
+    const [updated] = await db.update(adminRoles)
+      .set(role)
+      .where(eq(adminRoles.userId, userId))
+      .returning();
+    return updated;
+  }
+
+  async deleteAdminRole(userId: string): Promise<void> {
+    if (!isDbConnected) return;
+    await db.delete(adminRoles).where(eq(adminRoles.userId, userId));
+  }
+
+  // Analytics operations
+  async logAnalyticsEvent(log: InsertAnalyticsLog): Promise<AnalyticsLog> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    const [created] = await db.insert(analyticsLogs).values(log).returning();
+    return created;
+  }
+
+  async getAnalyticsLogs(eventType?: string, limit?: number): Promise<AnalyticsLog[]> {
+    if (!isDbConnected) return [];
+    
+    let query = db.select().from(analyticsLogs);
+    
+    if (eventType) {
+      query = query.where(eq(analyticsLogs.eventType, eventType));
+    }
+    
+    query = query.orderBy(desc(analyticsLogs.timestamp));
+    
+    if (limit) {
+      query = query.limit(limit);
+    }
+    
+    return await query;
+  }
+
+  async getAnalyticsStats(): Promise<any> {
+    if (!isDbConnected) return { userSignups: 0, postCreated: 0, schoolOnboarded: 0, totalEvents: 0 };
+    
+    const logs = await db.select().from(analyticsLogs);
+    const userSignups = logs.filter(l => l.eventType === "user_signup").length;
+    const postCreated = logs.filter(l => l.eventType === "post_created").length;
+    const schoolOnboarded = logs.filter(l => l.eventType === "school_onboarded").length;
+    
+    return {
+      userSignups,
+      postCreated,
+      schoolOnboarded,
+      totalEvents: logs.length,
+    };
+  }
 }
 
-// Use memory storage for now due to connection issues
-// TODO: Switch to PostgreSQL when database connection is stable
-export const storage = new MemStorage();
+// Use PostgreSQL storage for admin features
+export const storage = isDbConnected ? new PostgresStorage() : new MemStorage();
 
 // MemStorage class is already exported above

@@ -3,7 +3,16 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { storage } from "./storage";
-import { insertUserSchema, insertPostSchema, insertCommentSchema, insertFollowSchema } from "@shared/schema";
+import { 
+  insertUserSchema, 
+  insertPostSchema, 
+  insertCommentSchema, 
+  insertFollowSchema,
+  insertSchoolApplicationSchema,
+  insertSystemSettingSchema,
+  insertAdminRoleSchema,
+  insertAnalyticsLogSchema
+} from "@shared/schema";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -402,6 +411,189 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Signup error:', error);
       res.status(400).json({ message: "Registration failed. Please check your information." });
+    }
+  });
+
+  // Admin School Application Routes
+  app.get("/api/admin/school-applications", async (req, res) => {
+    try {
+      const applications = await storage.getSchoolApplications();
+      res.json(applications);
+    } catch (error) {
+      console.error('Get school applications error:', error);
+      res.status(500).json({ message: "Failed to fetch school applications" });
+    }
+  });
+
+  app.post("/api/admin/school-applications", async (req, res) => {
+    try {
+      const applicationData = insertSchoolApplicationSchema.parse(req.body);
+      const application = await storage.createSchoolApplication(applicationData);
+      res.json(application);
+    } catch (error) {
+      console.error('Create school application error:', error);
+      res.status(400).json({ message: "Failed to create school application" });
+    }
+  });
+
+  app.post("/api/admin/school-applications/:id/approve", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reviewerId } = req.body;
+      
+      if (!reviewerId) {
+        return res.status(400).json({ message: "Reviewer ID required" });
+      }
+
+      const school = await storage.approveSchoolApplication(id, reviewerId);
+      if (!school) {
+        return res.status(404).json({ message: "School application not found" });
+      }
+
+      res.json({ school, message: "School application approved successfully" });
+    } catch (error) {
+      console.error('Approve school application error:', error);
+      res.status(500).json({ message: "Failed to approve application" });
+    }
+  });
+
+  app.post("/api/admin/school-applications/:id/reject", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reviewerId, notes } = req.body;
+      
+      if (!reviewerId) {
+        return res.status(400).json({ message: "Reviewer ID required" });
+      }
+
+      const application = await storage.rejectSchoolApplication(id, reviewerId, notes);
+      if (!application) {
+        return res.status(404).json({ message: "School application not found" });
+      }
+
+      res.json({ application, message: "School application rejected" });
+    } catch (error) {
+      console.error('Reject school application error:', error);
+      res.status(500).json({ message: "Failed to reject application" });
+    }
+  });
+
+  // Admin System Settings Routes
+  app.get("/api/admin/system-settings", async (req, res) => {
+    try {
+      const settings = await storage.getSystemSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error('Get system settings error:', error);
+      res.status(500).json({ message: "Failed to fetch system settings" });
+    }
+  });
+
+  app.post("/api/admin/system-settings", async (req, res) => {
+    try {
+      const settingData = insertSystemSettingSchema.parse(req.body);
+      const setting = await storage.createOrUpdateSystemSetting(settingData);
+      res.json(setting);
+    } catch (error) {
+      console.error('Update system setting error:', error);
+      res.status(400).json({ message: "Failed to update system setting" });
+    }
+  });
+
+  app.delete("/api/admin/system-settings/:key", async (req, res) => {
+    try {
+      const { key } = req.params;
+      await storage.deleteSystemSetting(key);
+      res.json({ message: "System setting deleted successfully" });
+    } catch (error) {
+      console.error('Delete system setting error:', error);
+      res.status(500).json({ message: "Failed to delete system setting" });
+    }
+  });
+
+  // Admin Role Management Routes
+  app.get("/api/admin/roles", async (req, res) => {
+    try {
+      const roles = await storage.getAdminRoles();
+      res.json(roles);
+    } catch (error) {
+      console.error('Get admin roles error:', error);
+      res.status(500).json({ message: "Failed to fetch admin roles" });
+    }
+  });
+
+  app.post("/api/admin/roles", async (req, res) => {
+    try {
+      const roleData = insertAdminRoleSchema.parse(req.body);
+      const role = await storage.createAdminRole(roleData);
+      res.json(role);
+    } catch (error) {
+      console.error('Create admin role error:', error);
+      res.status(400).json({ message: "Failed to create admin role" });
+    }
+  });
+
+  app.put("/api/admin/roles/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const updateData = req.body;
+      const role = await storage.updateAdminRole(userId, updateData);
+      
+      if (!role) {
+        return res.status(404).json({ message: "Admin role not found" });
+      }
+
+      res.json(role);
+    } catch (error) {
+      console.error('Update admin role error:', error);
+      res.status(500).json({ message: "Failed to update admin role" });
+    }
+  });
+
+  app.delete("/api/admin/roles/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      await storage.deleteAdminRole(userId);
+      res.json({ message: "Admin role deleted successfully" });
+    } catch (error) {
+      console.error('Delete admin role error:', error);
+      res.status(500).json({ message: "Failed to delete admin role" });
+    }
+  });
+
+  // Analytics Routes
+  app.post("/api/analytics/log", async (req, res) => {
+    try {
+      const logData = insertAnalyticsLogSchema.parse(req.body);
+      const log = await storage.logAnalyticsEvent(logData);
+      res.json(log);
+    } catch (error) {
+      console.error('Log analytics event error:', error);
+      res.status(400).json({ message: "Failed to log analytics event" });
+    }
+  });
+
+  app.get("/api/analytics/logs", async (req, res) => {
+    try {
+      const { eventType, limit } = req.query;
+      const logs = await storage.getAnalyticsLogs(
+        eventType as string, 
+        limit ? parseInt(limit as string) : undefined
+      );
+      res.json(logs);
+    } catch (error) {
+      console.error('Get analytics logs error:', error);
+      res.status(500).json({ message: "Failed to fetch analytics logs" });
+    }
+  });
+
+  app.get("/api/analytics/stats", async (req, res) => {
+    try {
+      const stats = await storage.getAnalyticsStats();
+      res.json(stats);
+    } catch (error) {
+      console.error('Get analytics stats error:', error);
+      res.status(500).json({ message: "Failed to fetch analytics stats" });
     }
   });
 
