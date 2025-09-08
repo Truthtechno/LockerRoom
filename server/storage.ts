@@ -23,6 +23,10 @@ import {
   type InsertAdminRole,
   type AnalyticsLog,
   type InsertAnalyticsLog,
+  type StudentRating,
+  type InsertStudentRating,
+  type SchoolSetting,
+  type InsertSchoolSetting,
   type PostWithDetails,
   type StudentWithStats,
   type StudentSearchResult,
@@ -37,7 +41,9 @@ import {
   schoolApplications,
   systemSettings,
   adminRoles,
-  analyticsLogs
+  analyticsLogs,
+  studentRatings,
+  schoolSettings
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { neon } from '@neondatabase/serverless';
@@ -61,8 +67,11 @@ export interface IStorage {
   getStudent(id: string): Promise<Student | undefined>;
   getStudentByUserId(userId: string): Promise<Student | undefined>;
   getStudentsBySchool(schoolId: string): Promise<Student[]>;
+  getStudentByEmail(email: string): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: string, student: Partial<Student>): Promise<Student | undefined>;
+  deleteStudent(id: string): Promise<void>;
+  searchSchoolStudents(schoolId: string, query: string): Promise<Student[]>;
   getStudentWithStats(userId: string): Promise<StudentWithStats | undefined>;
   
   // Post operations
@@ -115,6 +124,20 @@ export interface IStorage {
   logAnalyticsEvent(log: InsertAnalyticsLog): Promise<AnalyticsLog>;
   getAnalyticsLogs(eventType?: string, limit?: number): Promise<AnalyticsLog[]>;
   getAnalyticsStats(): Promise<any>;
+
+  // Student Rating operations
+  getStudentRatings(studentId: string): Promise<StudentRating[]>;
+  getStudentRating(id: string): Promise<StudentRating | undefined>;
+  createStudentRating(rating: InsertStudentRating): Promise<StudentRating>;
+  updateStudentRating(id: string, rating: Partial<StudentRating>): Promise<StudentRating | undefined>;
+  deleteStudentRating(id: string): Promise<void>;
+  getAverageRating(studentId: string): Promise<number>;
+
+  // School Setting operations
+  getSchoolSettings(schoolId: string): Promise<SchoolSetting[]>;
+  getSchoolSetting(schoolId: string, key: string): Promise<SchoolSetting | undefined>;
+  createOrUpdateSchoolSetting(setting: InsertSchoolSetting): Promise<SchoolSetting>;
+  deleteSchoolSetting(schoolId: string, key: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -1545,6 +1568,112 @@ export class PostgresStorage implements IStorage {
       schoolOnboarded,
       totalEvents: logs.length,
     };
+  }
+
+  // Additional student operations for school admin
+  async getStudentByEmail(email: string): Promise<Student | undefined> {
+    if (!isDbConnected) return undefined;
+    const result = await db.select().from(students).where(eq(students.email, email));
+    return result[0];
+  }
+
+  async deleteStudent(id: string): Promise<void> {
+    if (!isDbConnected) return;
+    await db.delete(students).where(eq(students.id, id));
+  }
+
+  async searchSchoolStudents(schoolId: string, query: string): Promise<Student[]> {
+    if (!isDbConnected) return [];
+    
+    const searchTerm = `%${query.toLowerCase()}%`;
+    return await db.select().from(students)
+      .where(sql`${students.schoolId} = ${schoolId} AND (
+        LOWER(${students.name}) LIKE ${searchTerm} OR 
+        LOWER(${students.email}) LIKE ${searchTerm} OR 
+        LOWER(${students.grade}) LIKE ${searchTerm} OR
+        LOWER(${students.roleNumber}) LIKE ${searchTerm}
+      )`);
+  }
+
+  // Student Rating operations
+  async getStudentRatings(studentId: string): Promise<StudentRating[]> {
+    if (!isDbConnected) return [];
+    return await db.select().from(studentRatings)
+      .where(eq(studentRatings.studentId, studentId))
+      .orderBy(desc(studentRatings.createdAt));
+  }
+
+  async getStudentRating(id: string): Promise<StudentRating | undefined> {
+    if (!isDbConnected) return undefined;
+    const result = await db.select().from(studentRatings).where(eq(studentRatings.id, id));
+    return result[0];
+  }
+
+  async createStudentRating(rating: InsertStudentRating): Promise<StudentRating> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    const [created] = await db.insert(studentRatings).values(rating).returning();
+    return created;
+  }
+
+  async updateStudentRating(id: string, rating: Partial<StudentRating>): Promise<StudentRating | undefined> {
+    if (!isDbConnected) return undefined;
+    const [updated] = await db.update(studentRatings)
+      .set(rating)
+      .where(eq(studentRatings.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStudentRating(id: string): Promise<void> {
+    if (!isDbConnected) return;
+    await db.delete(studentRatings).where(eq(studentRatings.id, id));
+  }
+
+  async getAverageRating(studentId: string): Promise<number> {
+    if (!isDbConnected) return 0;
+    
+    const ratings = await this.getStudentRatings(studentId);
+    if (ratings.length === 0) return 0;
+    
+    const sum = ratings.reduce((acc, rating) => acc + rating.rating, 0);
+    return sum / ratings.length;
+  }
+
+  // School Setting operations
+  async getSchoolSettings(schoolId: string): Promise<SchoolSetting[]> {
+    if (!isDbConnected) return [];
+    return await db.select().from(schoolSettings)
+      .where(eq(schoolSettings.schoolId, schoolId))
+      .orderBy(schoolSettings.category, schoolSettings.key);
+  }
+
+  async getSchoolSetting(schoolId: string, key: string): Promise<SchoolSetting | undefined> {
+    if (!isDbConnected) return undefined;
+    const result = await db.select().from(schoolSettings)
+      .where(sql`${schoolSettings.schoolId} = ${schoolId} AND ${schoolSettings.key} = ${key}`);
+    return result[0];
+  }
+
+  async createOrUpdateSchoolSetting(setting: InsertSchoolSetting): Promise<SchoolSetting> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const existing = await this.getSchoolSetting(setting.schoolId, setting.key);
+    if (existing) {
+      const [updated] = await db.update(schoolSettings)
+        .set({ ...setting, updatedAt: new Date() })
+        .where(sql`${schoolSettings.schoolId} = ${setting.schoolId} AND ${schoolSettings.key} = ${setting.key}`)
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(schoolSettings).values(setting).returning();
+      return created;
+    }
+  }
+
+  async deleteSchoolSetting(schoolId: string, key: string): Promise<void> {
+    if (!isDbConnected) return;
+    await db.delete(schoolSettings)
+      .where(sql`${schoolSettings.schoolId} = ${schoolId} AND ${schoolSettings.key} = ${key}`);
   }
 }
 

@@ -11,7 +11,10 @@ import {
   insertSchoolApplicationSchema,
   insertSystemSettingSchema,
   insertAdminRoleSchema,
-  insertAnalyticsLogSchema
+  insertAnalyticsLogSchema,
+  insertStudentSchema,
+  insertStudentRatingSchema,
+  insertSchoolSettingSchema
 } from "@shared/schema";
 
 // Configure Cloudinary
@@ -594,6 +597,292 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get analytics stats error:', error);
       res.status(500).json({ message: "Failed to fetch analytics stats" });
+    }
+  });
+
+  // School Admin Student Management Routes
+  app.get("/api/schools/:schoolId/students", async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const students = await storage.getStudentsBySchool(schoolId);
+      res.json(students);
+    } catch (error) {
+      console.error('Get school students error:', error);
+      res.status(500).json({ message: "Failed to fetch school students" });
+    }
+  });
+
+  app.post("/api/schools/:schoolId/students", upload.single("profilePic"), async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      let studentData = insertStudentSchema.parse({
+        ...req.body,
+        schoolId,
+      });
+
+      // Handle profile picture upload to Cloudinary
+      if (req.file) {
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            { 
+              resource_type: "image",
+              folder: "student-profiles",
+              transformation: [
+                { width: 400, height: 400, crop: "fill", gravity: "face" }
+              ]
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          ).end(req.file!.buffer);
+        });
+
+        studentData.profilePicUrl = (result as any).secure_url;
+      }
+
+      // Check for duplicate email
+      const existingStudent = await storage.getStudentByEmail(studentData.email);
+      if (existingStudent) {
+        return res.status(400).json({ message: "Student with this email already exists" });
+      }
+
+      const student = await storage.createStudent(studentData);
+      
+      // Log analytics event
+      await storage.logAnalyticsEvent({
+        eventType: "student_created",
+        entityId: student.id,
+        entityType: "student",
+        metadata: JSON.stringify({ schoolId }),
+      });
+
+      res.json(student);
+    } catch (error) {
+      console.error('Create student error:', error);
+      res.status(400).json({ message: "Failed to create student" });
+    }
+  });
+
+  app.get("/api/students/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const student = await storage.getStudent(id);
+      if (!student) {
+        return res.status(404).json({ message: "Student not found" });
+      }
+      res.json(student);
+    } catch (error) {
+      console.error('Get student error:', error);
+      res.status(500).json({ message: "Failed to fetch student" });
+    }
+  });
+
+  app.put("/api/students/:id", upload.single("profilePic"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      let updates = req.body;
+
+      // Handle profile picture upload to Cloudinary
+      if (req.file) {
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            { 
+              resource_type: "image",
+              folder: "student-profiles",
+              transformation: [
+                { width: 400, height: 400, crop: "fill", gravity: "face" }
+              ]
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          ).end(req.file!.buffer);
+        });
+
+        updates.profilePicUrl = (result as any).secure_url;
+      }
+
+      const student = await storage.updateStudent(id, updates);
+      if (!student) {
+        return res.status(404).json({ message: "Student not found" });
+      }
+      res.json(student);
+    } catch (error) {
+      console.error('Update student error:', error);
+      res.status(500).json({ message: "Failed to update student" });
+    }
+  });
+
+  app.delete("/api/students/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteStudent(id);
+      res.json({ message: "Student deleted successfully" });
+    } catch (error) {
+      console.error('Delete student error:', error);
+      res.status(500).json({ message: "Failed to delete student" });
+    }
+  });
+
+  app.get("/api/schools/:schoolId/students/search", async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const { q: query } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ message: "Search query required" });
+      }
+
+      const students = await storage.searchSchoolStudents(schoolId, query);
+      res.json(students);
+    } catch (error) {
+      console.error('Search school students error:', error);
+      res.status(500).json({ message: "Search failed" });
+    }
+  });
+
+  // Student Rating Routes
+  app.get("/api/students/:studentId/ratings", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const ratings = await storage.getStudentRatings(studentId);
+      const averageRating = await storage.getAverageRating(studentId);
+      res.json({ ratings, averageRating });
+    } catch (error) {
+      console.error('Get student ratings error:', error);
+      res.status(500).json({ message: "Failed to fetch student ratings" });
+    }
+  });
+
+  app.post("/api/students/:studentId/ratings", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const ratingData = insertStudentRatingSchema.parse({
+        ...req.body,
+        studentId,
+      });
+
+      const rating = await storage.createStudentRating(ratingData);
+      res.json(rating);
+    } catch (error) {
+      console.error('Create student rating error:', error);
+      res.status(400).json({ message: "Failed to create student rating" });
+    }
+  });
+
+  app.put("/api/ratings/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const rating = await storage.updateStudentRating(id, updates);
+      if (!rating) {
+        return res.status(404).json({ message: "Rating not found" });
+      }
+      res.json(rating);
+    } catch (error) {
+      console.error('Update student rating error:', error);
+      res.status(500).json({ message: "Failed to update student rating" });
+    }
+  });
+
+  app.delete("/api/ratings/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteStudentRating(id);
+      res.json({ message: "Rating deleted successfully" });
+    } catch (error) {
+      console.error('Delete student rating error:', error);
+      res.status(500).json({ message: "Failed to delete student rating" });
+    }
+  });
+
+  // School Settings Routes
+  app.get("/api/schools/:schoolId/settings", async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const settings = await storage.getSchoolSettings(schoolId);
+      res.json(settings);
+    } catch (error) {
+      console.error('Get school settings error:', error);
+      res.status(500).json({ message: "Failed to fetch school settings" });
+    }
+  });
+
+  app.post("/api/schools/:schoolId/settings", async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const settingData = insertSchoolSettingSchema.parse({
+        ...req.body,
+        schoolId,
+      });
+
+      const setting = await storage.createOrUpdateSchoolSetting(settingData);
+      res.json(setting);
+    } catch (error) {
+      console.error('Update school setting error:', error);
+      res.status(400).json({ message: "Failed to update school setting" });
+    }
+  });
+
+  app.delete("/api/schools/:schoolId/settings/:key", async (req, res) => {
+    try {
+      const { schoolId, key } = req.params;
+      await storage.deleteSchoolSetting(schoolId, key);
+      res.json({ message: "School setting deleted successfully" });
+    } catch (error) {
+      console.error('Delete school setting error:', error);
+      res.status(500).json({ message: "Failed to delete school setting" });
+    }
+  });
+
+  // Enhanced school stats for analytics
+  app.get("/api/schools/:schoolId/analytics", async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      
+      const students = await storage.getStudentsBySchool(schoolId);
+      const totalStudents = students.length;
+      
+      // Get ratings statistics
+      const ratingsStats = await Promise.all(
+        students.map(async (student) => {
+          const avgRating = await storage.getAverageRating(student.id);
+          const ratings = await storage.getStudentRatings(student.id);
+          return { studentId: student.id, avgRating, ratingsCount: ratings.length };
+        })
+      );
+
+      const averageSchoolRating = ratingsStats.length > 0 
+        ? ratingsStats.reduce((sum, stat) => sum + stat.avgRating, 0) / ratingsStats.length
+        : 0;
+
+      // Grade distribution
+      const gradeDistribution = students.reduce((acc, student) => {
+        const grade = student.grade || 'Unknown';
+        acc[grade] = (acc[grade] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Gender distribution  
+      const genderDistribution = students.reduce((acc, student) => {
+        const gender = student.gender || 'Not specified';
+        acc[gender] = (acc[gender] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      res.json({
+        totalStudents,
+        averageSchoolRating: Math.round(averageSchoolRating * 100) / 100,
+        gradeDistribution,
+        genderDistribution,
+        ratingsStats: ratingsStats.filter(stat => stat.ratingsCount > 0),
+      });
+    } catch (error) {
+      console.error('Get school analytics error:', error);
+      res.status(500).json({ message: "Failed to fetch school analytics" });
     }
   });
 
