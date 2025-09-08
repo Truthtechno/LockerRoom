@@ -24,13 +24,23 @@ export const schools = pgTable("schools", {
 export const students = pgTable("students", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
-  roleNumber: text("role_number"),
+  schoolId: varchar("school_id").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  gender: text("gender"), // male, female, other
   dateOfBirth: text("date_of_birth"),
+  grade: text("grade"), // class/grade level
+  guardianContact: text("guardian_contact"),
+  profilePicUrl: text("profile_pic_url"), // Cloudinary URL
+  // Existing sport-related fields
+  roleNumber: text("role_number"),
   position: text("position"),
   sport: text("sport"),
-  profilePic: text("profile_pic"),
+  profilePic: text("profile_pic"), // Keep for backward compatibility
   bio: text("bio"),
   coverPhoto: text("cover_photo"),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
 export const posts = pgTable("posts", {
@@ -126,6 +136,26 @@ export const analyticsLogs = pgTable("analytics_logs", {
   timestamp: timestamp("timestamp").default(sql`now()`).notNull(),
 });
 
+export const studentRatings = pgTable("student_ratings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  studentId: varchar("student_id").notNull(),
+  rating: integer("rating").notNull(), // 1-5 scale
+  comments: text("comments"),
+  category: text("category").default("overall"), // overall, academic, athletic, behavior
+  ratedBy: varchar("rated_by").notNull(), // Admin/teacher who gave the rating
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const schoolSettings = pgTable("school_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  schoolId: varchar("school_id").notNull(),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  category: text("category").notNull().default("general"), // general, grades, staff
+  updatedBy: varchar("updated_by").notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -139,6 +169,7 @@ export const insertSchoolSchema = createInsertSchema(schools).omit({
 
 export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
+  createdAt: true,
 });
 
 export const insertPostSchema = createInsertSchema(posts).omit({
@@ -187,6 +218,16 @@ export const insertAnalyticsLogSchema = createInsertSchema(analyticsLogs).omit({
   timestamp: true,
 });
 
+export const insertStudentRatingSchema = createInsertSchema(studentRatings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSchoolSettingSchema = createInsertSchema(schoolSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type School = typeof schools.$inferSelect;
@@ -200,6 +241,8 @@ export type SchoolApplication = typeof schoolApplications.$inferSelect;
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type AdminRole = typeof adminRoles.$inferSelect;
 export type AnalyticsLog = typeof analyticsLogs.$inferSelect;
+export type StudentRating = typeof studentRatings.$inferSelect;
+export type SchoolSetting = typeof schoolSettings.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
@@ -213,6 +256,8 @@ export type InsertSchoolApplication = z.infer<typeof insertSchoolApplicationSche
 export type InsertSystemSetting = z.infer<typeof insertSystemSettingSchema>;
 export type InsertAdminRole = z.infer<typeof insertAdminRoleSchema>;
 export type InsertAnalyticsLog = z.infer<typeof insertAnalyticsLogSchema>;
+export type InsertStudentRating = z.infer<typeof insertStudentRatingSchema>;
+export type InsertSchoolSetting = z.infer<typeof insertSchoolSettingSchema>;
 
 // Extended types for joins
 export type PostWithDetails = Post & {
