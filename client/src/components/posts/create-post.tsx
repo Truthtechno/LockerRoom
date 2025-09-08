@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Image, Video } from "lucide-react";
+import { Image, Video, X, Upload, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function CreatePost() {
@@ -12,6 +12,25 @@ export default function CreatePost() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [caption, setCaption] = useState("");
+  const [selectedMedia, setSelectedMedia] = useState<{file: File; url: string; type: string} | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadMediaMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) throw new Error('Upload failed');
+      return response.json();
+    },
+  });
 
   const createPostMutation = useMutation({
     mutationFn: async (postData: { studentId: string; mediaUrl: string; mediaType: string; caption: string }) => {
@@ -24,6 +43,7 @@ export default function CreatePost() {
         description: "Your post has been shared successfully!",
       });
       setCaption("");
+      setSelectedMedia(null);
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
     },
     onError: () => {
@@ -35,18 +55,88 @@ export default function CreatePost() {
     },
   });
 
-  const handleSubmit = async () => {
-    if (!user || !caption.trim()) return;
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    // For demo purposes, use a placeholder image
-    const mockPostData = {
-      studentId: user.id, // In real app, this would be the student ID
-      mediaUrl: "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=800&h=600",
-      mediaType: "image",
+    // Validate file type
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    
+    if (type === 'image' && !isImage) {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (type === 'video' && !isVideo) {
+      toast({
+        title: "Invalid file",
+        description: "Please select a video file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create preview URL
+    const url = URL.createObjectURL(file);
+    setSelectedMedia({ 
+      file, 
+      url, 
+      type: isImage ? 'image' : 'video' 
+    });
+  };
+
+  const removeMedia = () => {
+    if (selectedMedia) {
+      URL.revokeObjectURL(selectedMedia.url);
+    }
+    setSelectedMedia(null);
+  };
+
+  const handleSubmit = async () => {
+    if (!user || !caption.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please add a caption to your post.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    let mediaUrl = "";
+    let mediaType = "text";
+
+    // Upload media if selected
+    if (selectedMedia) {
+      setIsUploading(true);
+      try {
+        const uploadResult = await uploadMediaMutation.mutateAsync(selectedMedia.file);
+        mediaUrl = uploadResult.url;
+        mediaType = selectedMedia.type;
+      } catch (error) {
+        toast({
+          title: "Upload failed",
+          description: "Failed to upload media. Please try again.",
+          variant: "destructive",
+        });
+        setIsUploading(false);
+        return;
+      }
+      setIsUploading(false);
+    }
+
+    const postData = {
+      studentId: user.id,
+      mediaUrl,
+      mediaType,
       caption: caption.trim(),
     };
 
-    createPostMutation.mutate(mockPostData);
+    createPostMutation.mutate(postData);
   };
 
   if (user?.role !== "student") return null;
@@ -71,17 +161,62 @@ export default function CreatePost() {
         </div>
       </div>
       
+      {/* Media Preview */}
+      {selectedMedia && (
+        <div className="relative mb-4">
+          {selectedMedia.type === 'image' ? (
+            <img
+              src={selectedMedia.url}
+              alt="Selected media"
+              className="w-full max-h-96 object-cover rounded-lg"
+            />
+          ) : (
+            <video
+              src={selectedMedia.url}
+              className="w-full max-h-96 object-cover rounded-lg"
+              controls
+            />
+          )}
+          <button
+            onClick={removeMedia}
+            className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white hover:bg-black/70 transition-colors"
+            data-testid="button-remove-media"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <div className="flex items-center space-x-4">
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleFileSelect(e, 'image')}
+            className="hidden"
+          />
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/*"
+            onChange={(e) => handleFileSelect(e, 'video')}
+            className="hidden"
+          />
+          
           <button
-            className="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={isUploading || createPostMutation.isPending}
+            className="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors disabled:opacity-50"
             data-testid="button-add-photo"
           >
             <Image className="w-5 h-5" />
             <span className="text-sm">Photo</span>
           </button>
           <button
-            className="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors"
+            onClick={() => videoInputRef.current?.click()}
+            disabled={isUploading || createPostMutation.isPending}
+            className="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors disabled:opacity-50"
             data-testid="button-add-video"
           >
             <Video className="w-5 h-5" />
@@ -91,11 +226,23 @@ export default function CreatePost() {
         
         <Button
           onClick={handleSubmit}
-          disabled={!caption.trim() || createPostMutation.isPending}
+          disabled={!caption.trim() || createPostMutation.isPending || isUploading}
           className="bg-accent hover:bg-accent/90 text-accent-foreground"
           data-testid="button-share-post"
         >
-          {createPostMutation.isPending ? "Sharing..." : "Share"}
+          {isUploading ? (
+            <>
+              <Upload className="w-4 h-4 mr-2" />
+              Uploading...
+            </>
+          ) : createPostMutation.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Sharing...
+            </>
+          ) : (
+            "Share"
+          )}
         </Button>
       </div>
     </div>

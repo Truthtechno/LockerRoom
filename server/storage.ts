@@ -48,7 +48,7 @@ import {
 import { randomUUID } from "crypto";
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and, or } from 'drizzle-orm';
 
 export interface IStorage {
   // User operations
@@ -1101,11 +1101,8 @@ export class PostgresStorage implements IStorage {
   }
 
   async getStudentsBySchool(schoolId: string): Promise<Student[]> {
-    const schoolUsers = await db.select().from(users).where(eq(users.schoolId, schoolId));
-    const userIds = schoolUsers.map(u => u.id);
-    if (userIds.length === 0) return [];
-    
-    const result = await db.select().from(students).where(sql`${students.userId} = ANY(${userIds})`);
+    if (!isDbConnected) return [];
+    const result = await db.select().from(students).where(eq(students.schoolId, schoolId));
     return result;
   }
 
@@ -1587,12 +1584,15 @@ export class PostgresStorage implements IStorage {
     
     const searchTerm = `%${query.toLowerCase()}%`;
     return await db.select().from(students)
-      .where(sql`${students.schoolId} = ${schoolId} AND (
-        LOWER(${students.name}) LIKE ${searchTerm} OR 
-        LOWER(${students.email}) LIKE ${searchTerm} OR 
-        LOWER(${students.grade}) LIKE ${searchTerm} OR
-        LOWER(${students.roleNumber}) LIKE ${searchTerm}
-      )`);
+      .where(and(
+        eq(students.schoolId, schoolId),
+        or(
+          sql`LOWER(${students.name}) LIKE ${searchTerm}`,
+          sql`LOWER(${students.email}) LIKE ${searchTerm}`,
+          sql`LOWER(${students.grade}) LIKE ${searchTerm}`,
+          sql`LOWER(${students.roleNumber}) LIKE ${searchTerm}`
+        )
+      ));
   }
 
   // Student Rating operations
@@ -1650,7 +1650,7 @@ export class PostgresStorage implements IStorage {
   async getSchoolSetting(schoolId: string, key: string): Promise<SchoolSetting | undefined> {
     if (!isDbConnected) return undefined;
     const result = await db.select().from(schoolSettings)
-      .where(sql`${schoolSettings.schoolId} = ${schoolId} AND ${schoolSettings.key} = ${key}`);
+      .where(and(eq(schoolSettings.schoolId, schoolId), eq(schoolSettings.key, key)));
     return result[0];
   }
 
@@ -1661,7 +1661,7 @@ export class PostgresStorage implements IStorage {
     if (existing) {
       const [updated] = await db.update(schoolSettings)
         .set({ ...setting, updatedAt: new Date() })
-        .where(sql`${schoolSettings.schoolId} = ${setting.schoolId} AND ${schoolSettings.key} = ${setting.key}`)
+        .where(and(eq(schoolSettings.schoolId, setting.schoolId), eq(schoolSettings.key, setting.key)))
         .returning();
       return updated;
     } else {
@@ -1673,7 +1673,7 @@ export class PostgresStorage implements IStorage {
   async deleteSchoolSetting(schoolId: string, key: string): Promise<void> {
     if (!isDbConnected) return;
     await db.delete(schoolSettings)
-      .where(sql`${schoolSettings.schoolId} = ${schoolId} AND ${schoolSettings.key} = ${key}`);
+      .where(and(eq(schoolSettings.schoolId, schoolId), eq(schoolSettings.key, key)));
   }
 }
 
