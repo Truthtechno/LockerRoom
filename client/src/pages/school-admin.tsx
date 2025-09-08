@@ -4,7 +4,7 @@ import { logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import StatsCard from "@/components/stats/stats-card";
-import { Users, FileText, Heart, Trophy, UserPlus, BarChart3, Settings, LogOut } from "lucide-react";
+import { Users, FileText, Heart, Trophy, UserPlus, BarChart3, Settings, LogOut, Search } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -21,24 +21,19 @@ export default function SchoolAdmin() {
   };
 
   const handleAddStudent = () => {
-    toast({
-      title: "Add Student",
-      description: "Student enrollment feature coming soon!",
-    });
+    setLocation("/school-admin/add-student");
   };
 
   const handleViewReports = () => {
-    toast({
-      title: "Reports",
-      description: "Advanced reporting dashboard coming soon!",
-    });
+    setLocation("/school-admin/live-reports");
   };
 
   const handleManageSettings = () => {
-    toast({
-      title: "Settings",
-      description: "School settings panel coming soon!",
-    });
+    setLocation("/school-admin/manage-settings");
+  };
+
+  const handleStudentSearch = () => {
+    setLocation("/school-admin/student-search");
   };
   
   const { data: schoolStats, isLoading } = useQuery<{
@@ -264,6 +259,15 @@ export default function SchoolAdmin() {
                 >
                   <Settings className="w-5 h-5 mr-3" />
                   Manage Settings
+                </Button>
+                <Button
+                  onClick={handleStudentSearch}
+                  variant="secondary"
+                  className="w-full justify-start"
+                  data-testid="button-student-search"
+                >
+                  <Search className="w-5 h-5 mr-3" />
+                  Student Search & Ratings
                 </Button>
               </div>
             </div>

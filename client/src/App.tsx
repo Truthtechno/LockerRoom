@@ -18,6 +18,10 @@ import SchoolApplications from "./pages/admin/school-applications";
 import PlatformAnalytics from "./pages/admin/platform-analytics";
 import SystemConfig from "./pages/admin/system-config";
 import AdminManagement from "./pages/admin/admin-management";
+import AddStudent from "./pages/school-admin/add-student";
+import LiveReports from "./pages/school-admin/live-reports";
+import ManageSettings from "./pages/school-admin/manage-settings";
+import StudentSearch from "./pages/school-admin/student-search";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ 
@@ -107,6 +111,30 @@ function Router() {
       <Route path="/admin/admin-management">
         <ProtectedRoute requiredRole="system_admin">
           <AdminManagement />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/school-admin/add-student">
+        <ProtectedRoute requiredRole="school_admin">
+          <AddStudent />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/school-admin/live-reports">
+        <ProtectedRoute requiredRole="school_admin">
+          <LiveReports />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/school-admin/manage-settings">
+        <ProtectedRoute requiredRole="school_admin">
+          <ManageSettings />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/school-admin/student-search">
+        <ProtectedRoute requiredRole="school_admin">
+          <StudentSearch />
         </ProtectedRoute>
       </Route>
       
