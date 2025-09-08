@@ -12,6 +12,8 @@ import Signup from "@/pages/signup";
 import Feed from "./pages/feed";
 import Profile from "./pages/profile";
 import SearchPage from "./pages/search";
+import StudentStats from "./pages/stats";
+import StudentSettings from "./pages/settings";
 import SchoolAdmin from "./pages/school-admin";
 import SystemAdmin from "./pages/system-admin";
 import SchoolApplications from "./pages/admin/school-applications";
@@ -75,6 +77,24 @@ function Router() {
       <Route path="/profile">
         <ProtectedRoute requiredRole="student">
           <Profile />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/stats">
+        <ProtectedRoute requiredRole="student">
+          <StudentStats />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/settings">
+        <ProtectedRoute requiredRole="student">
+          <StudentSettings />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/create">
+        <ProtectedRoute requiredRole="student">
+          <Feed />
         </ProtectedRoute>
       </Route>
       

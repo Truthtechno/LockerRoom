@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Search, Plus, BarChart3, User, LogOut } from "lucide-react";
+import { Home, Search, Plus, BarChart3, User, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { logout } from "@/lib/auth";
 
@@ -17,8 +17,8 @@ export default function MobileNav() {
     { name: "Feed", href: "/feed", icon: Home, active: location === "/feed" },
     { name: "Search", href: "/search", icon: Search, active: location === "/search" },
     { name: "Create", href: "/create", icon: Plus, active: location === "/create", studentOnly: true },
-    { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
-    { name: "Profile", href: "/profile", icon: User, active: location === "/profile", studentOnly: true },
+    { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats", studentOnly: true },
+    { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings", studentOnly: true },
   ];
 
   return (
