@@ -275,8 +275,9 @@ export default function ManageSettings() {
             <div className="flex items-center space-x-3">
               {(!settings || settings.length === 0) && (
                 <Button
-                  onClick={initializeDefaultSettings}
+                  disabled
                   variant="outline"
+                  className="cursor-not-allowed"
                   data-testid="button-initialize-defaults"
                 >
                   Initialize Defaults
@@ -284,7 +285,7 @@ export default function ManageSettings() {
               )}
               <Dialog open={showAddSetting} onOpenChange={setShowAddSetting}>
                 <DialogTrigger asChild>
-                  <Button className="gold-gradient text-accent-foreground" data-testid="button-add-setting">
+                  <Button disabled className="cursor-not-allowed" data-testid="button-add-setting">
                     <Plus className="w-4 h-4 mr-2" />
                     Add Setting
                   </Button>
@@ -408,7 +409,7 @@ export default function ManageSettings() {
                     <School className="w-5 h-5 mr-2 text-accent" />
                     School Information
                   </CardTitle>
-                  <CardDescription>Update your school's basic information</CardDescription>
+                  <CardDescription>View your school's basic information (read-only)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -417,7 +418,8 @@ export default function ManageSettings() {
                         <Label>School Name</Label>
                         <Input
                           value={school?.name || ""}
-                          onChange={(e) => updateSchoolInfo("name", e.target.value)}
+                          readOnly
+                          className="bg-muted cursor-not-allowed"
                           placeholder="Elite Soccer Academy"
                           data-testid="input-school-name"
                         />
@@ -425,18 +427,12 @@ export default function ManageSettings() {
                       
                       <div>
                         <Label>Subscription Plan</Label>
-                        <Select
-                          value={school?.subscriptionPlan || "standard"}
-                          onValueChange={(value) => updateSchoolInfo("subscriptionPlan", value)}
-                        >
-                          <SelectTrigger data-testid="select-subscription-plan">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="standard">Standard ($75/month)</SelectItem>
-                            <SelectItem value="premium">Premium ($150/month)</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Input
+                          value={school?.subscriptionPlan === "premium" ? "Premium ($150/month)" : "Standard ($75/month)"}
+                          readOnly
+                          className="bg-muted cursor-not-allowed"
+                          data-testid="select-subscription-plan"
+                        />
                       </div>
                     </div>
 
@@ -445,10 +441,26 @@ export default function ManageSettings() {
                       <Input
                         type="number"
                         value={school?.maxStudents || 100}
-                        onChange={(e) => updateSchoolInfo("maxStudents", parseInt(e.target.value))}
+                        readOnly
+                        className="bg-muted cursor-not-allowed"
                         placeholder="100"
                         data-testid="input-max-students"
                       />
+                    </div>
+                    
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                            School information can only be modified by system administrators. Contact support if changes are needed.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -460,14 +472,14 @@ export default function ManageSettings() {
               <CardHeader>
                 <CardTitle className="capitalize">{activeCategory} Settings</CardTitle>
                 <CardDescription>
-                  Configure {activeCategory} settings for your school
+                  View {activeCategory} settings for your school (read-only)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {filteredSettings.length > 0 ? (
                   <div className="space-y-6">
                     {filteredSettings.map((setting) => (
-                      <div key={setting.id} className="border border-border rounded-lg p-4" data-testid={`setting-${setting.key}`}>
+                      <div key={setting.id} className="border border-border rounded-lg p-4 bg-muted/50" data-testid={`setting-${setting.key}`}>
                         <div className="flex items-start justify-between">
                           <div className="flex-1 mr-4">
                             <div className="flex items-center space-x-2 mb-2">
@@ -480,7 +492,7 @@ export default function ManageSettings() {
                               <div className="flex items-center space-x-2">
                                 <Switch
                                   checked={setting.value === "true"}
-                                  onCheckedChange={(checked) => updateSetting(setting.key, checked.toString())}
+                                  disabled
                                   data-testid={`switch-${setting.key}`}
                                 />
                                 <span className="text-sm">{setting.value === "true" ? "Enabled" : "Disabled"}</span>
@@ -489,7 +501,8 @@ export default function ManageSettings() {
                               <Input
                                 type="url"
                                 value={setting.value}
-                                onChange={(e) => updateSetting(setting.key, e.target.value)}
+                                readOnly
+                                className="bg-muted cursor-not-allowed"
                                 placeholder="https://example.com/image.jpg"
                                 data-testid={`input-${setting.key}`}
                               />
@@ -497,7 +510,8 @@ export default function ManageSettings() {
                               <Input
                                 type="email"
                                 value={setting.value}
-                                onChange={(e) => updateSetting(setting.key, e.target.value)}
+                                readOnly
+                                className="bg-muted cursor-not-allowed"
                                 placeholder="admin@school.edu"
                                 data-testid={`input-${setting.key}`}
                               />
@@ -505,14 +519,16 @@ export default function ManageSettings() {
                               <Input
                                 type="tel"
                                 value={setting.value}
-                                onChange={(e) => updateSetting(setting.key, e.target.value)}
+                                readOnly
+                                className="bg-muted cursor-not-allowed"
                                 placeholder="(555) 123-4567"
                                 data-testid={`input-${setting.key}`}
                               />
                             ) : setting.key.includes("address") ? (
                               <Textarea
                                 value={setting.value}
-                                onChange={(e) => updateSetting(setting.key, e.target.value)}
+                                readOnly
+                                className="bg-muted cursor-not-allowed"
                                 placeholder="123 School St, City, State 12345"
                                 rows={2}
                                 data-testid={`textarea-${setting.key}`}
@@ -520,7 +536,8 @@ export default function ManageSettings() {
                             ) : (
                               <Input
                                 value={setting.value}
-                                onChange={(e) => updateSetting(setting.key, e.target.value)}
+                                readOnly
+                                className="bg-muted cursor-not-allowed"
                                 placeholder="Setting value"
                                 data-testid={`input-${setting.key}`}
                               />
@@ -534,8 +551,8 @@ export default function ManageSettings() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => deleteSettingMutation.mutate(setting.key)}
-                            disabled={deleteSettingMutation.isPending}
+                            disabled
+                            className="cursor-not-allowed"
                             data-testid={`button-delete-${setting.key}`}
                           >
                             <Trash2 className="w-4 h-4" />
@@ -543,17 +560,32 @@ export default function ManageSettings() {
                         </div>
                       </div>
                     ))}
+                    
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mt-6">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                            School settings can only be modified by system administrators. Contact support if changes are needed.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-12">
                     <Settings className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-foreground mb-2">No {activeCategory} Settings</h3>
                     <p className="text-muted-foreground mb-6">
-                      No settings found in the {activeCategory} category.
+                      No settings found in the {activeCategory} category. Contact system administrators to add settings.
                     </p>
                     <Button 
-                      onClick={() => setShowAddSetting(true)}
-                      className="gold-gradient text-accent-foreground"
+                      disabled
+                      className="cursor-not-allowed"
                       data-testid="button-add-first-setting"
                     >
                       <Plus className="w-4 h-4 mr-2" />
