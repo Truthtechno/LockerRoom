@@ -36,31 +36,19 @@ export default function SystemAdmin() {
   };
 
   const handleReviewApplications = () => {
-    toast({
-      title: "School Applications",
-      description: "School review system coming soon!",
-    });
+    setLocation("/admin/school-applications");
   };
 
   const handlePlatformAnalytics = () => {
-    toast({
-      title: "Analytics",
-      description: "Advanced platform analytics coming soon!",
-    });
+    setLocation("/admin/platform-analytics");
   };
 
   const handleSystemConfig = () => {
-    toast({
-      title: "Configuration",
-      description: "System configuration panel coming soon!",
-    });
+    setLocation("/admin/system-config");
   };
 
   const handleManageAdmins = () => {
-    toast({
-      title: "Admin Management",
-      description: "Administrator management system coming soon!",
-    });
+    setLocation("/admin/admin-management");
   };
 
   if (isLoading) {
