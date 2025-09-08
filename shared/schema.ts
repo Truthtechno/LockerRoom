@@ -79,6 +79,53 @@ export const follows = pgTable("follows", {
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
+export const schoolApplications = pgTable("school_applications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  schoolName: text("school_name").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  contactName: text("contact_name").notNull(),
+  phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  expectedStudents: integer("expected_students").default(100),
+  planType: text("plan_type").notNull().default("standard"), // standard, premium
+  status: text("status").notNull().default("pending"), // pending, approved, rejected
+  notes: text("notes"),
+  reviewedBy: varchar("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const systemSettings = pgTable("system_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  category: text("category").notNull().default("general"), // general, theme, features, email
+  description: text("description"),
+  updatedBy: varchar("updated_by").notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+});
+
+export const adminRoles = pgTable("admin_roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  role: text("role").notNull(), // super_admin, system_admin, moderator
+  permissions: text("permissions").array().notNull().default(sql`'{}'`), // JSON array of permissions
+  assignedBy: varchar("assigned_by").notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const analyticsLogs = pgTable("analytics_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventType: text("event_type").notNull(), // user_signup, post_created, school_onboarded, etc.
+  entityId: varchar("entity_id"), // ID of the related entity
+  entityType: text("entity_type"), // user, post, school, etc.
+  metadata: text("metadata"), // JSON string with additional data
+  timestamp: timestamp("timestamp").default(sql`now()`).notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -119,6 +166,27 @@ export const insertFollowSchema = createInsertSchema(follows).omit({
   createdAt: true,
 });
 
+export const insertSchoolApplicationSchema = createInsertSchema(schoolApplications).omit({
+  id: true,
+  createdAt: true,
+  reviewedAt: true,
+});
+
+export const insertSystemSettingSchema = createInsertSchema(systemSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertAdminRoleSchema = createInsertSchema(adminRoles).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAnalyticsLogSchema = createInsertSchema(analyticsLogs).omit({
+  id: true,
+  timestamp: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type School = typeof schools.$inferSelect;
@@ -128,6 +196,10 @@ export type Like = typeof likes.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
 export type Save = typeof saves.$inferSelect;
 export type Follow = typeof follows.$inferSelect;
+export type SchoolApplication = typeof schoolApplications.$inferSelect;
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type AdminRole = typeof adminRoles.$inferSelect;
+export type AnalyticsLog = typeof analyticsLogs.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertSchool = z.infer<typeof insertSchoolSchema>;
@@ -137,6 +209,10 @@ export type InsertLike = z.infer<typeof insertLikeSchema>;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type InsertSave = z.infer<typeof insertSaveSchema>;
 export type InsertFollow = z.infer<typeof insertFollowSchema>;
+export type InsertSchoolApplication = z.infer<typeof insertSchoolApplicationSchema>;
+export type InsertSystemSetting = z.infer<typeof insertSystemSettingSchema>;
+export type InsertAdminRole = z.infer<typeof insertAdminRoleSchema>;
+export type InsertAnalyticsLog = z.infer<typeof insertAnalyticsLogSchema>;
 
 // Extended types for joins
 export type PostWithDetails = Post & {

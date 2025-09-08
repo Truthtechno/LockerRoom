@@ -15,6 +15,14 @@ import {
   type InsertSave,
   type Follow,
   type InsertFollow,
+  type SchoolApplication,
+  type InsertSchoolApplication,
+  type SystemSetting,
+  type InsertSystemSetting,
+  type AdminRole,
+  type InsertAdminRole,
+  type AnalyticsLog,
+  type InsertAnalyticsLog,
   type PostWithDetails,
   type StudentWithStats,
   type StudentSearchResult,
@@ -25,7 +33,11 @@ import {
   likes,
   comments,
   saves,
-  follows
+  follows,
+  schoolApplications,
+  systemSettings,
+  adminRoles,
+  analyticsLogs
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { neon } from '@neondatabase/serverless';
@@ -77,6 +89,32 @@ export interface IStorage {
   // Stats operations
   getSchoolStats(schoolId: string): Promise<any>;
   getSystemStats(): Promise<any>;
+  
+  // School application operations
+  getSchoolApplications(): Promise<SchoolApplication[]>;
+  getSchoolApplication(id: string): Promise<SchoolApplication | undefined>;
+  createSchoolApplication(application: InsertSchoolApplication): Promise<SchoolApplication>;
+  updateSchoolApplication(id: string, application: Partial<SchoolApplication>): Promise<SchoolApplication | undefined>;
+  approveSchoolApplication(id: string, reviewerId: string): Promise<School | undefined>;
+  rejectSchoolApplication(id: string, reviewerId: string, notes?: string): Promise<SchoolApplication | undefined>;
+  
+  // System settings operations
+  getSystemSettings(): Promise<SystemSetting[]>;
+  getSystemSetting(key: string): Promise<SystemSetting | undefined>;
+  createOrUpdateSystemSetting(setting: InsertSystemSetting): Promise<SystemSetting>;
+  deleteSystemSetting(key: string): Promise<void>;
+  
+  // Admin role operations
+  getAdminRoles(): Promise<AdminRole[]>;
+  getAdminRole(userId: string): Promise<AdminRole | undefined>;
+  createAdminRole(role: InsertAdminRole): Promise<AdminRole>;
+  updateAdminRole(userId: string, role: Partial<AdminRole>): Promise<AdminRole | undefined>;
+  deleteAdminRole(userId: string): Promise<void>;
+  
+  // Analytics operations
+  logAnalyticsEvent(log: InsertAnalyticsLog): Promise<AnalyticsLog>;
+  getAnalyticsLogs(eventType?: string, limit?: number): Promise<AnalyticsLog[]>;
+  getAnalyticsStats(): Promise<any>;
 }
 
 export class MemStorage implements IStorage {
@@ -88,6 +126,10 @@ export class MemStorage implements IStorage {
   private comments: Map<string, Comment> = new Map();
   private saves: Map<string, Save> = new Map();
   private follows: Map<string, Follow> = new Map();
+  private schoolApplications: Map<string, SchoolApplication> = new Map();
+  private systemSettings: Map<string, SystemSetting> = new Map();
+  private adminRoles: Map<string, AdminRole> = new Map();
+  private analyticsLogs: Map<string, AnalyticsLog> = new Map();
 
   constructor() {
     this.initializeDemoData();
@@ -659,6 +701,199 @@ export class MemStorage implements IStorage {
     }
 
     return results.sort((a, b) => b.followersCount - a.followersCount); // Sort by popularity
+  }
+
+  async getSchoolStats(schoolId: string): Promise<any> {
+    const students = Array.from(this.students.values()).filter(s => {
+      const user = this.users.get(s.userId);
+      return user?.schoolId === schoolId;
+    });
+    const posts = Array.from(this.posts.values()).filter(p => 
+      students.some(s => s.id === p.studentId)
+    );
+    return {
+      totalStudents: students.length,
+      totalPosts: posts.length,
+    };
+  }
+
+  async getSystemStats(): Promise<any> {
+    const totalSchools = this.schools.size;
+    const activeStudents = this.students.size;
+    const contentUploads = this.posts.size;
+    const premiumSchools = Array.from(this.schools.values()).filter(s => s.subscriptionPlan === "premium").length;
+    const standardSchools = Array.from(this.schools.values()).filter(s => s.subscriptionPlan === "standard").length;
+    const monthlyRevenue = (premiumSchools * 150) + (standardSchools * 75);
+
+    return {
+      totalSchools,
+      activeStudents,
+      contentUploads,
+      monthlyRevenue,
+      premiumSchools,
+      standardSchools,
+    };
+  }
+
+  // School application operations (stub implementations)
+  async getSchoolApplications(): Promise<SchoolApplication[]> {
+    return Array.from(this.schoolApplications.values());
+  }
+
+  async getSchoolApplication(id: string): Promise<SchoolApplication | undefined> {
+    return this.schoolApplications.get(id);
+  }
+
+  async createSchoolApplication(application: InsertSchoolApplication): Promise<SchoolApplication> {
+    const id = randomUUID();
+    const newApplication: SchoolApplication = {
+      id,
+      ...application,
+      status: "pending",
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt: new Date(),
+    };
+    this.schoolApplications.set(id, newApplication);
+    return newApplication;
+  }
+
+  async updateSchoolApplication(id: string, application: Partial<SchoolApplication>): Promise<SchoolApplication | undefined> {
+    const existing = this.schoolApplications.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...application };
+    this.schoolApplications.set(id, updated);
+    return updated;
+  }
+
+  async approveSchoolApplication(id: string, reviewerId: string): Promise<School | undefined> {
+    const application = this.schoolApplications.get(id);
+    if (!application) return undefined;
+    
+    const school = await this.createSchool({
+      name: application.schoolName,
+      subscriptionPlan: application.planType as "standard" | "premium",
+      maxStudents: application.expectedStudents || 100,
+    });
+    
+    await this.updateSchoolApplication(id, {
+      status: "approved",
+      reviewedBy: reviewerId,
+      reviewedAt: new Date(),
+    });
+    
+    return school;
+  }
+
+  async rejectSchoolApplication(id: string, reviewerId: string, notes?: string): Promise<SchoolApplication | undefined> {
+    return await this.updateSchoolApplication(id, {
+      status: "rejected",
+      reviewedBy: reviewerId,
+      reviewedAt: new Date(),
+      notes: notes,
+    });
+  }
+
+  // System settings operations (stub implementations)
+  async getSystemSettings(): Promise<SystemSetting[]> {
+    return Array.from(this.systemSettings.values());
+  }
+
+  async getSystemSetting(key: string): Promise<SystemSetting | undefined> {
+    return Array.from(this.systemSettings.values()).find(s => s.key === key);
+  }
+
+  async createOrUpdateSystemSetting(setting: InsertSystemSetting): Promise<SystemSetting> {
+    const existing = Array.from(this.systemSettings.values()).find(s => s.key === setting.key);
+    if (existing) {
+      const updated = { ...existing, ...setting, updatedAt: new Date() };
+      this.systemSettings.set(existing.id, updated);
+      return updated;
+    } else {
+      const id = randomUUID();
+      const newSetting: SystemSetting = {
+        id,
+        ...setting,
+        updatedAt: new Date(),
+      };
+      this.systemSettings.set(id, newSetting);
+      return newSetting;
+    }
+  }
+
+  async deleteSystemSetting(key: string): Promise<void> {
+    const setting = Array.from(this.systemSettings.values()).find(s => s.key === key);
+    if (setting) {
+      this.systemSettings.delete(setting.id);
+    }
+  }
+
+  // Admin role operations (stub implementations)
+  async getAdminRoles(): Promise<AdminRole[]> {
+    return Array.from(this.adminRoles.values());
+  }
+
+  async getAdminRole(userId: string): Promise<AdminRole | undefined> {
+    return Array.from(this.adminRoles.values()).find(r => r.userId === userId);
+  }
+
+  async createAdminRole(role: InsertAdminRole): Promise<AdminRole> {
+    const id = randomUUID();
+    const newRole: AdminRole = {
+      id,
+      ...role,
+      createdAt: new Date(),
+    };
+    this.adminRoles.set(id, newRole);
+    return newRole;
+  }
+
+  async updateAdminRole(userId: string, role: Partial<AdminRole>): Promise<AdminRole | undefined> {
+    const existing = Array.from(this.adminRoles.values()).find(r => r.userId === userId);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...role };
+    this.adminRoles.set(existing.id, updated);
+    return updated;
+  }
+
+  async deleteAdminRole(userId: string): Promise<void> {
+    const role = Array.from(this.adminRoles.values()).find(r => r.userId === userId);
+    if (role) {
+      this.adminRoles.delete(role.id);
+    }
+  }
+
+  // Analytics operations (stub implementations)
+  async logAnalyticsEvent(log: InsertAnalyticsLog): Promise<AnalyticsLog> {
+    const id = randomUUID();
+    const newLog: AnalyticsLog = {
+      id,
+      ...log,
+      timestamp: new Date(),
+    };
+    this.analyticsLogs.set(id, newLog);
+    return newLog;
+  }
+
+  async getAnalyticsLogs(eventType?: string, limit?: number): Promise<AnalyticsLog[]> {
+    const logs = Array.from(this.analyticsLogs.values());
+    const filtered = eventType ? logs.filter(l => l.eventType === eventType) : logs;
+    const sorted = filtered.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return limit ? sorted.slice(0, limit) : sorted;
+  }
+
+  async getAnalyticsStats(): Promise<any> {
+    const logs = Array.from(this.analyticsLogs.values());
+    const userSignups = logs.filter(l => l.eventType === "user_signup").length;
+    const postCreated = logs.filter(l => l.eventType === "post_created").length;
+    const schoolOnboarded = logs.filter(l => l.eventType === "school_onboarded").length;
+    
+    return {
+      userSignups,
+      postCreated,
+      schoolOnboarded,
+      totalEvents: logs.length,
+    };
   }
 }
 
