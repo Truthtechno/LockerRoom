@@ -826,12 +826,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/schools/:schoolId/students", upload.single("profilePic"), async (req, res) => {
     try {
       const { schoolId } = req.params;
-      let studentData = insertStudentSchema.parse({
-        ...req.body,
-        schoolId,
-      });
+      
+      // First check for duplicate email in users
+      const existingUser = await storage.getUserByEmail(req.body.email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
 
       // Handle profile picture upload to Cloudinary
+      let profilePicUrl = null;
       if (req.file) {
         const result = await new Promise((resolve, reject) => {
           cloudinary.uploader.upload_stream(
@@ -849,14 +852,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ).end(req.file!.buffer);
         });
 
-        studentData.profilePicUrl = (result as any).secure_url;
+        profilePicUrl = (result as any).secure_url;
       }
 
-      // Check for duplicate email
-      const existingStudent = await storage.getStudentByEmail(studentData.email);
-      if (existingStudent) {
-        return res.status(400).json({ message: "Student with this email already exists" });
-      }
+      // Create user first
+      const userData = insertUserSchema.parse({
+        name: req.body.name,
+        email: req.body.email,
+        password: await bcrypt.hash("TempPassword123!", 10), // Temporary password
+        role: "student",
+        schoolId: schoolId,
+      });
+
+      const user = await storage.createUser(userData);
+
+      // Create student record with userId
+      const studentData = insertStudentSchema.parse({
+        userId: user.id,
+        schoolId: schoolId,
+        name: req.body.name,
+        email: req.body.email,
+        phone: req.body.phone || null,
+        gender: req.body.gender || null,
+        dateOfBirth: req.body.dateOfBirth || null,
+        grade: req.body.grade || null,
+        guardianContact: req.body.guardianContact || null,
+        profilePicUrl: profilePicUrl,
+        roleNumber: req.body.roleNumber || null,
+        position: req.body.position || null,
+        sport: req.body.sport || null,
+        bio: req.body.bio || null,
+      });
 
       const student = await storage.createStudent(studentData);
       

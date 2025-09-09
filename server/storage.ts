@@ -48,7 +48,7 @@ import {
 import { randomUUID } from "crypto";
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { eq, desc, sql, and, or } from 'drizzle-orm';
+import { eq, desc, sql, and, or, inArray } from 'drizzle-orm';
 
 export interface IStorage {
   // User operations
@@ -1253,6 +1253,53 @@ export class PostgresStorage implements IStorage {
     await db.delete(saves).where(sql`${saves.postId} = ${postId} AND ${saves.userId} = ${userId}`);
   }
 
+  async getUserSavedPosts(userId: string): Promise<PostWithDetails[]> {
+    if (!isDbConnected) return [];
+    
+    const userSaves = await db.select().from(saves).where(eq(saves.userId, userId));
+    const savedPostIds = userSaves.map(save => save.postId);
+    
+    if (savedPostIds.length === 0) return [];
+    
+    const savedPosts = await db.select().from(posts).where(inArray(posts.id, savedPostIds));
+    
+    const postsWithDetails: PostWithDetails[] = [];
+    
+    for (const post of savedPosts) {
+      const student = await db.select().from(students).where(eq(students.id, post.studentId)).limit(1);
+      if (!student[0]) continue;
+      
+      const user = await db.select().from(users).where(eq(users.id, student[0].userId)).limit(1);
+      if (!user[0]) continue;
+      
+      const postLikes = await db.select().from(likes).where(eq(likes.postId, post.id));
+      const postComments = await db.select().from(comments).where(eq(comments.postId, post.id));
+      const postSaves = await db.select().from(saves).where(eq(saves.postId, post.id));
+      
+      const commentsWithUsers = [];
+      for (const comment of postComments) {
+        const commentUser = await db.select().from(users).where(eq(users.id, comment.userId)).limit(1);
+        if (commentUser[0]) {
+          commentsWithUsers.push({ ...comment, user: commentUser[0] });
+        }
+      }
+
+      postsWithDetails.push({
+        ...post,
+        student: { ...student[0], user: user[0] },
+        likes: postLikes,
+        comments: commentsWithUsers,
+        saves: postSaves,
+        likesCount: postLikes.length,
+        commentsCount: postComments.length,
+        savesCount: postSaves.length,
+        viewsCount: Math.floor(Math.random() * 2000) + 100,
+      });
+    }
+    
+    return postsWithDetails.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
   async getSchoolStats(schoolId: string): Promise<any> {
     const schoolStudents = await this.getStudentsBySchool(schoolId);
     const studentIds = schoolStudents.map(s => s.id);
@@ -1266,7 +1313,7 @@ export class PostgresStorage implements IStorage {
       };
     }
     
-    const schoolPosts = await db.select().from(posts).where(sql`${posts.studentId} = ANY(${studentIds})`);
+    const schoolPosts = await db.select().from(posts).where(inArray(posts.studentId, studentIds));
     
     let totalLikes = 0;
     let totalComments = 0;
