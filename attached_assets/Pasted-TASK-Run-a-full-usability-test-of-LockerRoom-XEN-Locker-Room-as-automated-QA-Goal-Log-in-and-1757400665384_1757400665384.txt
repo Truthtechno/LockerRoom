@@ -1,0 +1,125 @@
+TASK: Run a full usability test of LockerRoom (XEN Locker Room) as automated QA.
+
+Goal:
+- Log in and act as each role: System Admin, School Admin, Student, Viewer, plus a brand-new Viewer signup.
+- Exercise every user-facing feature (create posts, uploads, likes, comments, follow, search, saved/bookmark, admin flows, add student, OTP enrollment, settings, analytics, read-only restrictions).
+- Produce a comprehensive, actionable usability report at /src/docs/usability-test-report.md with: success/failure per test, screenshots, console/server logs, steps-to-reproduce, severity (Critical/Major/Minor), suggested fixes and file/line pointers.
+- Save all artifacts (screenshots, traces, logs) under /artifacts/usability-tests/YYYYMMDD_HHMMSS/ and commit them.
+
+ENVIRONMENT CHECK (abort if production):
+- If NODE_ENV == 'production' then STOP and report: "Refusing to run automated UI tests in production".
+
+Prep steps (do these first):
+1. Ensure dev demo data is present. If not, run the seed script at `scripts/inject-demo-data.ts` or `scripts/seed.js`. Confirm the demo accounts below exist.
+2. Add stable test attributes to the UI for automation reliability (data-testid on interactive elements). If elements already have ids/data-testids use them; otherwise add:
+   - login: data-testid="login-email", "login-password", "login-submit"
+   - signup: data-testid="signup-fullname", "signup-email", "signup-password", "signup-submit"
+   - post upload: data-testid="upload-input", "upload-submit"
+   - feed post actions: data-testid="post-<postId>-like", "post-<postId>-comment", "post-<postId>-save", "post-<postId>-share"
+   - follow button: data-testid="follow-btn-<studentId>"
+   - search input: data-testid="student-search"
+   - settings fields and save: data-testid="settings-name", "settings-email", "settings-save"
+   - add-student form: data-testid="addstudent-name","addstudent-email","addstudent-submit"
+   - school subscription fields: data-testid="subscription-plan","max-students" (should be read-only for school_admins)
+   - pages: data-testid attributes for navigation links (nav-system-admin, nav-school-admin, nav-student, nav-viewer)
+
+Automated test toolchain:
+- Use Playwright (official @playwright/test) for browser automation.
+- Use a Node script (axios) for basic API checks (status codes, unauthorized access).
+
+Create these project files (if missing) and run tests:
+
+A) Add Playwright config and tests under `/tests/e2e/`:
+
+- `tests/e2e/playwright.config.ts` (set baseURL from env)
+- `tests/e2e/system-admin.spec.ts`
+- `tests/e2e/school-admin.spec.ts`
+- `tests/e2e/student.spec.ts`
+- `tests/e2e/viewer.spec.ts`
+- `tests/e2e/signup.spec.ts`
+- `tests/e2e/api.spec.ts` (basic API checks)
+
+B) Test behavior to verify (per role):
+- System Admin:
+  - Login.
+  - Open System Management → Review School Applications: create a new school application (via UI or API) and approve/reject it. Expect: application toggles to approved; analytics updates.
+  - Open Platform Analytics: confirm counts reflect approved school and demo data.
+  - System Configuration: modify a global setting (e.g., "platform_maintenance" flag) and confirm change propagates.
+  - Manage Administrators: add new admin, verify admin can log in, then remove.
+  - Create a school via System Admin flow and verify OTP issuance/email placeholder.
+
+- School Admin:
+  - Login.
+  - Add Student: fill the form, upload profile pic (Cloudinary), submit; expect student row in students table and visible in student list.
+  - View Live Reports: open student analytics, verify recent posts/engagement counts update after actions.
+  - Manage Settings: confirm subscription and max_students fields are **read-only** (no editing allowed). Try to POST an edit via UI: expect blocked; attempt via API with school_admin credentials → should be 403.
+  - Search student and open profile; add/update rating.
+
+- Student:
+  - Login.
+  - Create posts: upload image and video (use small sample files in repo `tests/fixtures/`) and publish; confirm post appears in feed immediately.
+  - Like, comment on another student's post and verify counts update.
+  - Edit profile: change profile pic and bio; verify DB and UI reflect changes.
+  - Check Stats: open stats page, verify counts include recent actions.
+  - Privacy: toggle privacy to private, confirm feed visibility behavior changes accordingly (public viewers cannot follow or see posts).
+
+- Viewer:
+  - Use existing Viewer account and also perform new signup flow.
+  - Search students, follow/unfollow, check "Following" page reflects changes.
+  - Save/unsave posts and verify "Saved" page lists saved items.
+  - Comment on post; verify comment appears.
+  - Settings: edit name and profile pic; confirm update.
+  - Ensure Stats tab is not visible for viewer.
+
+- Signup test:
+  - Use the signup UI to create a new viewer account (use randomized email).
+  - Verify signup confirmation, login works, and profile created.
+
+- Negative tests and edge cases:
+  - Attempt large file upload (> max limit), expect client-side rejection or server 413/validation error.
+  - Attempt unauthorized access: login as student and try to access System Admin routes → expect redirect/403.
+  - Attempt to edit subscription fields as school admin via API → expect 403 or validation error.
+  - RLS test: attempt to modify another student's profile via direct DB API using anon key → expect permission denied.
+
+C) Artifacts & Reporting requirements
+- Save screenshots at each step (success & failure) into `/artifacts/usability-tests/<timestamp>/screenshots/`.
+- Save Playwright trace/video for failing tests into `/artifacts/.../traces/`.
+- Save backend API responses and server logs into `/artifacts/.../logs/`.
+- Generate a single Markdown report `/src/docs/usability-test-report.md` that includes:
+  - Summary table: test name, role, status (PASS/FAIL), severity, screenshot link.
+  - For each failure: steps to reproduce, expected vs actual, stack traces/log excerpt, screenshot, suggested fix, priority (P0/P1/P2).
+  - Summary recommendations and next steps (bug fixes, UX adjustments).
+- Commit all changes and artifacts to a new branch `usability-tests/report-YYYYMMDD` and push; create a PR titled "Usability test report - automated run YYYY-MM-DD".
+
+D) Commands to run inside Replit
+- Install test deps: `npm ci && npx playwright install`
+- Run Playwright tests headless and output artifacts:  
+  `npx playwright test --reporter=list --project=chromium || true`  
+  (capture exit code but always continue to generate report file)
+- Run API checks: `node tests/e2e/api-checks.js`
+- Produce final Markdown report: `node scripts/generate-usability-report.js` (script to aggregate playwright results into the markdown — add script if not present)
+
+E) Deliverable files (create or update)
+- `/tests/e2e/*.spec.ts` → Playwright test suites
+- `/tests/fixtures/` → small sample image and short mp4 to upload
+- `/scripts/generate-usability-report.js` → aggregator for Playwright results and artifacts into markdown
+- `/src/docs/usability-test-report.md` → final human-readable report (also commit)
+- `/artifacts/usability-tests/<timestamp>/` → runtime artifacts (screenshots, traces, logs)
+
+F) Final output from Replit AI required:
+- A short console summary printed at the end of the run (stdout): total tests run, passes/fails, path to the generated report, and path to artifacts.  
+- Commit created with changes + artifacts and PR created.
+
+DATA / CREDENTIALS TO USE
+- System Admin: admin@lockerroom.com / Admin123!
+- School Admin: school@lockerroom.com / School123!
+- Student: student@lockerroom.com / Student123!
+- Viewer: viewer@lockerroom.com / Viewer123!
+- When creating a new viewer account, use `testviewer+<timestamp>@lockerroom.test` and password `Viewer123!`.
+
+IMPORTANT:
+- Do not run tests in production.
+- If any test interacts with real email sending, use a dummy email service or intercept the email (do not send real emails).
+- If any change requires DB migration, add the SQL files to `/migrations/` and run in dev only.
+
+Please implement the above, run the automated tests, and produce the final report in `/src/docs/usability-test-report.md`. If anything cannot be completed automatically, provide detailed manual steps and screenshots showing the failing points.
