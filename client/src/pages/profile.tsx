@@ -51,7 +51,7 @@ export default function Profile() {
         bio: `Hello! I'm ${user.name}, a student athlete at XEN Sports Academy.`
       };
 
-      const response = await apiRequest("/api/students", "POST", profileData);
+      const response = await apiRequest("POST", "/api/students", profileData);
       return response.json();
     },
     onSuccess: () => {

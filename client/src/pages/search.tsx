@@ -45,9 +45,9 @@ export default function SearchPage() {
   const followMutation = useMutation({
     mutationFn: async ({ studentId, action }: { studentId: string; action: 'follow' | 'unfollow' }) => {
       if (action === 'follow') {
-        return apiRequest(`/api/students/${studentId}/follow`, "POST", { userId: user?.id });
+        return apiRequest("POST", `/api/students/${studentId}/follow`, { userId: user?.id });
       } else {
-        return apiRequest(`/api/students/${studentId}/follow`, "DELETE", { userId: user?.id });
+        return apiRequest("DELETE", `/api/students/${studentId}/follow`, { userId: user?.id });
       }
     },
     onSuccess: (_, variables) => {
