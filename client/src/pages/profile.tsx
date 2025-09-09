@@ -257,7 +257,7 @@ export default function Profile() {
               {/* Profile Picture */}
               <img
                 className="w-32 h-32 rounded-full border-4 border-card shadow-lg mx-auto sm:mx-0"
-                src={studentProfile.profilePic || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"}
+                src={studentProfile.profilePicUrl || studentProfile.profilePic || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"}
                 alt={`${studentProfile.user.name} profile`}
               />
               
@@ -417,7 +417,7 @@ export default function Profile() {
             <div className="flex items-center space-x-4">
               <img
                 className="w-20 h-20 rounded-full border-4 border-border"
-                src={profilePicPreview || studentProfile.profilePic || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"}
+                src={profilePicPreview || studentProfile.profilePicUrl || studentProfile.profilePic || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"}
                 alt="Profile preview"
               />
               <div>
@@ -571,7 +571,7 @@ export default function Profile() {
             <div className="flex items-center space-x-3 p-4 bg-muted rounded-lg">
               <img
                 className="w-12 h-12 rounded-full"
-                src={studentProfile.profilePic || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"}
+                src={studentProfile.profilePicUrl || studentProfile.profilePic || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"}
                 alt={studentProfile.name}
               />
               <div>

@@ -114,10 +114,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:userId", async (req, res) => {
+  app.put("/api/users/:userId", upload.single("profilePic"), async (req, res) => {
     try {
       const { userId } = req.params;
-      const updateData = req.body;
+      let updateData = { ...req.body };
+
+      // Handle profile picture upload to Cloudinary for users
+      if (req.file) {
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            { 
+              resource_type: "image",
+              folder: "user-profiles",
+              transformation: [
+                { width: 400, height: 400, crop: "fill", gravity: "face" }
+              ]
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          ).end(req.file!.buffer);
+        });
+
+        updateData.profilePicUrl = (result as any).secure_url;
+      }
       
       const updatedUser = await storage.updateUser(userId, updateData);
       
@@ -130,9 +151,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
-        schoolId: updatedUser.schoolId
+        schoolId: updatedUser.schoolId,
+        profilePicUrl: updatedUser.profilePicUrl
       });
     } catch (error) {
+      console.error('Update user profile error:', error);
       res.status(500).json({ message: "Failed to update user" });
     }
   });
@@ -189,7 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/students/profile/:userId", async (req, res) => {
+  app.put("/api/students/profile/:userId", upload.single("profilePic"), async (req, res) => {
     try {
       const { userId } = req.params;
       const student = await storage.getStudentByUserId(userId);
@@ -198,9 +221,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Student not found" });
       }
 
-      const updatedStudent = await storage.updateStudent(student.id, req.body);
+      let updateData = { ...req.body };
+
+      // Handle profile picture upload to Cloudinary
+      if (req.file) {
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            { 
+              resource_type: "image",
+              folder: "student-profiles",
+              transformation: [
+                { width: 400, height: 400, crop: "fill", gravity: "face" }
+              ]
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          ).end(req.file!.buffer);
+        });
+
+        updateData.profilePicUrl = (result as any).secure_url;
+      }
+
+      const updatedStudent = await storage.updateStudent(student.id, updateData);
       res.json(updatedStudent);
     } catch (error) {
+      console.error('Update student profile error:', error);
       res.status(500).json({ message: "Failed to update student profile" });
     }
   });
@@ -996,9 +1043,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/students/:studentId/ratings", async (req, res) => {
     try {
       const { studentId } = req.params;
+      
+      // TODO: Get the current user from session/auth
+      // For now, using a placeholder - in real app this would come from authenticated user
+      const ratedBy = req.headers['x-user-id'] || 'admin-placeholder';
+      
       const ratingData = insertStudentRatingSchema.parse({
         ...req.body,
         studentId,
+        ratedBy,
       });
 
       const rating = await storage.createStudentRating(ratingData);
