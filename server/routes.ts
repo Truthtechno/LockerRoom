@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
+import bcrypt from "bcrypt";
 import { v2 as cloudinary } from "cloudinary";
 import { storage } from "./storage";
 import { 
@@ -42,7 +43,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await storage.getUserByEmail(email);
-      if (!user || user.password !== password) {
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Compare password with bcrypt
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
