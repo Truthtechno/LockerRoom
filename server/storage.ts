@@ -46,6 +46,7 @@ import {
   schoolSettings
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import bcrypt from "bcrypt";
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { eq, desc, sql, and, or, inArray } from 'drizzle-orm';
@@ -377,18 +378,23 @@ export class MemStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const bcrypt = require('bcrypt');
     const saltRounds = 10;
     
+    
+    // Hash the password before creating the user
+    const hashedPassword = await bcrypt.hash(insertUser.password, saltRounds);
+    
     const id = randomUUID();
+    const { password, ...userWithoutPassword } = insertUser; // Exclude original password
     const user: User = { 
-      ...insertUser, 
+      ...userWithoutPassword, 
       id,
       role: insertUser.role || "viewer",
       schoolId: insertUser.schoolId || null,
-      password: await bcrypt.hash(insertUser.password, saltRounds), // Hash the password
+      password: hashedPassword, // Use the hashed password
       createdAt: new Date()
     };
+    
     this.users.set(id, user);
     return user;
   }
@@ -956,6 +962,7 @@ try {
   isDbConnected = false;
 }
 
+
 export class PostgresStorage implements IStorage {
   constructor() {
     if (isDbConnected) {
@@ -1085,7 +1092,19 @@ export class PostgresStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+    const saltRounds = 10;
+    
+    
+    // Hash the password before inserting into database
+    const hashedPassword = await bcrypt.hash(insertUser.password, saltRounds);
+    
+    const { password, ...userWithoutPassword } = insertUser;
+    const userData = {
+      ...userWithoutPassword,
+      password: hashedPassword
+    };
+    
+    const [user] = await db.insert(users).values(userData).returning();
     return user;
   }
 

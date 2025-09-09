@@ -43,12 +43,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await storage.getUserByEmail(email);
+      
       if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
       // Compare password with bcrypt
       const isPasswordValid = await bcrypt.compare(password, user.password);
+      
       if (!isPasswordValid) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
@@ -555,10 +557,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Public signup route (enhanced from existing register)
   app.post("/api/auth/signup", async (req, res) => {
     try {
+      
       const userData = insertUserSchema.parse({
         ...req.body,
         role: "viewer" // Force public users to be viewers
       });
+      
       
       const existingUser = await storage.getUserByEmail(userData.email);
       
