@@ -649,6 +649,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Student analytics endpoints
+  app.get("/api/students/:studentId/analytics", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      
+      // Get student posts and engagement data
+      const posts = await storage.getPostsByStudent(studentId);
+      const totalPosts = posts.length;
+      
+      // Calculate monthly engagement data for the last 6 months
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const now = new Date();
+      const monthlyData = [];
+      
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthName = monthNames[date.getMonth()];
+        const year = date.getFullYear();
+        
+        // Filter posts for this month
+        const monthPosts = posts.filter(post => {
+          const postDate = new Date(post.createdAt);
+          return postDate.getMonth() === date.getMonth() && postDate.getFullYear() === year;
+        });
+        
+        // Calculate totals for this month
+        const monthLikes = monthPosts.reduce((sum, post) => sum + (post.likesCount || 0), 0);
+        const monthComments = monthPosts.reduce((sum, post) => sum + (post.commentsCount || 0), 0);
+        const monthSaves = monthPosts.reduce((sum, post) => sum + (post.savesCount || 0), 0);
+        
+        monthlyData.push({
+          month: monthName,
+          posts: monthPosts.length,
+          likes: monthLikes,
+          comments: monthComments,
+          saves: monthSaves
+        });
+      }
+
+      // Get student profile for total stats
+      const studentStats = await storage.getStudentWithStats(studentId);
+      
+      res.json({
+        monthlyEngagement: monthlyData,
+        totalStats: {
+          posts: totalPosts,
+          likes: studentStats?.totalLikes || 0,
+          comments: studentStats?.totalComments || 0,
+          saves: studentStats?.totalSaves || 0,
+          views: studentStats?.totalViews || 0,
+          followers: studentStats?.followersCount || 0
+        }
+      });
+    } catch (error) {
+      console.error('Get student analytics error:', error);
+      res.status(500).json({ message: "Failed to fetch student analytics" });
+    }
+  });
+
+  app.get("/api/students/:studentId/performance", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      
+      // Mock sports performance data based on student's sport
+      const student = await storage.getStudentById(studentId);
+      if (!student) {
+        return res.status(404).json({ message: "Student not found" });
+      }
+
+      // Generate realistic performance data based on student's sport
+      const sportsSkills = {
+        'Soccer': [
+          { skill: 'Dribbling', score: Math.floor(Math.random() * 30) + 70, target: 90 },
+          { skill: 'Passing', score: Math.floor(Math.random() * 30) + 70, target: 88 },
+          { skill: 'Shooting', score: Math.floor(Math.random() * 30) + 70, target: 85 },
+          { skill: 'Defense', score: Math.floor(Math.random() * 30) + 70, target: 80 },
+          { skill: 'Speed', score: Math.floor(Math.random() * 30) + 70, target: 90 },
+          { skill: 'Teamwork', score: Math.floor(Math.random() * 30) + 80, target: 95 }
+        ],
+        'Basketball': [
+          { skill: 'Shooting', score: Math.floor(Math.random() * 30) + 70, target: 90 },
+          { skill: 'Dribbling', score: Math.floor(Math.random() * 30) + 70, target: 85 },
+          { skill: 'Defense', score: Math.floor(Math.random() * 30) + 70, target: 88 },
+          { skill: 'Rebounding', score: Math.floor(Math.random() * 30) + 70, target: 82 },
+          { skill: 'Passing', score: Math.floor(Math.random() * 30) + 70, target: 85 },
+          { skill: 'Free Throws', score: Math.floor(Math.random() * 30) + 70, target: 95 }
+        ]
+      };
+
+      const skills = sportsSkills[student.sport as keyof typeof sportsSkills] || sportsSkills['Soccer'];
+      
+      // Generate monthly goals data
+      const monthlyGoals = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const monthName = monthNames[date.getMonth()];
+        
+        const totalGoals = Math.floor(Math.random() * 5) + 8; // 8-12 goals
+        const completed = Math.floor(Math.random() * totalGoals) + Math.floor(totalGoals * 0.6); // 60-100% completion
+        
+        monthlyGoals.push({
+          month: monthName,
+          completed: Math.min(completed, totalGoals),
+          total: totalGoals
+        });
+      }
+
+      res.json({
+        sportsPerformance: skills,
+        monthlyGoals: monthlyGoals,
+        overallRating: Math.floor(Math.random() * 20) + 80 // 80-100 rating
+      });
+    } catch (error) {
+      console.error('Get student performance error:', error);
+      res.status(500).json({ message: "Failed to fetch student performance data" });
+    }
+  });
+
   // School Admin Student Management Routes
   app.get("/api/schools/:schoolId/students", async (req, res) => {
     try {

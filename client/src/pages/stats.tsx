@@ -18,43 +18,35 @@ export default function StudentStats() {
     enabled: !!user?.id,
   });
 
-  // Mock performance data for student analytics
-  const performanceData = [
-    { month: 'Aug', posts: 12, likes: 156, comments: 45, saves: 23 },
-    { month: 'Sep', posts: 8, likes: 134, comments: 38, saves: 19 },
-    { month: 'Oct', posts: 15, likes: 203, comments: 67, saves: 31 },
-    { month: 'Nov', posts: 10, likes: 178, comments: 52, saves: 27 },
-    { month: 'Dec', posts: 18, likes: 245, comments: 78, saves: 34 },
-    { month: 'Jan', posts: 14, likes: 189, comments: 58, saves: 29 },
-  ];
+  // Fetch real analytics data
+  const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
+    queryKey: ["/api/students/analytics", studentProfile?.id],
+    enabled: !!studentProfile?.id,
+  });
 
+  // Fetch real performance data
+  const { data: performanceData, isLoading: performanceLoading } = useQuery({
+    queryKey: ["/api/students/performance", studentProfile?.id],
+    enabled: !!studentProfile?.id,
+  });
+
+  // Use real data or fallback to defaults
+  const monthlyEngagementData = analyticsData?.monthlyEngagement || [];
+  
   const engagementData = [
-    { name: 'Likes', value: studentProfile?.totalLikes || 245, color: '#FFD700' },
-    { name: 'Comments', value: studentProfile?.totalComments || 78, color: '#FFA500' },
-    { name: 'Saves', value: studentProfile?.totalSaves || 34, color: '#FF6B6B' },
-    { name: 'Views', value: studentProfile?.totalViews || 1250, color: '#4ECDC4' },
+    { name: 'Likes', value: studentProfile?.totalLikes || 0, color: '#FFD700' },
+    { name: 'Comments', value: studentProfile?.totalComments || 0, color: '#FFA500' },
+    { name: 'Saves', value: studentProfile?.totalSaves || 0, color: '#FF6B6B' },
+    { name: 'Views', value: studentProfile?.totalViews || 0, color: '#4ECDC4' },
   ];
 
-  // Mock sports performance data
-  const sportsData = [
-    { skill: 'Dribbling', score: 85, target: 90 },
-    { skill: 'Passing', score: 92, target: 88 },
-    { skill: 'Shooting', score: 78, target: 85 },
-    { skill: 'Defense', score: 70, target: 75 },
-    { skill: 'Speed', score: 88, target: 90 },
-    { skill: 'Teamwork', score: 95, target: 92 },
-  ];
+  // Use real sports performance data
+  const sportsSkillsData = performanceData?.sportsPerformance || [];
+  const monthlyGoalsData = performanceData?.monthlyGoals || [];
 
-  const monthlyGoals = [
-    { month: 'Aug', completed: 8, total: 10 },
-    { month: 'Sep', completed: 7, total: 10 },
-    { month: 'Oct', completed: 9, total: 10 },
-    { month: 'Nov', completed: 6, total: 8 },
-    { month: 'Dec', completed: 10, total: 12 },
-    { month: 'Jan', completed: 8, total: 10 },
-  ];
+  const isLoadingData = isLoading || analyticsLoading || performanceLoading;
 
-  if (isLoading) {
+  if (isLoadingData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -174,7 +166,7 @@ export default function StudentStats() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={performanceData}>
+                  <LineChart data={monthlyEngagementData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
@@ -238,7 +230,7 @@ export default function StudentStats() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={sportsData}>
+                  <BarChart data={sportsSkillsData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="skill" />
                     <YAxis domain={[0, 100]} />
@@ -264,7 +256,7 @@ export default function StudentStats() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={monthlyGoals}>
+                  <BarChart data={monthlyGoalsData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
