@@ -66,7 +66,7 @@ export default function CreatePost() {
     if (type === 'image' && !isImage) {
       toast({
         title: "Invalid file",
-        description: "Please select an image file.",
+        description: "Please select an image file (JPG, PNG, GIF, etc.).",
         variant: "destructive",
       });
       return;
@@ -75,7 +75,20 @@ export default function CreatePost() {
     if (type === 'video' && !isVideo) {
       toast({
         title: "Invalid file",
-        description: "Please select a video file.",
+        description: "Please select a video file (MP4, MOV, AVI, etc.).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (10MB for images, 50MB for videos)
+    const maxSize = type === 'image' ? 10 * 1024 * 1024 : 50 * 1024 * 1024;
+    const sizeLimit = type === 'image' ? '10MB' : '50MB';
+    
+    if (file.size > maxSize) {
+      toast({
+        title: "File too large",
+        description: `Please select a ${type} smaller than ${sizeLimit}. Current file: ${(file.size / (1024 * 1024)).toFixed(1)}MB`,
         variant: "destructive",
       });
       return;
@@ -87,6 +100,12 @@ export default function CreatePost() {
       file, 
       url, 
       type: isImage ? 'image' : 'video' 
+    });
+    
+    // Show success message
+    toast({
+      title: "Media selected",
+      description: `${type === 'image' ? 'Image' : 'Video'} ready for upload (${(file.size / (1024 * 1024)).toFixed(1)}MB)`,
     });
   };
 
@@ -114,13 +133,24 @@ export default function CreatePost() {
     if (selectedMedia) {
       setIsUploading(true);
       try {
+        toast({
+          title: "Uploading media...",
+          description: `Uploading ${selectedMedia.type}. Please wait...`,
+        });
+        
         const uploadResult = await uploadMediaMutation.mutateAsync(selectedMedia.file);
         mediaUrl = uploadResult.url;
         mediaType = selectedMedia.type;
+        
+        toast({
+          title: "Upload complete",
+          description: "Media uploaded successfully!",
+        });
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
         toast({
           title: "Upload failed",
-          description: "Failed to upload media. Please try again.",
+          description: `Failed to upload media: ${errorMessage}. Please try again.`,
           variant: "destructive",
         });
         setIsUploading(false);

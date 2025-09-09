@@ -117,12 +117,18 @@ export default function AddStudent() {
 
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
         toast({
-          title: "File Too Large",
-          description: "Please select an image smaller than 5MB.",
+          title: "File too large",
+          description: `Please select an image smaller than 5MB. Current file: ${(file.size / (1024 * 1024)).toFixed(1)}MB`,
           variant: "destructive",
         });
         return;
       }
+
+      // Show success message
+      toast({
+        title: "Profile image selected",
+        description: `Image ready for upload (${(file.size / (1024 * 1024)).toFixed(1)}MB)`,
+      });
 
       setProfilePicFile(file);
       
