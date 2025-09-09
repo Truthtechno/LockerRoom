@@ -112,10 +112,10 @@ export default function Following() {
                           <img
                             className="h-16 w-16 rounded-full"
                             src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"
-                            alt={student.user.name}
+                            alt={student?.user?.name}
                           />
                           <div>
-                            <h3 className="font-semibold text-foreground text-lg">{student.user.name}</h3>
+                            <h3 className="font-semibold text-foreground text-lg">{student?.user?.name}</h3>
                             <p className="text-muted-foreground">
                               {student.sport} • #{student.roleNumber} • {student.position}
                             </p>
