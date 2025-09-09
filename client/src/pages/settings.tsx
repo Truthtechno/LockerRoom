@@ -86,9 +86,9 @@ export default function Settings() {
       });
     } else if (user?.role === "viewer" && userProfile) {
       setViewerProfileData({
-        name: user.name || "",
-        bio: "",
-        phone: "",
+        name: userProfile.name || user.name || "",
+        bio: userProfile.bio || "",
+        phone: userProfile.phone || "",
       });
     }
   }, [studentProfile, userProfile, user]);
@@ -98,7 +98,7 @@ export default function Settings() {
       if (user?.role === "student") {
         return apiRequest(`/api/students/profile/${user?.id}`, "PUT", updates);
       } else if (user?.role === "viewer") {
-        return apiRequest(`/api/users/${user?.id}`, "PUT", updates);
+        return apiRequest(`/api/users/${user?.id}/profile`, "PUT", updates);
       }
     },
     onSuccess: () => {

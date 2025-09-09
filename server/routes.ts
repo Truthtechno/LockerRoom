@@ -114,6 +114,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User profile update (JSON) - for regular profile updates without files
+  app.put("/api/users/:userId/profile", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const updateData = req.body;
+      
+      const updatedUser = await storage.updateUser(userId, updateData);
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        schoolId: updatedUser.schoolId,
+        profilePicUrl: updatedUser.profilePicUrl
+      });
+    } catch (error) {
+      console.error('Update user profile error:', error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  // User profile picture update (FormData) - for file uploads
   app.put("/api/users/:userId", upload.single("profilePic"), async (req, res) => {
     try {
       const { userId } = req.params;
