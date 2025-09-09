@@ -257,7 +257,8 @@ export default function Settings() {
             </div>
             <Badge variant="outline" className="flex items-center">
               <User className="w-4 h-4 mr-2" />
-              {user?.role === "student" ? "Student" : "Viewer"}
+              {user?.role === "student" ? "Student" : 
+               user?.role === "school_admin" ? "School Admin" : "Viewer"}
             </Badge>
           </div>
         </div>
@@ -273,6 +274,8 @@ export default function Settings() {
               <CardDescription>
                 {user?.role === "student" 
                   ? "Update your personal information and sports details"
+                  : user?.role === "school_admin"
+                  ? "School admin profile information (read-only)"
                   : "Update your personal information and preferences"
                 }
               </CardDescription>
@@ -374,6 +377,8 @@ export default function Settings() {
                         id="viewer-name"
                         value={viewerProfileData.name}
                         onChange={(e) => setViewerProfileData({ ...viewerProfileData, name: e.target.value })}
+                        readOnly={user?.role === "school_admin"}
+                        className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
                         data-testid="input-settings-name"
                       />
                     </div>
@@ -385,6 +390,8 @@ export default function Settings() {
                         value={viewerProfileData.phone}
                         onChange={(e) => setViewerProfileData({ ...viewerProfileData, phone: e.target.value })}
                         placeholder="+1 (555) 123-4567"
+                        readOnly={user?.role === "school_admin"}
+                        className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
                         data-testid="input-settings-phone"
                       />
                     </div>
@@ -398,6 +405,8 @@ export default function Settings() {
                       onChange={(e) => setViewerProfileData({ ...viewerProfileData, bio: e.target.value })}
                       placeholder="Tell everyone about yourself and your interests..."
                       rows={4}
+                      readOnly={user?.role === "school_admin"}
+                      className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
                       data-testid="textarea-settings-bio"
                     />
                   </div>
@@ -407,11 +416,13 @@ export default function Settings() {
               <div className="flex justify-end">
                 <Button 
                   onClick={handleProfileSave}
-                  disabled={updateProfileMutation.isPending}
+                  disabled={updateProfileMutation.isPending || user?.role === "school_admin"}
+                  className={user?.role === "school_admin" ? "cursor-not-allowed" : ""}
                   data-testid="button-save-profile"
                 >
                   <Save className="w-4 h-4 mr-2" />
-                  {updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
+                  {user?.role === "school_admin" ? "Read Only" : 
+                   updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
                 </Button>
               </div>
             </CardContent>
@@ -425,7 +436,10 @@ export default function Settings() {
                 Password & Security
               </CardTitle>
               <CardDescription>
-                Change your password to keep your account secure
+                {user?.role === "school_admin" 
+                  ? "Password management restricted for school administrators"
+                  : "Change your password to keep your account secure"
+                }
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -438,6 +452,8 @@ export default function Settings() {
                     value={passwordData.currentPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                     placeholder="Enter current password"
+                    readOnly={user?.role === "school_admin"}
+                    className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
                     data-testid="input-current-password"
                   />
                 </div>
@@ -450,6 +466,8 @@ export default function Settings() {
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                     placeholder="Enter new password"
+                    readOnly={user?.role === "school_admin"}
+                    className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
                     data-testid="input-new-password"
                   />
                   <p className="text-xs text-muted-foreground">
@@ -465,6 +483,8 @@ export default function Settings() {
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                     placeholder="Confirm new password"
+                    readOnly={user?.role === "school_admin"}
+                    className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
                     data-testid="input-confirm-password"
                   />
                 </div>
@@ -484,12 +504,13 @@ export default function Settings() {
                 </div>
                 <Button 
                   onClick={handlePasswordChange} 
-                  disabled={changePasswordMutation.isPending}
-                  className="bg-accent hover:bg-accent/90"
+                  disabled={changePasswordMutation.isPending || user?.role === "school_admin"}
+                  className={user?.role === "school_admin" ? "cursor-not-allowed" : "bg-accent hover:bg-accent/90"}
                   data-testid="button-change-password"
                 >
                   <Lock className="w-4 h-4 mr-2" />
-                  {changePasswordMutation.isPending ? "Updating..." : "Change Password"}
+                  {user?.role === "school_admin" ? "Restricted" : 
+                   changePasswordMutation.isPending ? "Updating..." : "Change Password"}
                 </Button>
               </div>
             </CardContent>
