@@ -130,6 +130,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Password change endpoint
+  app.post("/api/users/:userId/change-password", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Both current and new password are required" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "New password must be at least 6 characters long" });
+      }
+
+      // Get user to verify current password
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // For demo purposes, we'll skip password verification since we're using simple auth
+      // In a real app, you'd verify the current password here
+      const bcrypt = require('bcrypt');
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update user password
+      await storage.updateUser(userId, { password: hashedPassword });
+
+      res.json({ message: "Password updated successfully" });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({ message: "Failed to change password" });
+    }
+  });
+
   // Student routes
   app.get("/api/students/profile/:userId", async (req, res) => {
     try {

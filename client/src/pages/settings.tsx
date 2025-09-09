@@ -41,6 +41,12 @@ export default function Settings() {
     phone: "",
   });
 
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
   const [notificationSettings, setNotificationSettings] = useState({
     postLikes: true,
     postComments: true,
@@ -115,9 +121,67 @@ export default function Settings() {
     },
   });
 
+  const changePasswordMutation = useMutation({
+    mutationFn: async (passwordData: { currentPassword: string; newPassword: string }) => {
+      return apiRequest(`/api/users/${user?.id}/change-password`, "POST", passwordData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password changed",
+        description: "Your password has been changed successfully!",
+      });
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to change password. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleProfileSave = () => {
     const dataToUpdate = user?.role === "student" ? profileData : viewerProfileData;
     updateProfileMutation.mutate(dataToUpdate);
+  };
+
+  const handlePasswordChange = () => {
+    if (!passwordData.currentPassword || !passwordData.newPassword) {
+      toast({
+        title: "Error",
+        description: "Please fill in all password fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "New password and confirmation do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "New password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    changePasswordMutation.mutate({
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword,
+    });
   };
 
   const handleLogout = () => {
@@ -348,6 +412,84 @@ export default function Settings() {
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Password Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Lock className="w-5 h-5 mr-2" />
+                Password & Security
+              </CardTitle>
+              <CardDescription>
+                Change your password to keep your account secure
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">Current Password</Label>
+                  <Input
+                    id="current-password"
+                    type="password"
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                    placeholder="Enter current password"
+                    data-testid="input-current-password"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">New Password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                    placeholder="Enter new password"
+                    data-testid="input-new-password"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Password must be at least 6 characters long
+                  </p>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="confirm-password">Confirm New Password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                    placeholder="Confirm new password"
+                    data-testid="input-confirm-password"
+                  />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex justify-between items-center">
+                <div>
+                  <h4 className="font-medium flex items-center">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Account Security
+                  </h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Last password change: Never (Demo Account)
+                  </p>
+                </div>
+                <Button 
+                  onClick={handlePasswordChange} 
+                  disabled={changePasswordMutation.isPending}
+                  className="bg-accent hover:bg-accent/90"
+                  data-testid="button-change-password"
+                >
+                  <Lock className="w-4 h-4 mr-2" />
+                  {changePasswordMutation.isPending ? "Updating..." : "Change Password"}
                 </Button>
               </div>
             </CardContent>
