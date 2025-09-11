@@ -196,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User profile picture update (FormData) - for file uploads
-  app.put("/api/users/:userId", upload.single("profilePic"), async (req, res) => {
+  app.put("/api/users/:userId", requireAuth, requireSelfAccess, upload.single("profilePic"), async (req, res) => {
     try {
       const { userId } = req.params;
       let updateData = { ...req.body };
@@ -300,7 +300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/students/profile/:userId", upload.single("profilePic"), async (req, res) => {
+  app.put("/api/students/profile/:userId", requireAuth, requireSelfAccess, upload.single("profilePic"), async (req, res) => {
     try {
       const { userId } = req.params;
       const student = await storage.getStudentByUserId(userId);
@@ -419,10 +419,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/posts/:postId/save", async (req, res) => {
+  app.delete("/api/posts/:postId/save", requireAuth, async (req, res) => {
     try {
       const { postId } = req.params;
-      const { userId } = req.body;
+      const userId = req.user.id; // Use authenticated user ID
       
       await storage.unsavePost(postId, userId);
       res.json({ message: "Post unsaved" });
@@ -482,7 +482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cloudinary file upload
-  app.post("/api/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/upload", requireAuth, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file provided" });
@@ -580,10 +580,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/students/:studentId/is-following", async (req, res) => {
+  app.get("/api/students/:studentId/is-following", requireAuth, async (req, res) => {
     try {
       const { studentId } = req.params;
-      const { userId } = req.query;
+      const userId = req.user.id; // Use authenticated user ID
       
       if (!userId) {
         return res.status(400).json({ message: "User ID required" });
