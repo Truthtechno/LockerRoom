@@ -46,7 +46,7 @@ export class AuthStorage {
             phone: profileData.phone,
           } as InsertViewer).returning();
           profileId = viewer.id;
-          profile = { ...viewer, role: 'viewer' };
+          profile = { ...viewer, role: 'viewer', profilePicUrl: viewer.profilePicUrl ?? undefined };
           break;
           
         case 'student':
@@ -66,7 +66,7 @@ export class AuthStorage {
             coverPhoto: profileData.coverPhoto,
           } as InsertStudent).returning();
           profileId = student.id;
-          profile = { ...student, role: 'student' };
+          profile = { ...student, role: 'student', profilePicUrl: student.profilePicUrl ?? undefined };
           break;
           
         case 'school_admin':
@@ -79,7 +79,7 @@ export class AuthStorage {
             position: profileData.position,
           } as InsertSchoolAdmin).returning();
           profileId = schoolAdmin.id;
-          profile = { ...schoolAdmin, role: 'school_admin' };
+          profile = { ...schoolAdmin, role: 'school_admin', profilePicUrl: schoolAdmin.profilePicUrl ?? undefined };
           break;
           
         case 'system_admin':
@@ -91,7 +91,7 @@ export class AuthStorage {
             permissions: profileData.permissions || [],
           } as InsertSystemAdmin).returning();
           profileId = systemAdmin.id;
-          profile = { ...systemAdmin, role: 'system_admin' };
+          profile = { ...systemAdmin, role: 'system_admin', profilePicUrl: systemAdmin.profilePicUrl ?? undefined };
           break;
           
         default:

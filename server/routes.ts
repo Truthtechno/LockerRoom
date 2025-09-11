@@ -360,19 +360,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/posts", requireAuth, requireRole(['student']), async (req, res) => {
+  app.post("/api/posts/create", requireAuth, requireRole(['student']), upload.single('mediaFile'), async (req, res) => {
     try {
       // Derive studentId from authenticated user's linkedId with fallback
       const studentId = req.user.linkedId ?? (await authStorage.getUserProfile(req.user.id))?.linkedId;
-      if (!studentId) return res.status(403).json({ message: "Student identity missing; please re-login" });
+      if (!studentId) {
+        console.error('Student ID missing for user:', req.user.id, 'role:', req.user.role);
+        return res.status(403).json({ message: "Student identity missing; please re-login" });
+      }
+      
+      let contentUrl = '';
+      let contentType = 'text';
+      
+      // Upload file to Cloudinary if provided
+      if (req.file) {
+        console.log('Uploading file to Cloudinary:', req.file.originalname);
+        
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            {
+              folder: "lockerroom/posts",
+              transformation: [
+                { width: 1200, crop: "scale" },
+                { quality: "auto:good" },
+                { fetch_format: "auto" }
+              ],
+              resource_type: "auto"
+            },
+            (error, result) => {
+              if (error) {
+                console.error('Cloudinary upload error:', error);
+                reject(error);
+              } else {
+                resolve(result);
+              }
+            }
+          ).end(req.file.buffer);
+        });
+        
+        contentUrl = (result as any).secure_url;
+        contentType = (result as any).resource_type === 'video' ? 'video' : 'image';
+        console.log('File uploaded successfully:', contentUrl, 'type:', contentType);
+      }
       
       const postData = insertPostSchema.parse({ 
-        ...req.body, 
-        studentId 
+        studentId,
+        caption: req.body.caption || '',
+        mediaUrl: contentUrl,
+        mediaType: contentType
       });
+      
       const post = await storage.createPost(postData);
+      console.log('Post created successfully:', post.id);
       res.json(post);
     } catch (error) {
+      console.error('Create post error:', error);
       res.status(400).json({ message: "Failed to create post" });
     }
   });
@@ -523,6 +565,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Upload error:', error);
       res.status(500).json({ message: "Upload failed" });
+    }
+  });
+
+  // School Admin Routes
+  app.post("/api/school-admin/add-student", requireAuth, requireRole(['school_admin']), async (req, res) => {
+    try {
+      const { schoolId, name, email, phone, sport, position, bio } = req.body;
+      
+      // Verify admin can only add students to their own school
+      const adminProfile = await authStorage.getUserProfile(req.user.id);
+      if (adminProfile?.schoolId !== schoolId) {
+        return res.status(403).json({ message: 'Cannot add students to another school' });
+      }
+      
+      // Check if email already exists
+      const existingUser = await authStorage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: 'Email already registered' });
+      }
+      
+      // Generate one-time password (6-digit numeric)
+      const oneTimePassword = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Create student profile data
+      const studentData = {
+        schoolId,
+        name,
+        phone,
+        sport,
+        position,
+        bio
+      };
+      
+      // Create user with student profile
+      const { user, profile } = await authStorage.createUserWithProfile(
+        email, 
+        oneTimePassword, 
+        'student', 
+        studentData
+      );
+      
+      res.json({ 
+        message: 'Student added successfully',
+        student: {
+          id: profile.id,
+          name: profile.name,
+          email: user.email,
+          oneTimePassword, // Return for admin to share with student
+          schoolId: profile.schoolId
+        }
+      });
+    } catch (error) {
+      console.error('Add student error:', error);
+      res.status(500).json({ message: 'Failed to add student' });
     }
   });
 
