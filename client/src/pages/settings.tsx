@@ -88,9 +88,9 @@ export default function Settings() {
       });
     } else if (user?.role === "viewer" && userProfile) {
       setViewerProfileData({
-        name: userProfile.name || user.name || "",
-        bio: userProfile.bio || "",
-        phone: userProfile.phone || "",
+        name: (userProfile as any).name || user.name || "",
+        bio: (userProfile as any).bio || "",
+        phone: (userProfile as any).phone || "",
       });
     }
   }, [studentProfile, userProfile, user]);
@@ -125,7 +125,7 @@ export default function Settings() {
 
   const changePasswordMutation = useMutation({
     mutationFn: async (passwordData: { currentPassword: string; newPassword: string }) => {
-      return apiRequest("POST", `/api/users/${user?.id}/change-password`, passwordData);
+      return apiRequest(`/api/users/${user?.id}/change-password`, "POST", passwordData);
     },
     onSuccess: () => {
       toast({
@@ -209,7 +209,7 @@ export default function Settings() {
     // @ts-ignore - Cloudinary widget is loaded via script tag
     const widget = (window as any).cloudinary.createUploadWidget(
       {
-        cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'demo',
+        cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
         uploadPreset: 'ml_default', // Default unsigned preset
         sources: ['local', 'camera'],
         multiple: false,
@@ -248,7 +248,7 @@ export default function Settings() {
               
               // Update the user context with new photo
               if (user) {
-                updateUser({ ...user, profilePicUrl: imageUrl });
+                updateUser({ ...user, profilePicUrl: imageUrl } as any);
               }
             },
             onError: () => {

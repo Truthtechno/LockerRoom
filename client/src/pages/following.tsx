@@ -117,15 +117,15 @@ export default function Following() {
                             <Avatar className="h-16 w-16 cursor-pointer hover:opacity-80 transition-opacity" data-testid={`avatar-student-${student.id}`}>
                               <AvatarImage 
                                 src={student.profilePicUrl || student.profilePic || ""} 
-                                alt={student?.user?.name || student.name} 
+                                alt={student?.user?.name || (student as any).name} 
                               />
                               <AvatarFallback className="bg-accent/20 text-accent font-semibold">
-                                {student?.user?.name?.slice(0, 2).toUpperCase() || student?.name?.slice(0, 2).toUpperCase() || "S"}
+                                {student?.user?.name?.slice(0, 2).toUpperCase() || (student as any).name?.slice(0, 2).toUpperCase() || "S"}
                               </AvatarFallback>
                             </Avatar>
                           </Link>
                           <div>
-                            <h3 className="font-semibold text-foreground text-lg">{student?.user?.name || student?.name}</h3>
+                            <h3 className="font-semibold text-foreground text-lg">{student?.user?.name || (student as any).name}</h3>
                             <p className="text-muted-foreground">
                               {student.sport} • #{student.roleNumber} • {student.position}
                             </p>

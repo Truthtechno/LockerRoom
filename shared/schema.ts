@@ -10,6 +10,9 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   role: text("role").notNull().default("viewer"), // system_admin, school_admin, student, viewer
   schoolId: varchar("school_id"),
+  profilePicUrl: text("profile_pic_url"), // Cloudinary URL for all users
+  bio: text("bio"),
+  phone: text("phone"),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
