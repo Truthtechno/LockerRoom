@@ -195,8 +195,19 @@ export default function Settings() {
   const handleChangePhoto = () => {
     setIsUploadingPhoto(true);
     
+    // Check if Cloudinary is loaded
+    if (typeof (window as any).cloudinary === 'undefined') {
+      toast({
+        title: "Error",
+        description: "Photo upload service is not available. Please refresh the page.",
+        variant: "destructive",
+      });
+      setIsUploadingPhoto(false);
+      return;
+    }
+    
     // @ts-ignore - Cloudinary widget is loaded via script tag
-    const widget = cloudinary.createUploadWidget(
+    const widget = (window as any).cloudinary.createUploadWidget(
       {
         cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'demo',
         uploadPreset: 'ml_default', // Default unsigned preset

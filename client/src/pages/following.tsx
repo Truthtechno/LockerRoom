@@ -113,19 +113,19 @@ export default function Following() {
                     <div key={student.id} className="bg-card border border-border rounded-xl p-6">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                          <Link href={`/profile/${student.user.id}`}>
+                          <Link href={`/profile/${student.user?.id || student.id}`}>
                             <Avatar className="h-16 w-16 cursor-pointer hover:opacity-80 transition-opacity" data-testid={`avatar-student-${student.id}`}>
                               <AvatarImage 
                                 src={student.profilePicUrl || student.profilePic || ""} 
-                                alt={student?.user?.name} 
+                                alt={student?.user?.name || student.name} 
                               />
                               <AvatarFallback className="bg-accent/20 text-accent font-semibold">
-                                {student?.user?.name?.slice(0, 2).toUpperCase() || "S"}
+                                {student?.user?.name?.slice(0, 2).toUpperCase() || student?.name?.slice(0, 2).toUpperCase() || "S"}
                               </AvatarFallback>
                             </Avatar>
                           </Link>
                           <div>
-                            <h3 className="font-semibold text-foreground text-lg">{student?.user?.name}</h3>
+                            <h3 className="font-semibold text-foreground text-lg">{student?.user?.name || student?.name}</h3>
                             <p className="text-muted-foreground">
                               {student.sport} • #{student.roleNumber} • {student.position}
                             </p>
