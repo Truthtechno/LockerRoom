@@ -56,6 +56,8 @@ export default function Settings() {
     pushNotifications: true,
   });
 
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
   const [privacySettings, setPrivacySettings] = useState({
     profileVisibility: "public",
     showStats: true,
@@ -190,6 +192,69 @@ export default function Settings() {
     setLocation("/login");
   };
 
+  const handleChangePhoto = () => {
+    setIsUploadingPhoto(true);
+    
+    // @ts-ignore - Cloudinary widget is loaded via script tag
+    const widget = cloudinary.createUploadWidget(
+      {
+        cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'demo',
+        uploadPreset: 'ml_default', // Default unsigned preset
+        sources: ['local', 'camera'],
+        multiple: false,
+        resourceType: 'image',
+        clientAllowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxFileSize: 5000000, // 5MB
+        cropping: true,
+        croppingAspectRatio: 1,
+        folder: 'profile_photos'
+      },
+      (error: any, result: any) => {
+        setIsUploadingPhoto(false);
+        
+        if (error) {
+          console.error('Cloudinary error:', error);
+          toast({
+            title: "Upload Error",
+            description: "Failed to upload photo. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        if (result && result.event === 'success') {
+          const imageUrl = result.info.secure_url;
+          
+          // Update profile with new photo
+          const photoUpdate = { profilePicUrl: imageUrl };
+          
+          updateProfileMutation.mutate(photoUpdate, {
+            onSuccess: () => {
+              toast({
+                title: "Photo Updated",
+                description: "Your profile photo has been updated successfully!",
+              });
+              
+              // Update the user context with new photo
+              if (user) {
+                updateUser({ ...user, profilePicUrl: imageUrl });
+              }
+            },
+            onError: () => {
+              toast({
+                title: "Error",
+                description: "Failed to save profile photo. Please try again.",
+                variant: "destructive",
+              });
+            }
+          });
+        }
+      }
+    );
+    
+    widget.open();
+  };
+
   const saveNotificationSettings = () => {
     // In a real app, this would save to the backend
     toast({
@@ -285,7 +350,11 @@ export default function Settings() {
               <div className="flex items-center space-x-4">
                 <Avatar className="h-20 w-20">
                   <AvatarImage 
-                    src={user?.role === "student" ? studentProfile?.profilePic || "" : ""} 
+                    src={
+                      user?.role === "student" 
+                        ? studentProfile?.profilePicUrl || studentProfile?.profilePic || "" 
+                        : user?.profilePicUrl || ""
+                    } 
                     alt={user?.name || "Profile"} 
                   />
                   <AvatarFallback>{user?.name?.slice(0, 2).toUpperCase() || "U"}</AvatarFallback>
@@ -293,9 +362,16 @@ export default function Settings() {
                 <div>
                   <h3 className="font-medium">{user?.name}</h3>
                   <p className="text-sm text-muted-foreground">{user?.email}</p>
-                  <Button variant="outline" size="sm" className="mt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2"
+                    onClick={handleChangePhoto}
+                    disabled={isUploadingPhoto || updateProfileMutation.isPending}
+                    data-testid="button-change-photo"
+                  >
                     <Camera className="w-4 h-4 mr-2" />
-                    Change Photo
+                    {isUploadingPhoto ? "Uploading..." : "Change Photo"}
                   </Button>
                 </div>
               </div>
