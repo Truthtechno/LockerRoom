@@ -7,8 +7,8 @@ import { storage } from "./storage";
 import { 
   insertUserSchema, 
   insertPostSchema, 
-  insertCommentSchema, 
-  insertFollowSchema,
+  insertPostCommentSchema, 
+  insertStudentFollowerSchema,
   insertSchoolApplicationSchema,
   insertSystemSettingSchema,
   insertAdminRoleSchema,
@@ -354,7 +354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/posts/:postId/comment", async (req, res) => {
     try {
       const { postId } = req.params;
-      const commentData = insertCommentSchema.parse({ ...req.body, postId });
+      const commentData = insertPostCommentSchema.parse({ ...req.body, postId });
       
       const comment = await storage.commentOnPost(commentData);
       res.json(comment);
