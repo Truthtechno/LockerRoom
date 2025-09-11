@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -18,15 +21,16 @@ export default function SearchPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
 
   // Debounce search query
-  useState(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
     }, 300);
 
     return () => clearTimeout(timer);
-  });
+  }, [searchQuery]);
 
   const { data: searchResults, isLoading } = useQuery<StudentSearchResult[]>({
     queryKey: ["/api/search/students", debouncedQuery, user?.id],
@@ -133,34 +137,62 @@ export default function SearchPage() {
             {debouncedQuery.length >= 2 && (
               <div className="space-y-6">
                 {isLoading ? (
-                  <div className="text-center py-8">
-                    <div className="inline-flex items-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-3"></div>
-                      <span className="text-muted-foreground">Searching...</span>
-                    </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {[...Array(6)].map((_, i) => (
+                      <Card key={i} className="animate-pulse">
+                        <CardContent className="p-6">
+                          <div className="flex items-start space-x-3 mb-4">
+                            <Skeleton className="w-12 h-12 rounded-full" />
+                            <div className="space-y-2 flex-1">
+                              <Skeleton className="h-4 w-3/4" />
+                              <Skeleton className="h-3 w-1/2" />
+                            </div>
+                          </div>
+                          <div className="space-y-2 mb-4">
+                            <div className="flex space-x-2">
+                              <Skeleton className="h-6 w-16" />
+                              <Skeleton className="h-6 w-20" />
+                            </div>
+                            <Skeleton className="h-3 w-2/3" />
+                          </div>
+                          <Skeleton className="h-3 w-full mb-2" />
+                          <Skeleton className="h-3 w-4/5 mb-4" />
+                          <Skeleton className="h-9 w-full" />
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 ) : searchResults && searchResults.length > 0 ? (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {searchResults.map((student) => (
-                      <Card key={student.id} className="hover:shadow-lg transition-shadow">
+                      <Card 
+                        key={student.id} 
+                        className="hover:shadow-lg transition-shadow cursor-pointer group" 
+                        data-testid={`search-result-${student.id}`}
+                        onClick={() => navigate(`/profile/${student.user.id}`)}
+                      >
                         <CardContent className="p-6">
-                          {/* Profile Picture and Basic Info */}
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center space-x-3">
-                              <img
-                                src={student.profilePic || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"}
-                                alt={student.user.name}
-                                className="w-12 h-12 rounded-full object-cover"
-                              />
-                              <div>
-                                <h3 className="font-semibold text-foreground">{student.user.name}</h3>
-                                <div className="flex items-center text-sm text-muted-foreground">
-                                  <Users className="w-3 h-3 mr-1" />
-                                  {student.followersCount} followers
+                            {/* Profile Picture and Basic Info */}
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-center space-x-3">
+                                <Avatar className="w-12 h-12">
+                                  <AvatarImage 
+                                    src={student.profilePicUrl || student.profilePic || ""} 
+                                    alt={student.user.name} 
+                                  />
+                                  <AvatarFallback className="bg-accent/20 text-accent font-semibold">
+                                    {student.user.name?.slice(0, 2).toUpperCase() || "S"}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{student.user.name}</h3>
+                                  <div className="flex items-center text-sm text-muted-foreground">
+                                    <Users className="w-3 h-3 mr-1" />
+                                    {student.followersCount} followers
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
 
                           {/* Sports Info */}
                           <div className="space-y-2 mb-4">
@@ -188,31 +220,34 @@ export default function SearchPage() {
                             </p>
                           )}
 
-                          {/* Follow Button */}
-                          <Button
-                            onClick={() => handleFollow(student.id, student.isFollowing || false)}
-                            disabled={followMutation.isPending}
-                            variant={student.isFollowing ? "outline" : "default"}
-                            className={`w-full ${!student.isFollowing ? 'bg-accent hover:bg-accent/90 text-accent-foreground' : ''}`}
-                            data-testid={`follow-button-${student.id}`}
-                          >
-                            {followMutation.isPending ? (
-                              <div className="flex items-center">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
-                                Processing...
-                              </div>
-                            ) : student.isFollowing ? (
-                              <>
-                                <UserMinus className="w-4 h-4 mr-2" />
-                                Unfollow
-                              </>
-                            ) : (
-                              <>
-                                <UserPlus className="w-4 h-4 mr-2" />
-                                Follow
-                              </>
-                            )}
-                          </Button>
+                            {/* Follow Button */}
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFollow(student.id, student.isFollowing || false);
+                              }}
+                              disabled={followMutation.isPending}
+                              variant={student.isFollowing ? "outline" : "default"}
+                              className={`w-full ${!student.isFollowing ? 'bg-accent hover:bg-accent/90 text-accent-foreground' : ''}`}
+                              data-testid={`follow-button-${student.id}`}
+                            >
+                              {followMutation.isPending ? (
+                                <div className="flex items-center">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                                  Processing...
+                                </div>
+                              ) : student.isFollowing ? (
+                                <>
+                                  <UserMinus className="w-4 h-4 mr-2" />
+                                  Unfollow
+                                </>
+                              ) : (
+                                <>
+                                  <UserPlus className="w-4 h-4 mr-2" />
+                                  Follow
+                                </>
+                              )}
+                            </Button>
                         </CardContent>
                       </Card>
                     ))}
