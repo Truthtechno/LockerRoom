@@ -92,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate JWT token
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
+        { id: user.id, email: user.email, role: user.role, linkedId: user.linkedId },
         JWT_SECRET,
         { expiresIn: '7d' }
       );
@@ -132,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate JWT token
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role },
+        { id: user.id, email: user.email, role: user.role, linkedId: user.linkedId },
         JWT_SECRET,
         { expiresIn: '7d' }
       );
@@ -360,9 +360,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/posts", async (req, res) => {
+  app.post("/api/posts", requireAuth, requireRole(['student']), async (req, res) => {
     try {
-      const postData = insertPostSchema.parse(req.body);
+      // Derive studentId from authenticated user's linkedId with fallback
+      const studentId = req.user.linkedId ?? (await authStorage.getUserProfile(req.user.id))?.linkedId;
+      if (!studentId) return res.status(403).json({ message: "Student identity missing; please re-login" });
+      
+      const postData = insertPostSchema.parse({ 
+        ...req.body, 
+        studentId 
+      });
       const post = await storage.createPost(postData);
       res.json(post);
     } catch (error) {
@@ -431,7 +438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:userId/saved-posts", async (req, res) => {
+  app.get("/api/users/:userId/saved-posts", requireAuth, requireSelfAccess, async (req, res) => {
     try {
       const { userId } = req.params;
       const savedPosts = await storage.getUserSavedPosts(userId);
@@ -520,10 +527,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Follow/Unfollow routes
-  app.post("/api/students/:studentId/follow", async (req, res) => {
+  app.post("/api/students/:studentId/follow", requireAuth, async (req, res) => {
     try {
       const { studentId } = req.params;
-      const { userId } = req.body;
+      const userId = req.user.id; // Use authenticated user ID
       
       if (!userId) {
         return res.status(400).json({ message: "User ID required" });
@@ -543,10 +550,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/students/:studentId/follow", async (req, res) => {
+  app.delete("/api/students/:studentId/follow", requireAuth, async (req, res) => {
     try {
       const { studentId } = req.params;
-      const { userId } = req.body;
+      const userId = req.user.id; // Use authenticated user ID
       
       if (!userId) {
         return res.status(400).json({ message: "User ID required" });
@@ -960,9 +967,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/schools/:schoolId/students", upload.single("profilePic"), async (req, res) => {
+  app.post("/api/schools/:schoolId/students", requireAuth, requireRole(['school_admin']), upload.single("profilePic"), async (req, res) => {
     try {
       const { schoolId } = req.params;
+      
+      // Enforce school boundary - admin can only create students in their own school
+      const adminProfile = await authStorage.getUserProfile(req.user.id);
+      if (adminProfile?.schoolId !== schoolId) {
+        return res.status(403).json({ message: 'Cannot create students in another school' });
+      }
       
       // First check for duplicate email in users
       const existingUser = await storage.getUserByEmail(req.body.email);
@@ -1130,18 +1143,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/students/:studentId/ratings", async (req, res) => {
+  app.post("/api/students/:studentId/ratings", requireAuth, async (req, res) => {
     try {
       const { studentId } = req.params;
       
       // TODO: Get the current user from session/auth
       // For now, using a placeholder - in real app this would come from authenticated user
-      const ratedBy = req.headers['x-user-id'] || 'admin-placeholder';
+      // Remove header-based identity spoofing - all identity from server-side auth
       
       const ratingData = insertStudentRatingSchema.parse({
         ...req.body,
         studentId,
-        ratedBy,
+        raterId: req.user.id // Use authenticated user's ID as rater
       });
 
       const rating = await storage.createStudentRating(ratingData);
