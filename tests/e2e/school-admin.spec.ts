@@ -1,160 +1,149 @@
-import { test, expect, Page } from '@playwright/test';
-import path from 'path';
+import { test, expect } from '@playwright/test';
 
 test.describe('School Admin Portal', () => {
-  let page: Page;
-
-  test.beforeEach(async ({ browser }) => {
-    page = await browser.newPage();
-    
+  test.beforeEach(async ({ page }) => {
     // Login as school admin
     await page.goto('/login');
-    await page.fill('[data-testid="input-email"]', 'school@lockerroom.com');
-    await page.fill('[data-testid="input-password"]', 'School123!');
+    await page.fill('[data-testid="input-email"]', 'principal@lincoln.edu');
+    await page.fill('[data-testid="input-password"]', 'principal123');
     await page.click('[data-testid="button-login"]');
-    
-    // Wait for redirect to school admin dashboard
-    await page.waitForURL('/school-admin');
-  });
-
-  test.afterEach(async () => {
-    await page.close();
-  });
-
-  test('TC-SAD-001: School Admin Login and Dashboard Access', async () => {
-    // Verify school admin dashboard loads
     await expect(page).toHaveURL('/school-admin');
-    await expect(page.locator('h1')).toContainText('School Administration');
-    
-    // Take screenshot
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/school-admin-dashboard.png' });
-    
-    // Verify school admin navigation exists
-    await expect(page.locator('[data-testid="button-add-student"]')).toBeVisible();
   });
 
-  test('TC-SAD-002: Add Student Functionality', async () => {
-    // Click Add Student button
-    await page.click('[data-testid="button-add-student"]');
-    await page.waitForLoadState('networkidle');
+  test('Should be able to add new student', async ({ page }) => {
+    // Navigate to add student page
+    await page.goto('/school-admin/add-student');
     
-    // Take screenshot of add student form
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/add-student-form.png' });
+    // Fill student form
+    await page.fill('[data-testid="input-name"]', 'John Doe');
+    await page.fill('[data-testid="input-email"]', `john.doe.${Date.now()}@student.com`);
+    await page.fill('[data-testid="input-phone"]', '555-0123');
+    await page.selectOption('[data-testid="select-gender"]', 'Male');
+    await page.fill('[data-testid="input-date-of-birth"]', '2005-01-01');
+    await page.selectOption('[data-testid="select-grade"]', '12');
+    await page.fill('[data-testid="input-guardian-contact"]', 'guardian@example.com');
+    await page.selectOption('[data-testid="select-sport"]', 'Basketball');
+    await page.fill('[data-testid="input-position"]', 'Forward');
+    await page.fill('[data-testid="input-bio"]', 'New student athlete');
     
-    // Fill out student form
-    await page.fill('input[name="name"], input[placeholder*="name"]', 'Test Student');
-    await page.fill('input[type="email"], input[name="email"]', 'teststudent@test.com');
-    await page.fill('input[name="phone"], input[placeholder*="phone"]', '555-0123');
-    
-    // Upload profile picture if file input exists
-    const fileInput = page.locator('input[type="file"]').first();
-    if (await fileInput.isVisible()) {
-      await fileInput.setInputFiles(path.join(process.cwd(), 'tests/fixtures/test-image.png'));
-    }
-    
-    // Fill additional fields
-    await page.selectOption('select[name="sport"], select:has(option)', { index: 1 });
-    await page.fill('input[name="position"], input[placeholder*="position"]', 'Forward');
-    await page.fill('textarea[name="bio"], textarea[placeholder*="bio"]', 'Test student athlete bio');
+    // Upload profile photo
+    const fileInput = page.locator('[data-testid="profile-photo-upload"]');
+    await fileInput.setInputFiles('tests/fixtures/test-image.png');
     
     // Submit form
-    const submitButton = page.locator('[data-testid="button-submit"], button[type="submit"], button:has-text("Add Student")').first();
-    await submitButton.click();
+    await page.click('[data-testid="button-add-student"]');
     
-    // Wait for success message or redirect
-    await page.waitForLoadState('networkidle');
+    // Should show success with OTP
+    await expect(page.locator('text=Student added successfully')).toBeVisible();
+    await expect(page.locator('text=One-time password:')).toBeVisible();
     
-    // Take screenshot of result
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/add-student-result.png' });
-    
-    // Verify success (toast message or redirect)
-    const successIndicator = page.locator('.toast, .success, .alert-success');
-    if (await successIndicator.isVisible()) {
-      await expect(successIndicator).toContainText(/success|added|created/i);
-    }
+    // Should show OTP in response
+    const otpText = await page.textContent('[data-testid="otp-display"]');
+    expect(otpText).toMatch(/\d{6}/);
   });
 
-  test('TC-SAD-003: View Live Reports and Analytics', async () => {
-    // Look for reports/analytics button
-    const reportsButton = page.locator('[data-testid*="report"], [data-testid*="analytics"], button:has-text("Reports"), button:has-text("Analytics")').first();
+  test('New student should be able to login with OTP', async ({ page }) => {
+    // First add a student (simplified version)
+    await page.goto('/school-admin/add-student');
+    await page.fill('[data-testid="input-name"]', 'Jane Smith');
+    await page.fill('[data-testid="input-email"]', `jane.smith.${Date.now()}@student.com`);
+    await page.selectOption('[data-testid="select-sport"]', 'Soccer');
+    await page.click('[data-testid="button-add-student"]');
     
-    if (await reportsButton.isVisible()) {
-      await reportsButton.click();
-      await page.waitForLoadState('networkidle');
-      
-      // Take screenshot
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/school-reports.png' });
-      
-      // Verify charts/data are visible
-      await expect(page.locator('.chart, .analytics, .report')).toBeVisible();
-    } else {
-      // Navigate to reports manually
-      await page.goto('/school-admin/reports');
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/school-reports-alt.png' });
-    }
+    // Get the OTP from the response
+    const otpText = await page.textContent('[data-testid="otp-display"]');
+    const otp = otpText?.match(/\d{6}/)?.[0];
+    
+    // Open new tab for student login
+    const studentPage = await page.context().newPage();
+    await studentPage.goto('/login');
+    
+    // Login with OTP
+    await studentPage.fill('[data-testid="input-email"]', `jane.smith.${Date.now()}@student.com`);
+    await studentPage.fill('[data-testid="input-password"]', otp || '123456');
+    await studentPage.click('[data-testid="button-login"]');
+    
+    // Should be redirected to change password
+    await expect(studentPage).toHaveURL(/\/change-password/);
+    
+    // Change password
+    await studentPage.fill('[data-testid="input-new-password"]', 'newpassword123');
+    await studentPage.fill('[data-testid="input-confirm-password"]', 'newpassword123');
+    await studentPage.click('[data-testid="button-change-password"]');
+    
+    // Should redirect to feed
+    await expect(studentPage).toHaveURL('/feed');
+    
+    await studentPage.close();
   });
 
-  test('TC-SAD-004: Settings Read-Only Restrictions', async () => {
-    // Navigate to settings
-    await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
+  test('Live Analytics should show correct counts', async ({ page }) => {
+    // Navigate to live reports
+    await page.goto('/school-admin/live-reports');
     
-    // Take screenshot
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/school-admin-settings.png' });
+    // Should see analytics data
+    await expect(page.locator('[data-testid="total-students"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-posts"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-likes"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-comments"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-saves"]')).toBeVisible();
     
-    // Check if subscription fields are read-only
-    const subscriptionField = page.locator('[data-testid="subscription-plan"], input[name*="subscription"], select[name*="plan"]').first();
-    const maxStudentsField = page.locator('[data-testid="max-students"], input[name*="students"], input[name*="limit"]').first();
-    
-    if (await subscriptionField.isVisible()) {
-      // Verify field is disabled/readonly
-      await expect(subscriptionField).toBeDisabled();
-    }
-    
-    if (await maxStudentsField.isVisible()) {
-      // Verify field is disabled/readonly
-      await expect(maxStudentsField).toBeDisabled();
-    }
-    
-    // Verify "School Admin" role badge is displayed
-    await expect(page.locator(':has-text("School Admin")')).toBeVisible();
+    // Values should match database (non-zero for seeded data)
+    const studentsCount = await page.textContent('[data-testid="total-students"]');
+    expect(parseInt(studentsCount || '0')).toBeGreaterThan(0);
   });
 
-  test('TC-SAD-005: Student Search and Profile Access', async () => {
-    // Navigate to students list or search
-    const studentsButton = page.locator('button:has-text("Students"), [data-testid*="student"]').first();
+  test('Student Search should return results', async ({ page }) => {
+    // Navigate to student search
+    await page.goto('/school-admin/student-search');
     
-    if (await studentsButton.isVisible()) {
-      await studentsButton.click();
-      await page.waitForLoadState('networkidle');
-    } else {
-      await page.goto('/school-admin/students');
-    }
+    // Search for existing student
+    await page.fill('[data-testid="search-input"]', 'marcus');
+    await page.click('[data-testid="search-button"]');
     
-    // Take screenshot
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/students-list.png' });
+    // Should see search results
+    await expect(page.locator('[data-testid="student-result"]')).toHaveCount.greaterThan(0);
     
-    // Search for a student if search box exists
-    const searchInput = page.locator('[data-testid="student-search"], input[placeholder*="search"]').first();
-    if (await searchInput.isVisible()) {
-      await searchInput.fill('Diego');
-      await page.waitForLoadState('networkidle');
-      
-      // Take screenshot of search results
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/student-search-results.png' });
-    }
+    // Click on student should open profile
+    await page.click('[data-testid="student-result"]:first-child');
+    await expect(page.locator('[data-testid="student-profile"]')).toBeVisible();
   });
 
-  test('TC-SAD-006: API Restrictions Test', async () => {
-    // Attempt to modify subscription via API (should fail)
-    const response = await page.request.put('/api/schools/subscription', {
-      data: { plan: 'premium', maxStudents: 500 }
-    });
+  test('Should be able to rate students', async ({ page }) => {
+    await page.goto('/school-admin/student-search');
     
-    // Should return 403 or similar error
-    expect(response.status()).toBeGreaterThanOrEqual(400);
+    // Search and select a student
+    await page.fill('[data-testid="search-input"]', 'marcus');
+    await page.click('[data-testid="search-button"]');
+    await page.click('[data-testid="student-result"]:first-child');
     
-    // Take screenshot showing current page
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/api-restriction-test.png' });
+    // Add rating
+    await page.click('[data-testid="add-rating-button"]');
+    await page.fill('[data-testid="rating-score"]', '8');
+    await page.fill('[data-testid="rating-comment"]', 'Excellent performance');
+    await page.click('[data-testid="submit-rating"]');
+    
+    // Should show success
+    await expect(page.locator('text=Rating added successfully')).toBeVisible();
+  });
+
+  test('Settings should allow school profile updates', async ({ page }) => {
+    await page.goto('/school-admin/manage-settings');
+    
+    // Update school settings
+    await page.fill('[data-testid="input-school-name"]', 'Lincoln High School Updated');
+    await page.fill('[data-testid="input-school-description"]', 'Updated school description');
+    
+    // Upload school logo if supported
+    const logoInput = page.locator('[data-testid="logo-upload"]');
+    if (await logoInput.isVisible()) {
+      await logoInput.setInputFiles('tests/fixtures/test-image.png');
+    }
+    
+    // Save changes
+    await page.click('[data-testid="button-save-settings"]');
+    
+    // Should show success
+    await expect(page.locator('text=Settings updated successfully')).toBeVisible();
   });
 });

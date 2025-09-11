@@ -1,324 +1,120 @@
-import { test, expect, Page } from '@playwright/test';
-import path from 'path';
+import { test, expect } from '@playwright/test';
 
 test.describe('Student Portal', () => {
-  let page: Page;
-
-  test.beforeEach(async ({ browser }) => {
-    page = await browser.newPage();
-    
+  test.beforeEach(async ({ page }) => {
     // Login as student
     await page.goto('/login');
-    await page.fill('[data-testid="input-email"]', 'student@lockerroom.com');
-    await page.fill('[data-testid="input-password"]', 'Student123!');
+    await page.fill('[data-testid="input-email"]', 'marcus.rodriguez@student.com');
+    await page.fill('[data-testid="input-password"]', 'student123');
     await page.click('[data-testid="button-login"]');
-    
-    // Wait for redirect to feed
-    await page.waitForURL('/feed');
-  });
-
-  test.afterEach(async () => {
-    await page.close();
-  });
-
-  test('TC-STU-001: Student Login and Feed Access', async () => {
-    // Verify feed loads
     await expect(page).toHaveURL('/feed');
-    await expect(page.locator('main, .feed')).toBeVisible();
-    
-    // Take screenshot
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/student-feed.png' });
-    
-    // Verify student navigation
-    await expect(page.locator('[data-testid="mobile-nav-feed"]')).toBeVisible();
-    await expect(page.locator('[data-testid="mobile-nav-create"]')).toBeVisible();
-    await expect(page.locator('[data-testid="mobile-nav-stats"]')).toBeVisible();
   });
 
-  test('TC-STU-002: Create Photo Post', async () => {
+  test('Should be able to upload photo post', async ({ page }) => {
     // Navigate to create post
-    const createButton = page.locator('[data-testid="mobile-nav-create"], [data-testid="button-add-photo"], button:has-text("Photo")').first();
-    await createButton.click();
+    await page.click('[data-testid="create-post-button"]');
     
-    // Take screenshot of create interface
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/create-photo-interface.png' });
+    // Fill caption
+    await page.fill('[data-testid="post-caption"]', 'Test photo post from E2E test');
     
     // Upload photo
-    const photoButton = page.locator('[data-testid="button-add-photo"]');
-    if (await photoButton.isVisible()) {
-      await photoButton.click();
-      
-      // Handle file input
-      const fileInput = page.locator('input[type="file"][accept*="image"]');
-      await fileInput.setInputFiles(path.join(process.cwd(), 'tests/fixtures/test-image.png'));
-      
-      // Wait for preview
-      await page.waitForSelector('img, .media-preview', { timeout: 5000 });
-      
-      // Add caption
-      const captionInput = page.locator('textarea[placeholder*="caption"], textarea[name="caption"], .caption-input textarea').first();
-      if (await captionInput.isVisible()) {
-        await captionInput.fill('Test photo post from automated testing 📸');
-      }
-      
-      // Submit post
-      const shareButton = page.locator('[data-testid="button-share-post"], button:has-text("Share"), button[type="submit"]').first();
-      await shareButton.click();
-      
-      // Wait for success
-      await page.waitForLoadState('networkidle');
-      
-      // Take screenshot of result
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/photo-post-created.png' });
-      
-      // Verify post appears in feed
-      await page.goto('/feed');
-      await page.waitForLoadState('networkidle');
-      await expect(page.locator(':has-text("Test photo post")')).toBeVisible();
-    }
+    const fileInput = page.locator('[data-testid="media-upload"]');
+    await fileInput.setInputFiles('tests/fixtures/test-image.png');
+    
+    // Submit post
+    await page.click('[data-testid="submit-post"]');
+    
+    // Should show success message
+    await expect(page.locator('text=Post created successfully')).toBeVisible();
+    
+    // Should appear in feed
+    await expect(page.locator('text=Test photo post from E2E test')).toBeVisible();
   });
 
-  test('TC-STU-003: Create Video Post', async () => {
-    // Navigate to create post
-    const createButton = page.locator('[data-testid="mobile-nav-create"], [data-testid="button-add-video"], button:has-text("Video")').first();
-    await createButton.click();
+  test('Should be able to upload video post', async ({ page }) => {
+    await page.click('[data-testid="create-post-button"]');
+    
+    await page.fill('[data-testid="post-caption"]', 'Test video post from E2E test');
     
     // Upload video
-    const videoButton = page.locator('[data-testid="button-add-video"]');
-    if (await videoButton.isVisible()) {
-      await videoButton.click();
-      
-      // Handle file input
-      const fileInput = page.locator('input[type="file"][accept*="video"]');
-      await fileInput.setInputFiles(path.join(process.cwd(), 'tests/fixtures/test-video.mp4'));
-      
-      // Wait for preview
-      await page.waitForSelector('video, .video-preview', { timeout: 5000 });
-      
-      // Add caption
-      const captionInput = page.locator('textarea[placeholder*="caption"], textarea[name="caption"], .caption-input textarea').first();
-      if (await captionInput.isVisible()) {
-        await captionInput.fill('Test video post from automated testing 🎥');
-      }
-      
-      // Submit post
-      const shareButton = page.locator('[data-testid="button-share-post"], button:has-text("Share")').first();
-      await shareButton.click();
-      
-      // Wait for success
-      await page.waitForLoadState('networkidle');
-      
-      // Take screenshot
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/video-post-created.png' });
-    }
+    const fileInput = page.locator('[data-testid="media-upload"]');
+    await fileInput.setInputFiles('tests/fixtures/test-video.mp4');
+    
+    await page.click('[data-testid="submit-post"]');
+    
+    await expect(page.locator('text=Post created successfully')).toBeVisible();
+    await expect(page.locator('text=Test video post from E2E test')).toBeVisible();
   });
 
-  test('TC-STU-004: Interact with Posts', async () => {
+  test('Should be able to like and comment on posts', async ({ page }) => {
     // Go to feed
     await page.goto('/feed');
-    await page.waitForLoadState('networkidle');
     
-    // Find first post
-    const firstPost = page.locator('.post, [data-testid*="post-"], .post-card').first();
-    await expect(firstPost).toBeVisible();
+    // Like first post
+    const likeBtn = page.locator('[data-testid="like-button"]:first-child');
+    await likeBtn.click();
     
-    // Get post ID if available
-    const postElement = await firstPost.getAttribute('data-testid') || await firstPost.getAttribute('id');
-    let postId = 'unknown';
-    if (postElement && postElement.includes('post-')) {
-      postId = postElement.split('post-')[1];
-    }
+    // Should show liked state
+    await expect(likeBtn).toHaveClass(/liked/);
     
-    // Like the post
-    const likeButton = page.locator(`[data-testid="button-like-${postId}"], button:has([data-icon="heart"]), .like-button`).first();
-    if (await likeButton.isVisible()) {
-      await likeButton.click();
-      await page.waitForTimeout(500); // Wait for animation
-    }
+    // Add comment
+    await page.click('[data-testid="comment-button"]:first-child');
+    await page.fill('[data-testid="comment-input"]', 'Great post!');
+    await page.click('[data-testid="submit-comment"]');
     
-    // Comment on the post
-    const commentButton = page.locator(`[data-testid="button-comment-${postId}"], button:has([data-icon="message"]), .comment-button`).first();
-    if (await commentButton.isVisible()) {
-      await commentButton.click();
-      
-      // Add comment if comment input appears
-      const commentInput = page.locator('input[placeholder*="comment"], textarea[placeholder*="comment"], .comment-input input, .comment-input textarea').first();
-      if (await commentInput.isVisible()) {
-        await commentInput.fill('Great post! 👍');
-        
-        // Submit comment
-        const submitComment = page.locator('button:has-text("Post"), button:has-text("Comment"), .comment-submit').first();
-        if (await submitComment.isVisible()) {
-          await submitComment.click();
-        } else {
-          await commentInput.press('Enter');
-        }
-      }
-    }
-    
-    // Take screenshot of interactions
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/post-interactions.png' });
+    // Comment should appear
+    await expect(page.locator('text=Great post!')).toBeVisible();
   });
 
-  test('TC-STU-005: Edit Profile', async () => {
-    // Navigate to profile/settings
+  test('Analytics should show engagement counts', async ({ page }) => {
+    // Navigate to stats page
+    await page.goto('/stats');
+    
+    // Should see analytics data
+    await expect(page.locator('[data-testid="total-posts"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-likes"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-comments"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-saves"]')).toBeVisible();
+    
+    // Should have non-zero values
+    const postsCount = await page.textContent('[data-testid="total-posts"]');
+    expect(parseInt(postsCount || '0')).toBeGreaterThan(0);
+  });
+
+  test('Should be able to update profile', async ({ page }) => {
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
     
-    // Take screenshot
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/student-profile-edit.png' });
+    // Update profile fields
+    await page.fill('[data-testid="input-bio"]', 'Updated student bio');
+    await page.fill('[data-testid="input-sport"]', 'Basketball');
+    await page.fill('[data-testid="input-position"]', 'Point Guard');
     
-    // Edit profile fields
-    const nameField = page.locator('input[name="name"], input[placeholder*="name"]').first();
-    if (await nameField.isVisible()) {
-      await nameField.clear();
-      await nameField.fill('Updated Student Name');
-    }
-    
-    const bioField = page.locator('textarea[name="bio"], textarea[placeholder*="bio"]').first();
-    if (await bioField.isVisible()) {
-      await bioField.clear();
-      await bioField.fill('Updated bio from automated testing');
-    }
-    
-    const phoneField = page.locator('input[name="phone"], input[placeholder*="phone"]').first();
-    if (await phoneField.isVisible()) {
-      await phoneField.clear();
-      await phoneField.fill('555-TEST-123');
-    }
+    // Upload profile photo
+    const fileInput = page.locator('[data-testid="profile-photo-upload"]');
+    await fileInput.setInputFiles('tests/fixtures/test-image.png');
     
     // Save changes
-    const saveButton = page.locator('[data-testid="settings-save"], button:has-text("Save"), button[type="submit"]').first();
-    if (await saveButton.isVisible()) {
-      await saveButton.click();
-      
-      // Wait for success message
-      await page.waitForSelector('.toast, .success, .alert-success', { timeout: 5000 });
-      
-      // Take screenshot of success
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/profile-updated.png' });
-    }
+    await page.click('[data-testid="button-save-profile"]');
+    
+    // Should show success message
+    await expect(page.locator('text=Profile updated successfully')).toBeVisible();
   });
 
-  test('TC-STU-006: Upload Profile Picture', async () => {
-    // Navigate to profile settings
+  test('Should be able to change password', async ({ page }) => {
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
     
-    // Look for profile picture upload
-    const uploadButton = page.locator('button:has-text("Upload"), input[type="file"], .upload-avatar').first();
+    // Navigate to password change
+    await page.click('[data-testid="password-tab"]');
     
-    if (await uploadButton.isVisible()) {
-      if (await uploadButton.getAttribute('type') === 'file') {
-        // Direct file input
-        await uploadButton.setInputFiles(path.join(process.cwd(), 'tests/fixtures/test-image.png'));
-      } else {
-        // Button that triggers file input
-        await uploadButton.click();
-        const fileInput = page.locator('input[type="file"]').first();
-        await fileInput.setInputFiles(path.join(process.cwd(), 'tests/fixtures/test-image.png'));
-      }
-      
-      // Wait for upload completion
-      await page.waitForLoadState('networkidle');
-      
-      // Take screenshot
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/profile-pic-uploaded.png' });
-    }
-  });
-
-  test('TC-STU-007: View Analytics Dashboard', async () => {
-    // Navigate to stats
-    await page.goto('/stats');
-    await page.waitForLoadState('networkidle');
+    // Fill password form
+    await page.fill('[data-testid="input-current-password"]', 'student123');
+    await page.fill('[data-testid="input-new-password"]', 'newstudent123');
+    await page.fill('[data-testid="input-confirm-password"]', 'newstudent123');
     
-    // Take screenshot
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/student-analytics.png' });
+    // Submit
+    await page.click('[data-testid="button-change-password"]');
     
-    // Verify analytics components are visible
-    await expect(page.locator('.chart, .analytics, .stats')).toBeVisible();
-    
-    // Check for engagement metrics
-    const engagementSection = page.locator(':has-text("Engagement"), :has-text("Likes"), :has-text("Comments")');
-    if (await engagementSection.isVisible()) {
-      await expect(engagementSection).toBeVisible();
-    }
-  });
-
-  test('TC-STU-008: Share Profile', async () => {
-    // Navigate to profile
-    await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
-    
-    // Look for share profile button
-    const shareButton = page.locator('[data-testid="button-share-profile"], button:has-text("Share")').first();
-    
-    if (await shareButton.isVisible()) {
-      await shareButton.click();
-      
-      // Take screenshot of share dialog
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/share-profile-dialog.png' });
-      
-      // Verify share options are visible
-      await expect(page.locator('[role="dialog"], .share-dialog, .modal')).toBeVisible();
-    }
-  });
-
-  test('TC-STU-009: Privacy Settings Toggle', async () => {
-    // Navigate to settings
-    await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
-    
-    // Look for privacy settings
-    const privacyToggle = page.locator('input[type="checkbox"], .toggle, .switch').first();
-    
-    if (await privacyToggle.isVisible()) {
-      // Toggle privacy setting
-      await privacyToggle.click();
-      
-      // Save settings
-      const saveButton = page.locator('button:has-text("Save")').first();
-      if (await saveButton.isVisible()) {
-        await saveButton.click();
-      }
-      
-      // Take screenshot
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/privacy-settings.png' });
-    }
-  });
-
-  test('TC-STU-010: Large File Upload Rejection', async () => {
-    // Create a large dummy file (simulate)
-    const createButton = page.locator('[data-testid="mobile-nav-create"], [data-testid="button-add-photo"]').first();
-    await createButton.click();
-    
-    const photoButton = page.locator('[data-testid="button-add-photo"]');
-    if (await photoButton.isVisible()) {
-      await photoButton.click();
-      
-      // Try to upload large file (this will test client-side validation)
-      try {
-        await page.evaluate(() => {
-          const input = document.querySelector('input[type="file"]') as HTMLInputElement;
-          if (input) {
-            // Create a large file blob
-            const largeFile = new File(['x'.repeat(10 * 1024 * 1024)], 'large-file.jpg', { type: 'image/jpeg' });
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(largeFile);
-            input.files = dataTransfer.files;
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-        });
-        
-        // Wait for error message
-        await page.waitForSelector('.error, .alert-error, .toast:has-text("large")', { timeout: 5000 });
-        
-        // Take screenshot of error
-        await page.screenshot({ path: 'artifacts/usability-tests/screenshots/large-file-error.png' });
-      } catch (error) {
-        // File size validation may prevent this test
-        console.log('Large file test not applicable or blocked by validation');
-      }
-    }
+    // Should show success
+    await expect(page.locator('text=Password updated successfully')).toBeVisible();
   });
 });

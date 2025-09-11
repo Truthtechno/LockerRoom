@@ -1,120 +1,128 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 test.describe('System Admin Portal', () => {
-  let page: Page;
-
-  test.beforeEach(async ({ browser }) => {
-    page = await browser.newPage();
-    
+  test.beforeEach(async ({ page }) => {
     // Login as system admin
     await page.goto('/login');
     await page.fill('[data-testid="input-email"]', 'admin@lockerroom.com');
-    await page.fill('[data-testid="input-password"]', 'Admin123!');
+    await page.fill('[data-testid="input-password"]', 'admin123');
     await page.click('[data-testid="button-login"]');
-    
-    // Wait for redirect to system admin dashboard
-    await page.waitForURL('/system-admin');
-  });
-
-  test.afterEach(async () => {
-    await page.close();
-  });
-
-  test('TC-SA-001: System Admin Login and Dashboard Access', async () => {
-    // Verify system admin dashboard loads
     await expect(page).toHaveURL('/system-admin');
-    await expect(page.locator('h1')).toContainText('System Administration');
-    
-    // Take screenshot
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/system-admin-dashboard.png' });
-    
-    // Verify admin navigation exists
-    await expect(page.locator('[data-testid="button-review-applications"]')).toBeVisible();
-    await expect(page.locator('[data-testid="button-platform-analytics"]')).toBeVisible();
   });
 
-  test('TC-SA-002: Review School Applications Portal', async () => {
-    // Navigate to school applications
-    await page.click('[data-testid="button-review-applications"]');
-    await page.waitForLoadState('networkidle');
-    
-    // Take screenshot of applications page
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/school-applications.png' });
-    
-    // Verify applications table is visible
-    await expect(page.locator('table, .applications-list')).toBeVisible();
-  });
-
-  test('TC-SA-003: Platform Analytics Access', async () => {
-    // Navigate to platform analytics
-    await page.click('[data-testid="button-platform-analytics"]');
-    await page.waitForLoadState('networkidle');
-    
-    // Take screenshot of analytics page
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/platform-analytics.png' });
-    
-    // Verify analytics charts/data is visible
-    await expect(page.locator('.chart, .analytics')).toBeVisible();
-  });
-
-  test('TC-SA-004: Create New School Application', async () => {
-    // Navigate to school applications
-    await page.click('[data-testid="button-review-applications"]');
-    await page.waitForLoadState('networkidle');
-    
-    // Look for "Add New School" or similar button
-    const addButton = page.locator('[data-testid="button-add-school"], button:has-text("Add"), button:has-text("New")').first();
-    if (await addButton.isVisible()) {
-      await addButton.click();
-      
-      // Fill out school application form if modal/form appears
-      await page.waitForSelector('form, [role="dialog"]', { timeout: 5000 });
-      
-      // Take screenshot of form
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/add-school-form.png' });
-      
-      // Fill basic fields if they exist
-      const nameField = page.locator('input[name="schoolName"], input[placeholder*="school"], input[placeholder*="name"]').first();
-      if (await nameField.isVisible()) {
-        await nameField.fill('Test Academy');
-      }
-      
-      const emailField = page.locator('input[type="email"], input[name="email"]').first();
-      if (await emailField.isVisible()) {
-        await emailField.fill('test@academy.com');
-      }
-    }
-  });
-
-  test('TC-SA-005: System Configuration Access', async () => {
-    // Look for system settings/configuration
-    const settingsButton = page.locator('[data-testid*="settings"], [data-testid*="config"], button:has-text("Settings"), button:has-text("Configuration")').first();
-    
-    if (await settingsButton.isVisible()) {
-      await settingsButton.click();
-      await page.waitForLoadState('networkidle');
-      
-      // Take screenshot
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/system-configuration.png' });
-      
-      // Verify configuration form/options are visible
-      await expect(page.locator('form, .settings, .configuration')).toBeVisible();
-    } else {
-      // If no direct settings access, navigate through menu
-      await page.goto('/system-admin/settings');
-      await page.screenshot({ path: 'artifacts/usability-tests/screenshots/system-configuration-alt.png' });
-    }
-  });
-
-  test('TC-SA-006: Unauthorized Access Prevention', async () => {
-    // Logout and try to access system admin page directly
-    await page.goto('/logout');
+  test('Should be able to create new school', async ({ page }) => {
+    // Navigate to school management
     await page.goto('/system-admin');
     
-    // Should redirect to login or show access denied
-    await expect(page).toHaveURL(/\/login|\/unauthorized|\/403/);
+    // Click create school button
+    await page.click('[data-testid="create-school-button"]');
     
-    // Take screenshot
-    await page.screenshot({ path: 'artifacts/usability-tests/screenshots/unauthorized-access.png' });
+    // Fill school form
+    await page.fill('[data-testid="input-school-name"]', 'Test High School');
+    await page.fill('[data-testid="input-school-address"]', '123 Test St, Test City, TC 12345');
+    await page.fill('[data-testid="input-school-phone"]', '555-0123');
+    await page.fill('[data-testid="input-school-email"]', 'admin@testhigh.edu');
+    await page.selectOption('[data-testid="select-subscription-plan"]', 'premium');
+    await page.fill('[data-testid="input-max-students"]', '300');
+    
+    // Submit form
+    await page.click('[data-testid="button-create-school"]');
+    
+    // Should show success message
+    await expect(page.locator('text=School created successfully')).toBeVisible();
+    
+    // Should appear in schools list
+    await expect(page.locator('text=Test High School')).toBeVisible();
+  });
+
+  test('Should be able to review school applications', async ({ page }) => {
+    // Navigate to school applications
+    await page.goto('/system-admin/school-applications');
+    
+    // Should see applications list
+    await expect(page.locator('[data-testid="application-card"]')).toHaveCount.greaterThan(0);
+    
+    // Click on first application
+    await page.click('[data-testid="application-card"]:first-child');
+    
+    // Should see application details
+    await expect(page.locator('[data-testid="application-details"]')).toBeVisible();
+    
+    // Approve application
+    await page.click('[data-testid="approve-application"]');
+    await page.fill('[data-testid="reviewer-notes"]', 'Approved for testing');
+    await page.click('[data-testid="confirm-approve"]');
+    
+    // Should show success
+    await expect(page.locator('text=Application approved successfully')).toBeVisible();
+  });
+
+  test('Platform Analytics should show non-zero totals', async ({ page }) => {
+    // Navigate to platform analytics
+    await page.goto('/system-admin/platform-analytics');
+    
+    // Should see analytics data
+    await expect(page.locator('[data-testid="total-schools"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-students"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-posts"]')).toBeVisible();
+    await expect(page.locator('[data-testid="total-views"]')).toBeVisible();
+    
+    // Values should be non-zero (seeded data)
+    const schoolsCount = await page.textContent('[data-testid="total-schools"]');
+    expect(parseInt(schoolsCount || '0')).toBeGreaterThan(0);
+    
+    const studentsCount = await page.textContent('[data-testid="total-students"]');
+    expect(parseInt(studentsCount || '0')).toBeGreaterThan(0);
+  });
+
+  test('Should be able to manage admin roles', async ({ page }) => {
+    // Navigate to admin management
+    await page.goto('/system-admin/admin-management');
+    
+    // Should see admin roles list
+    await expect(page.locator('[data-testid="admin-role-card"]')).toHaveCount.greaterThan(0);
+    
+    // Create new admin role
+    await page.click('[data-testid="create-admin-button"]');
+    await page.fill('[data-testid="input-admin-email"]', 'newadmin@example.com');
+    await page.selectOption('[data-testid="select-admin-role"]', 'school_admin');
+    await page.fill('[data-testid="input-admin-school"]', 'Lincoln High School');
+    await page.click('[data-testid="button-create-admin"]');
+    
+    // Should show success
+    await expect(page.locator('text=Admin role created successfully')).toBeVisible();
+  });
+
+  test('Should be able to configure system settings', async ({ page }) => {
+    // Navigate to system config
+    await page.goto('/system-admin/system-config');
+    
+    // Should see settings form
+    await expect(page.locator('[data-testid="system-settings-form"]')).toBeVisible();
+    
+    // Update a setting
+    await page.fill('[data-testid="input-max-file-size"]', '100');
+    await page.fill('[data-testid="input-session-timeout"]', '3600');
+    await page.click('[data-testid="button-save-settings"]');
+    
+    // Should show success
+    await expect(page.locator('text=System settings updated successfully')).toBeVisible();
+  });
+
+  test('Should be able to view detailed analytics', async ({ page }) => {
+    await page.goto('/system-admin/platform-analytics');
+    
+    // Should see various analytics charts
+    await expect(page.locator('[data-testid="schools-chart"]')).toBeVisible();
+    await expect(page.locator('[data-testid="students-chart"]')).toBeVisible();
+    await expect(page.locator('[data-testid="engagement-chart"]')).toBeVisible();
+    
+    // Should be able to filter by date range
+    await page.fill('[data-testid="date-from"]', '2024-01-01');
+    await page.fill('[data-testid="date-to"]', '2024-12-31');
+    await page.click('[data-testid="apply-filter"]');
+    
+    // Charts should update
+    await expect(page.locator('[data-testid="schools-chart"]')).toBeVisible();
   });
 });

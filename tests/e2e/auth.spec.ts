@@ -1,73 +1,92 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Authentication E2E Tests', () => {
+test.describe('Auth & Signup', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:5000');
+    // Navigate to signup page
+    await page.goto('/signup');
   });
 
-  test('should allow viewer registration and login', async ({ page }) => {
-    // Navigate to signup/register page
-    await page.click('[data-testid="link-signup"]');
+  test('Viewer signup with new email should succeed', async ({ page }) => {
+    // Fill out signup form
+    await page.fill('[data-testid="input-name"]', 'Test User');
+    await page.fill('[data-testid="input-email"]', `test-${Date.now()}@example.com`);
+    await page.fill('[data-testid="input-password"]', 'testpassword123');
+    await page.fill('[data-testid="input-confirm-password"]', 'testpassword123');
     
-    // Fill registration form
-    await page.fill('[data-testid="input-email"]', 'e2e.viewer@example.com');
-    await page.fill('[data-testid="input-password"]', 'password123');
-    await page.fill('[data-testid="input-name"]', 'E2E Test Viewer');
-    await page.fill('[data-testid="input-bio"]', 'E2E test account for viewer');
+    // Submit form
+    await page.click('[data-testid="button-signup"]');
     
-    // Submit registration
-    await page.click('[data-testid="button-register"]');
+    // Wait for success toast
+    await expect(page.locator('text=Welcome to LockerRoom!')).toBeVisible();
     
-    // Should redirect to feed after successful registration
-    await expect(page).toHaveURL(/.*feed/);
-    await expect(page.locator('[data-testid="text-username"]')).toContainText('E2E Test Viewer');
+    // Should redirect to feed
+    await expect(page).toHaveURL('/feed');
   });
 
-  test('should allow login with demo accounts', async ({ page }) => {
+  test('Duplicate email should show error', async ({ page }) => {
+    // Use existing email from seeded data
+    await page.fill('[data-testid="input-name"]', 'Test User');
+    await page.fill('[data-testid="input-email"]', 'sarah.johnson@viewer.com');
+    await page.fill('[data-testid="input-password"]', 'testpassword123');
+    await page.fill('[data-testid="input-confirm-password"]', 'testpassword123');
+    
+    // Submit form
+    await page.click('[data-testid="button-signup"]');
+    
+    // Should show error message
+    await expect(page.locator('text=Email already registered')).toBeVisible();
+  });
+
+  test('Password mismatch should show validation error', async ({ page }) => {
+    await page.fill('[data-testid="input-name"]', 'Test User');
+    await page.fill('[data-testid="input-email"]', `test-${Date.now()}@example.com`);
+    await page.fill('[data-testid="input-password"]', 'testpassword123');
+    await page.fill('[data-testid="input-confirm-password"]', 'differentpassword');
+    
+    // Submit form
+    await page.click('[data-testid="button-signup"]');
+    
+    // Should show validation error
+    await expect(page.locator('text=Passwords don\'t match')).toBeVisible();
+  });
+
+  test('Login with valid credentials should succeed', async ({ page }) => {
     // Navigate to login page
-    await page.click('[data-testid="link-login"]');
+    await page.goto('/login');
     
-    // Login as viewer
+    // Fill login form with seeded data
     await page.fill('[data-testid="input-email"]', 'sarah.johnson@viewer.com');
     await page.fill('[data-testid="input-password"]', 'viewer123');
+    
+    // Submit form
     await page.click('[data-testid="button-login"]');
     
     // Should redirect to feed
-    await expect(page).toHaveURL(/.*feed/);
-    await expect(page.locator('[data-testid="text-username"]')).toContainText('Sarah Johnson');
+    await expect(page).toHaveURL('/feed');
   });
 
-  test('should handle login errors gracefully', async ({ page }) => {
-    await page.click('[data-testid="link-login"]');
+  test('Login with invalid credentials should show error', async ({ page }) => {
+    await page.goto('/login');
     
-    // Try invalid credentials
-    await page.fill('[data-testid="input-email"]', 'invalid@example.com');
+    await page.fill('[data-testid="input-email"]', 'sarah.johnson@viewer.com');
     await page.fill('[data-testid="input-password"]', 'wrongpassword');
+    
     await page.click('[data-testid="button-login"]');
     
     // Should show error message
-    await expect(page.locator('[data-testid="error-message"]')).toBeVisible();
-    await expect(page.locator('[data-testid="error-message"]')).toContainText('Invalid credentials');
+    await expect(page.locator('text=Invalid credentials')).toBeVisible();
   });
 
-  test('should allow password change', async ({ page }) => {
-    // Login first
-    await page.click('[data-testid="link-login"]');
-    await page.fill('[data-testid="input-email"]', 'sarah.johnson@viewer.com');
-    await page.fill('[data-testid="input-password"]', 'viewer123');
-    await page.click('[data-testid="button-login"]');
+  test('Password visibility toggle should work', async ({ page }) => {
+    await page.fill('[data-testid="input-password"]', 'testpassword123');
     
-    // Navigate to settings
-    await page.click('[data-testid="link-settings"]');
+    // Password should be hidden by default
+    await expect(page.locator('[data-testid="input-password"]')).toHaveAttribute('type', 'password');
     
-    // Change password section
-    await page.fill('[data-testid="input-current-password"]', 'viewer123');
-    await page.fill('[data-testid="input-new-password"]', 'newpassword123');
-    await page.fill('[data-testid="input-confirm-password"]', 'newpassword123');
-    await page.click('[data-testid="button-change-password"]');
+    // Click toggle
+    await page.click('[data-testid="toggle-password"]');
     
-    // Should show success message
-    await expect(page.locator('[data-testid="success-message"]')).toBeVisible();
-    await expect(page.locator('[data-testid="success-message"]')).toContainText('Password updated successfully');
+    // Password should be visible
+    await expect(page.locator('[data-testid="input-password"]')).toHaveAttribute('type', 'text');
   });
 });

@@ -1,163 +1,233 @@
 import request from 'supertest';
-import { describe, beforeAll, afterAll, test, expect } from '@jest/globals';
-import { createServer } from '../../server/index';
-import type { Server } from 'http';
+import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
+
+const API_BASE = 'http://localhost:5174';
 
 describe('Posts API Tests', () => {
-  let server: Server;
-  let app: any;
   let studentToken: string;
   let viewerToken: string;
+  let studentId: string;
+  let viewerId: string;
   let testPostId: string;
 
   beforeAll(async () => {
-    const result = await createServer();
-    app = result.app;
-    server = result.server;
-
-    // Login as student to get token
-    const studentLogin = await request(app)
+    // Login as student
+    const studentLogin = await request(API_BASE)
       .post('/api/auth/login')
       .send({
         email: 'marcus.rodriguez@student.com',
         password: 'student123'
       });
+    
     studentToken = studentLogin.body.token;
+    studentId = studentLogin.body.user.id;
 
-    // Login as viewer to get token
-    const viewerLogin = await request(app)
+    // Login as viewer
+    const viewerLogin = await request(API_BASE)
       .post('/api/auth/login')
       .send({
         email: 'sarah.johnson@viewer.com',
         password: 'viewer123'
       });
+    
     viewerToken = viewerLogin.body.token;
-  });
-
-  afterAll((done) => {
-    server.close(done);
+    viewerId = viewerLogin.body.user.id;
   });
 
   describe('GET /api/posts', () => {
-    test('should fetch all posts', async () => {
-      const response = await request(app)
-        .get('/api/posts');
+    test('should return list of posts', async () => {
+      const response = await request(API_BASE)
+        .get('/api/posts')
+        .expect(200);
 
-      expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
       
-      // Save a post ID for later tests
-      if (response.body.length > 0) {
-        testPostId = response.body[0].id;
-      }
+      // Check post structure
+      const post = response.body[0];
+      expect(post).toHaveProperty('id');
+      expect(post).toHaveProperty('caption');
+      expect(post).toHaveProperty('createdAt');
+    });
+  });
+
+  describe('POST /api/posts/create', () => {
+    test('should create post with text only', async () => {
+      const postData = {
+        caption: 'Test post from API test'
+      };
+
+      const response = await request(API_BASE)
+        .post('/api/posts/create')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send(postData)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.caption).toBe(postData.caption);
+      expect(response.body.studentId).toBe(studentId);
+      
+      testPostId = response.body.id;
+    });
+
+    test('should return 401 without authentication', async () => {
+      const postData = {
+        caption: 'Test post'
+      };
+
+      const response = await request(API_BASE)
+        .post('/api/posts/create')
+        .send(postData)
+        .expect(401);
+
+      expect(response.body.message).toBe('Authentication required');
+    });
+
+    test('should return 403 for non-student users', async () => {
+      const postData = {
+        caption: 'Test post'
+      };
+
+      const response = await request(API_BASE)
+        .post('/api/posts/create')
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .send(postData)
+        .expect(403);
+
+      expect(response.body.message).toBe('Insufficient permissions');
     });
   });
 
   describe('POST /api/posts/:postId/like', () => {
-    test('should allow viewer to like a post', async () => {
-      const response = await request(app)
+    test('should like post successfully', async () => {
+      const response = await request(API_BASE)
         .post(`/api/posts/${testPostId}/like`)
-        .set('Authorization', `Bearer ${viewerToken}`);
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .expect(200);
 
-      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.postId).toBe(testPostId);
+      expect(response.body.userId).toBe(viewerId);
     });
 
-    test('should allow student to like a post', async () => {
-      const response = await request(app)
+    test('should return 401 without authentication', async () => {
+      const response = await request(API_BASE)
         .post(`/api/posts/${testPostId}/like`)
-        .set('Authorization', `Bearer ${studentToken}`);
+        .expect(401);
 
-      expect(response.status).toBe(200);
-    });
-
-    test('should require authentication', async () => {
-      const response = await request(app)
-        .post(`/api/posts/${testPostId}/like`);
-
-      expect(response.status).toBe(401);
+      expect(response.body.message).toBe('Authentication required');
     });
   });
 
-  describe('POST /api/posts/:postId/comments', () => {
-    test('should allow viewer to comment on post', async () => {
-      const response = await request(app)
-        .post(`/api/posts/${testPostId}/comments`)
+  describe('DELETE /api/posts/:postId/like', () => {
+    test('should unlike post successfully', async () => {
+      const response = await request(API_BASE)
+        .delete(`/api/posts/${testPostId}/like`)
         .set('Authorization', `Bearer ${viewerToken}`)
-        .send({
-          content: 'Great post! Keep up the good work! 🔥'
-        });
+        .expect(200);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('content');
-      expect(response.body.content).toBe('Great post! Keep up the good work! 🔥');
+      expect(response.body.message).toBe('Post unliked');
+    });
+  });
+
+  describe('POST /api/posts/:postId/comment', () => {
+    test('should add comment successfully', async () => {
+      const commentData = {
+        content: 'Great post!'
+      };
+
+      const response = await request(API_BASE)
+        .post(`/api/posts/${testPostId}/comment`)
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .send(commentData)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.content).toBe(commentData.content);
+      expect(response.body.postId).toBe(testPostId);
+      expect(response.body.userId).toBe(viewerId);
     });
 
-    test('should allow student to comment on post', async () => {
-      const response = await request(app)
-        .post(`/api/posts/${testPostId}/comments`)
-        .set('Authorization', `Bearer ${studentToken}`)
-        .send({
-          content: 'Nice work teammate!'
-        });
+    test('should return 401 without authentication', async () => {
+      const commentData = {
+        content: 'Test comment'
+      };
 
-      expect(response.status).toBe(200);
-    });
+      const response = await request(API_BASE)
+        .post(`/api/posts/${testPostId}/comment`)
+        .send(commentData)
+        .expect(401);
 
-    test('should require authentication for comments', async () => {
-      const response = await request(app)
-        .post(`/api/posts/${testPostId}/comments`)
-        .send({
-          content: 'Unauthorized comment'
-        });
-
-      expect(response.status).toBe(401);
+      expect(response.body.message).toBe('Authentication required');
     });
   });
 
   describe('GET /api/posts/:postId/comments', () => {
-    test('should fetch comments for a post', async () => {
-      const response = await request(app)
-        .get(`/api/posts/${testPostId}/comments`);
+    test('should return post comments', async () => {
+      const response = await request(API_BASE)
+        .get(`/api/posts/${testPostId}/comments`)
+        .expect(200);
 
-      expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-    });
-
-    test('should fetch all comments when limit=all', async () => {
-      const response = await request(app)
-        .get(`/api/posts/${testPostId}/comments?limit=all`);
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      
+      if (response.body.length > 0) {
+        const comment = response.body[0];
+        expect(comment).toHaveProperty('id');
+        expect(comment).toHaveProperty('content');
+        expect(comment).toHaveProperty('createdAt');
+      }
     });
   });
 
   describe('POST /api/posts/:postId/save', () => {
-    test('should allow viewer to save a post', async () => {
-      const response = await request(app)
+    test('should save post successfully', async () => {
+      const response = await request(API_BASE)
         .post(`/api/posts/${testPostId}/save`)
-        .set('Authorization', `Bearer ${viewerToken}`);
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .expect(200);
 
-      expect(response.status).toBe(200);
-    });
-
-    test('should require authentication for saves', async () => {
-      const response = await request(app)
-        .post(`/api/posts/${testPostId}/save`);
-
-      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.postId).toBe(testPostId);
+      expect(response.body.userId).toBe(viewerId);
     });
   });
 
   describe('DELETE /api/posts/:postId/save', () => {
-    test('should allow viewer to unsave a post', async () => {
-      const response = await request(app)
+    test('should unsave post successfully', async () => {
+      const response = await request(API_BASE)
         .delete(`/api/posts/${testPostId}/save`)
-        .set('Authorization', `Bearer ${viewerToken}`);
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .expect(200);
 
-      expect(response.status).toBe(200);
+      expect(response.body.message).toBe('Post unsaved');
+    });
+  });
+
+  describe('GET /api/users/:userId/saved-posts', () => {
+    test('should return user saved posts', async () => {
+      const response = await request(API_BASE)
+        .get(`/api/users/${viewerId}/saved-posts`)
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBe(true);
+    });
+
+    test('should return 401 without authentication', async () => {
+      const response = await request(API_BASE)
+        .get(`/api/users/${viewerId}/saved-posts`)
+        .expect(401);
+
+      expect(response.body.message).toBe('Authentication required');
+    });
+
+    test('should return 403 for accessing other user\'s saved posts', async () => {
+      const response = await request(API_BASE)
+        .get('/api/users/other-user-id/saved-posts')
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .expect(403);
+
+      expect(response.body.message).toBe('Access denied');
     });
   });
 });
