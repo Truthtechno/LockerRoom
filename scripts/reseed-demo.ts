@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import "dotenv/config";
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { 
@@ -26,8 +27,11 @@ import {
   type InsertStudentFollower
 } from "@shared/schema";
 
-const connectionString = process.env.DATABASE_URL || "";
-const sql = neon(connectionString);
+if (!process.env.DATABASE_URL) {
+  throw new Error("❌ DATABASE_URL not set. Please define it in your .env");
+}
+
+const sql = neon(process.env.DATABASE_URL);
 const db = drizzle(sql);
 
 // Demo data arrays

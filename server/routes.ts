@@ -79,13 +79,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { email, password } = req.body;
       
       if (!email || !password) {
-        return res.status(400).json({ message: "Email and password required" });
+        return res.status(400).json({ 
+          error: { 
+            code: "missing_fields", 
+            message: "Email and password required" 
+          } 
+        });
       }
 
       const result = await authStorage.verifyPassword(email, password);
       
       if (!result) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        return res.status(401).json({ 
+          error: { 
+            code: "invalid_credentials", 
+            message: "Invalid credentials" 
+          } 
+        });
       }
 
       const { user, profile } = result;
@@ -110,25 +120,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('Login error:', error);
-      res.status(500).json({ message: "Login failed" });
+      res.status(500).json({ 
+        error: { 
+          code: "login_failed", 
+          message: "Login failed" 
+        } 
+      });
     }
   });
 
+  // Alias route for register -> signup (for backward compatibility)
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { email, password, role, ...profileData } = req.body;
+      const { email, password, name } = req.body;
       
-      if (!email || !password || !role) {
-        return res.status(400).json({ message: "Email, password, and role are required" });
+      if (!email || !password || !name) {
+        return res.status(400).json({ 
+          error: { 
+            code: "missing_fields", 
+            message: "Email, password, and name are required" 
+          } 
+        });
       }
       
       const existingUser = await authStorage.getUserByEmail(email);
       
       if (existingUser) {
-        return res.status(400).json({ message: "User already exists" });
+        return res.status(409).json({ 
+          error: { 
+            code: "email_taken", 
+            message: "Email already registered" 
+          } 
+        });
       }
 
-      const { user, profile } = await authStorage.createUserWithProfile(email, password, role, profileData);
+      const { user, profile } = await authStorage.createUserWithProfile(
+        email, 
+        password, 
+        'viewer', 
+        { name }
+      );
       
       // Generate JWT token
       const token = jwt.sign(
@@ -137,7 +168,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { expiresIn: '7d' }
       );
       
-      // Return user and profile data separately to avoid ID collision
       res.json({ 
         token,
         user: { 
@@ -146,10 +176,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: user.role,
           linkedId: user.linkedId
         },
-        profile
+        profile,
+        message: "Account created successfully! You can now search and follow student athletes."
       });
     } catch (error) {
-      res.status(400).json({ message: "Registration failed" });
+      console.error('Register error:', error);
+      res.status(400).json({ 
+        error: { 
+          code: "signup_failed", 
+          message: "Registration failed. Please check your information." 
+        } 
+      });
     }
   });
 
@@ -732,33 +769,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Public signup route (enhanced from existing register)
   app.post("/api/auth/signup", async (req, res) => {
     try {
+      const { email, password, name } = req.body;
       
-      const userData = insertUserSchema.parse({
-        ...req.body,
-        role: "viewer" // Force public users to be viewers
-      });
+      if (!email || !password || !name) {
+        return res.status(400).json({ 
+          error: { 
+            code: "missing_fields", 
+            message: "Email, password, and name are required" 
+          } 
+        });
+      }
       
-      
-      const existingUser = await storage.getUserByEmail(userData.email);
+      const existingUser = await authStorage.getUserByEmail(email);
       
       if (existingUser) {
-        return res.status(400).json({ message: "Email already registered" });
+        return res.status(409).json({ 
+          error: { 
+            code: "email_taken", 
+            message: "Email already registered" 
+          } 
+        });
       }
 
-      const user = await storage.createUser(userData);
+      const { user, profile } = await authStorage.createUserWithProfile(
+        email, 
+        password, 
+        'viewer', 
+        { name }
+      );
+      
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role, linkedId: user.linkedId },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
       res.json({ 
+        token,
         user: { 
           id: user.id, 
-          name: user.name, 
           email: user.email, 
           role: user.role,
-          schoolId: user.schoolId 
+          linkedId: user.linkedId
         },
+        profile,
         message: "Account created successfully! You can now search and follow student athletes."
       });
     } catch (error) {
       console.error('Signup error:', error);
-      res.status(400).json({ message: "Registration failed. Please check your information." });
+      res.status(400).json({ 
+        error: { 
+          code: "signup_failed", 
+          message: "Registration failed. Please check your information." 
+        } 
+      });
     }
   });
 
