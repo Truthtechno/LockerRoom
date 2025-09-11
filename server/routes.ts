@@ -204,14 +204,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get user to verify current password
-      const user = await storage.getUserById(userId);
+      const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // For demo purposes, we'll skip password verification since we're using simple auth
-      // In a real app, you'd verify the current password here
-      const bcrypt = require('bcrypt');
+      // Verify current password with bcrypt
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isCurrentPasswordValid) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
+
       const saltRounds = 10;
       const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
