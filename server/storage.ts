@@ -1,21 +1,27 @@
 import { 
   type User, 
-  type InsertUser, 
+  type InsertUser,
+  type Viewer,
+  type InsertViewer,
+  type SchoolAdmin,
+  type InsertSchoolAdmin,
+  type SystemAdmin,
+  type InsertSystemAdmin,
   type School, 
   type InsertSchool,
   type Student,
   type InsertStudent,
   type Post,
   type InsertPost,
-  type Like,
-  type InsertLike,
-  type Comment,
-  type InsertComment,
-  type CommentWithUser,
-  type Save,
-  type InsertSave,
-  type Follow,
-  type InsertFollow,
+  type PostLike,
+  type InsertPostLike,
+  type PostComment,
+  type InsertPostComment,
+  type PostCommentWithUser,
+  type SavedPost,
+  type InsertSavedPost,
+  type StudentFollower,
+  type InsertStudentFollower,
   type SchoolApplication,
   type InsertSchoolApplication,
   type SystemSetting,
@@ -31,14 +37,18 @@ import {
   type PostWithDetails,
   type StudentWithStats,
   type StudentSearchResult,
+  type UserProfile,
   users,
+  viewers,
+  schoolAdmins,
+  systemAdmins,
   schools,
   students,
   posts,
-  likes,
-  comments,
-  saves,
-  follows,
+  postLikes,
+  postComments,
+  savedPosts,
+  studentFollowers,
   schoolApplications,
   systemSettings,
   adminRoles,
@@ -53,11 +63,15 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { eq, desc, sql, and, or, inArray } from 'drizzle-orm';
 
 export interface IStorage {
-  // User operations
-  getUser(id: string): Promise<User | undefined>;
+  // Authentication operations
   getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUser(id: string, user: Partial<User>): Promise<User | undefined>;
+  createUserWithProfile(email: string, password: string, role: string, profileData: any): Promise<{ user: User; profile: UserProfile }>;
+  verifyPassword(email: string, password: string): Promise<{ user: User; profile: UserProfile } | null>;
+  changePassword(userId: string, newPassword: string): Promise<void>;
+  
+  // Profile operations (role-based)
+  getUserProfile(userId: string): Promise<UserProfile | undefined>;
+  updateUserProfile(userId: string, role: string, profileData: Partial<UserProfile>): Promise<UserProfile | undefined>;
   
   // School operations
   getSchool(id: string): Promise<School | undefined>;
@@ -83,20 +97,20 @@ export interface IStorage {
   createPost(post: InsertPost): Promise<Post>;
   
   // Interaction operations
-  likePost(like: InsertLike): Promise<Like>;
+  likePost(like: InsertPostLike): Promise<PostLike>;
   unlikePost(postId: string, userId: string): Promise<void>;
-  commentOnPost(comment: InsertComment): Promise<Comment>;
-  getPostComments(postId: string): Promise<CommentWithUser[]>;
-  savePost(save: InsertSave): Promise<Save>;
+  commentOnPost(comment: InsertPostComment): Promise<PostComment>;
+  getPostComments(postId: string): Promise<PostCommentWithUser[]>;
+  savePost(save: InsertSavedPost): Promise<SavedPost>;
   unsavePost(postId: string, userId: string): Promise<void>;
   getUserSavedPosts(userId: string): Promise<PostWithDetails[]>;
   
   // Follow operations
-  followStudent(follow: InsertFollow): Promise<Follow>;
-  unfollowStudent(followerId: string, followingId: string): Promise<void>;
-  getFollowers(studentId: string): Promise<User[]>;
-  getFollowing(userId: string): Promise<Student[]>;
-  isFollowing(followerId: string, followingId: string): Promise<boolean>;
+  followStudent(follow: InsertStudentFollower): Promise<StudentFollower>;
+  unfollowStudent(followerUserId: string, studentId: string): Promise<void>;
+  getStudentFollowers(studentId: string): Promise<UserProfile[]>;
+  getUserFollowing(userId: string): Promise<Student[]>;
+  isFollowingStudent(followerUserId: string, studentId: string): Promise<boolean>;
   searchStudents(query: string, currentUserId?: string): Promise<StudentSearchResult[]>;
   
   // Stats operations
