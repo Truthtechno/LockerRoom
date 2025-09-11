@@ -11,6 +11,7 @@ import {
   type InsertLike,
   type Comment,
   type InsertComment,
+  type CommentWithUser,
   type Save,
   type InsertSave,
   type Follow,
@@ -85,6 +86,7 @@ export interface IStorage {
   likePost(like: InsertLike): Promise<Like>;
   unlikePost(postId: string, userId: string): Promise<void>;
   commentOnPost(comment: InsertComment): Promise<Comment>;
+  getPostComments(postId: string): Promise<CommentWithUser[]>;
   savePost(save: InsertSave): Promise<Save>;
   unsavePost(postId: string, userId: string): Promise<void>;
   getUserSavedPosts(userId: string): Promise<PostWithDetails[]>;
@@ -155,6 +157,8 @@ export class MemStorage implements IStorage {
   private systemSettings: Map<string, SystemSetting> = new Map();
   private adminRoles: Map<string, AdminRole> = new Map();
   private analyticsLogs: Map<string, AnalyticsLog> = new Map();
+  private studentRatings: Map<string, StudentRating> = new Map();
+  private schoolSettings: Map<string, SchoolSetting> = new Map();
 
   constructor() {
     this.initializeDemoData();
@@ -453,6 +457,29 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getStudentByEmail(email: string): Promise<Student | undefined> {
+    const user = await this.getUserByEmail(email);
+    if (!user) return undefined;
+    return this.getStudentByUserId(user.id);
+  }
+
+  async deleteStudent(id: string): Promise<void> {
+    this.students.delete(id);
+  }
+
+  async searchSchoolStudents(schoolId: string, query: string): Promise<Student[]> {
+    const schoolStudents = await this.getStudentsBySchool(schoolId);
+    const searchTerm = query.toLowerCase();
+    
+    return schoolStudents.filter(student => {
+      const user = this.users.get(student.userId);
+      if (!user) return false;
+      
+      const searchableText = `${user.name} ${student.sport || ''} ${student.position || ''} ${student.roleNumber || ''}`.toLowerCase();
+      return searchableText.includes(searchTerm);
+    });
+  }
+
   async createStudent(insertStudent: InsertStudent): Promise<Student> {
     const id = randomUUID();
     const student: Student = { 
@@ -607,6 +634,35 @@ export class MemStorage implements IStorage {
     return comment;
   }
 
+  async getPostComments(postId: string): Promise<CommentWithUser[]> {
+    const comments = Array.from(this.comments.values())
+      .filter(comment => comment.postId === postId)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    
+    // Enrich comments with user data
+    const commentsWithUsers: CommentWithUser[] = [];
+    for (const comment of comments) {
+      const user = this.users.get(comment.userId);
+      if (user) {
+        commentsWithUsers.push({
+          ...comment,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            password: user.password,
+            role: user.role,
+            schoolId: user.schoolId,
+            createdAt: user.createdAt,
+            profilePicUrl: user.profilePicUrl
+          }
+        });
+      }
+    }
+    
+    return commentsWithUsers;
+  }
+
   async savePost(insertSave: InsertSave): Promise<Save> {
     const id = randomUUID();
     const save: Save = { 
@@ -755,37 +811,6 @@ export class MemStorage implements IStorage {
     return results.sort((a, b) => b.followersCount - a.followersCount); // Sort by popularity
   }
 
-  async getSchoolStats(schoolId: string): Promise<any> {
-    const students = Array.from(this.students.values()).filter(s => {
-      const user = this.users.get(s.userId);
-      return user?.schoolId === schoolId;
-    });
-    const posts = Array.from(this.posts.values()).filter(p => 
-      students.some(s => s.id === p.studentId)
-    );
-    return {
-      totalStudents: students.length,
-      totalPosts: posts.length,
-    };
-  }
-
-  async getSystemStats(): Promise<any> {
-    const totalSchools = this.schools.size;
-    const activeStudents = this.students.size;
-    const contentUploads = this.posts.size;
-    const premiumSchools = Array.from(this.schools.values()).filter(s => s.subscriptionPlan === "premium").length;
-    const standardSchools = Array.from(this.schools.values()).filter(s => s.subscriptionPlan === "standard").length;
-    const monthlyRevenue = (premiumSchools * 150) + (standardSchools * 75);
-
-    return {
-      totalSchools,
-      activeStudents,
-      contentUploads,
-      monthlyRevenue,
-      premiumSchools,
-      standardSchools,
-    };
-  }
 
   // School application operations (stub implementations)
   async getSchoolApplications(): Promise<SchoolApplication[]> {
@@ -945,6 +970,108 @@ export class MemStorage implements IStorage {
       postCreated,
       schoolOnboarded,
       totalEvents: logs.length,
+    };
+  }
+
+  // Student Rating operations
+  async getStudentRatings(studentId: string): Promise<StudentRating[]> {
+    return Array.from(this.studentRatings.values()).filter(rating => rating.studentId === studentId);
+  }
+
+  async getStudentRating(id: string): Promise<StudentRating | undefined> {
+    return this.studentRatings.get(id);
+  }
+
+  async createStudentRating(rating: InsertStudentRating): Promise<StudentRating> {
+    const id = randomUUID();
+    const newRating: StudentRating = {
+      id,
+      ...rating,
+      createdAt: new Date(),
+    };
+    this.studentRatings.set(id, newRating);
+    return newRating;
+  }
+
+  async updateStudentRating(id: string, rating: Partial<StudentRating>): Promise<StudentRating | undefined> {
+    const existing = this.studentRatings.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...rating };
+    this.studentRatings.set(id, updated);
+    return updated;
+  }
+
+  async deleteStudentRating(id: string): Promise<void> {
+    this.studentRatings.delete(id);
+  }
+
+  async getAverageRating(studentId: string): Promise<number> {
+    const ratings = await this.getStudentRatings(studentId);
+    if (ratings.length === 0) return 0;
+    const sum = ratings.reduce((acc, rating) => acc + rating.rating, 0);
+    return sum / ratings.length;
+  }
+
+  // School Setting operations
+  async getSchoolSettings(schoolId: string): Promise<SchoolSetting[]> {
+    return Array.from(this.schoolSettings.values()).filter(setting => setting.schoolId === schoolId);
+  }
+
+  async getSchoolSetting(schoolId: string, key: string): Promise<SchoolSetting | undefined> {
+    return Array.from(this.schoolSettings.values()).find(setting => 
+      setting.schoolId === schoolId && setting.key === key
+    );
+  }
+
+  async createOrUpdateSchoolSetting(setting: InsertSchoolSetting): Promise<SchoolSetting> {
+    const existing = await this.getSchoolSetting(setting.schoolId, setting.key);
+    if (existing) {
+      const updated = { ...existing, ...setting, updatedAt: new Date() };
+      this.schoolSettings.set(existing.id, updated);
+      return updated;
+    } else {
+      const id = randomUUID();
+      const newSetting: SchoolSetting = {
+        id,
+        ...setting,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      this.schoolSettings.set(id, newSetting);
+      return newSetting;
+    }
+  }
+
+  async deleteSchoolSetting(schoolId: string, key: string): Promise<void> {
+    const setting = await this.getSchoolSetting(schoolId, key);
+    if (setting) {
+      this.schoolSettings.delete(setting.id);
+    }
+  }
+
+  // Helper method for getPostDetails
+  private async getPostDetails(post: Post): Promise<PostWithDetails> {
+    const student = this.students.get(post.studentId);
+    const user = student ? this.users.get(student.userId) : undefined;
+    const likes = Array.from(this.likes.values()).filter(like => like.postId === post.id);
+    const comments = Array.from(this.comments.values()).filter(comment => comment.postId === post.id);
+    const saves = Array.from(this.saves.values()).filter(save => save.postId === post.id);
+    
+    const commentsWithUsers = await Promise.all(comments.map(async (comment) => {
+      const commentUser = this.users.get(comment.userId);
+      return { ...comment, user: commentUser! };
+    }));
+
+    return {
+      ...post,
+      student: { ...student!, user: user! },
+      likes,
+      comments: commentsWithUsers,
+      saves,
+      likesCount: likes.length,
+      commentsCount: comments.length,
+      savesCount: saves.length,
+      viewsCount: Math.floor(Math.random() * 2000) + 100,
     };
   }
 }
@@ -1265,6 +1392,32 @@ export class PostgresStorage implements IStorage {
   async commentOnPost(insertComment: InsertComment): Promise<Comment> {
     const [comment] = await db.insert(comments).values(insertComment).returning();
     return comment;
+  }
+
+  async getPostComments(postId: string): Promise<CommentWithUser[]> {
+    if (!isDbConnected) return [];
+    
+    // First get comments for the post
+    const postComments = await db.select().from(comments)
+      .where(eq(comments.postId, postId))
+      .orderBy(comments.createdAt);
+    
+    // Then enrich each comment with user data
+    const commentsWithUsers: CommentWithUser[] = [];
+    for (const comment of postComments) {
+      const userResult = await db.select().from(users)
+        .where(eq(users.id, comment.userId))
+        .limit(1);
+      
+      if (userResult[0]) {
+        commentsWithUsers.push({
+          ...comment,
+          user: userResult[0]
+        });
+      }
+    }
+    
+    return commentsWithUsers;
   }
 
   async savePost(insertSave: InsertSave): Promise<Save> {

@@ -189,6 +189,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all comments for a post
+  app.get("/api/posts/:postId/comments", async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const comments = await storage.getPostComments(postId);
+      res.json(comments);
+    } catch (error) {
+      console.error('Get post comments error:', error);
+      res.status(500).json({ message: "Failed to fetch comments" });
+    }
+  });
+
   // Password change endpoint
   app.post("/api/users/:userId/change-password", async (req, res) => {
     try {

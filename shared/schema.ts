@@ -260,10 +260,14 @@ export type InsertStudentRating = z.infer<typeof insertStudentRatingSchema>;
 export type InsertSchoolSetting = z.infer<typeof insertSchoolSettingSchema>;
 
 // Extended types for joins
+export type CommentWithUser = Comment & {
+  user: User;
+};
+
 export type PostWithDetails = Post & {
   student: Student & { user: User };
   likes: Like[];
-  comments: (Comment & { user: User })[];
+  comments: CommentWithUser[];
   saves: Save[];
   likesCount: number;
   commentsCount: number;

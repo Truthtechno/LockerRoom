@@ -2,11 +2,15 @@ import { useState, useEffect } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Heart, MessageCircle, Bookmark, MoreHorizontal, Send, UserPlus, UserCheck } from "lucide-react";
+import { Heart, MessageCircle, Bookmark, MoreHorizontal, Send, UserPlus, UserCheck, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import type { PostWithDetails } from "@shared/schema";
+import type { PostWithDetails, Comment } from "@shared/schema";
+import { formatDistanceToNow } from "date-fns";
 
 interface PostCardProps {
   post: PostWithDetails;
@@ -21,6 +25,7 @@ export default function PostCard({ post }: PostCardProps) {
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [isFollowing, setIsFollowing] = useState(false);
+  const [showCommentsModal, setShowCommentsModal] = useState(false);
 
   // Check if following the student
   const { data: followStatus } = useQuery({
@@ -38,6 +43,17 @@ export default function PostCard({ post }: PostCardProps) {
       setIsFollowing(followStatus);
     }
   }, [followStatus]);
+
+  // Fetch all comments for the modal
+  const { data: allComments, isLoading: loadingComments } = useQuery<Comment[]>({
+    queryKey: ["/api/posts", post.id, "comments"],
+    queryFn: async () => {
+      const response = await fetch(`/api/posts/${post.id}/comments`);
+      if (!response.ok) throw new Error('Failed to fetch comments');
+      return response.json();
+    },
+    enabled: showCommentsModal,
+  });
 
   const likeMutation = useMutation({
     mutationFn: async () => {
@@ -92,6 +108,7 @@ export default function PostCard({ post }: PostCardProps) {
       setNewComment("");
       setShowCommentInput(false);
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts", post.id, "comments"] });
       toast({
         title: "Comment added",
         description: "Your comment has been posted successfully!",
@@ -308,9 +325,110 @@ export default function PostCard({ post }: PostCardProps) {
               </div>
             </div>
             {post.commentsCount > 1 && (
-              <button className="text-sm text-muted-foreground hover:text-foreground ml-10">
-                View all {post.commentsCount} comments
-              </button>
+              <Dialog open={showCommentsModal} onOpenChange={setShowCommentsModal}>
+                <DialogTrigger asChild>
+                  <button 
+                    className="text-sm text-muted-foreground hover:text-foreground ml-10"
+                    data-testid={`button-view-comments-${post.id}`}
+                  >
+                    View all {post.commentsCount} comments
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[600px] max-h-[80vh]">
+                  <DialogHeader>
+                    <DialogTitle>Comments</DialogTitle>
+                  </DialogHeader>
+                  <ScrollArea className="max-h-[60vh] pr-4">
+                    {loadingComments ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {allComments && allComments.length > 0 ? (
+                          allComments.map((comment) => (
+                            <div key={comment.id} className="flex items-start space-x-3">
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage 
+                                  src={comment.user?.profilePicUrl || comment.user?.profilePic || ""} 
+                                  alt={comment.user?.name || "User"} 
+                                />
+                                <AvatarFallback className="bg-accent/20 text-accent font-semibold text-xs">
+                                  {comment.user?.name?.slice(0, 2).toUpperCase() || "U"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <span className="font-medium text-sm text-foreground">
+                                    {comment.user?.name || 'Anonymous'}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-foreground">{comment.content}</p>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground">
+                            No comments yet. Be the first to comment!
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  <div className="border-t pt-4">
+                    <div className="flex items-center space-x-3">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage 
+                          src={user?.profilePicUrl || ""} 
+                          alt={user?.name || "You"} 
+                        />
+                        <AvatarFallback className="bg-accent/20 text-accent font-semibold text-xs">
+                          {user?.name?.slice(0, 2).toUpperCase() || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 flex items-center space-x-2">
+                        <Input
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              if (handleSubmitComment) {
+                                handleSubmitComment();
+                                setShowCommentsModal(false);
+                              }
+                            }
+                          }}
+                          placeholder="Add a comment..."
+                          className="flex-1"
+                          data-testid={`input-modal-comment-${post.id}`}
+                        />
+                        <Button
+                          onClick={() => {
+                            if (handleSubmitComment) {
+                              handleSubmitComment();
+                              setShowCommentsModal(false);
+                            }
+                          }}
+                          disabled={!newComment.trim() || commentMutation.isPending}
+                          size="sm"
+                          className="bg-accent hover:bg-accent/90"
+                          data-testid={`button-submit-modal-comment-${post.id}`}
+                        >
+                          {commentMutation.isPending ? (
+                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         )}
