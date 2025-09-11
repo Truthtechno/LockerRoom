@@ -2,8 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { v2 as cloudinary } from "cloudinary";
 import { storage } from "./storage";
+import { authStorage } from "./auth-storage";
 import { 
   insertUserSchema, 
   insertPostSchema, 
@@ -31,6 +33,44 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
+// JWT secret
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-production';
+
+// Auth middleware
+const requireAuth = (req: any, res: any, next: any) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+};
+
+// Middleware to check if user can access their own data
+const requireSelfAccess = (req: any, res: any, next: any) => {
+  if (req.user.id !== req.params.userId) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  next();
+};
+
+// Middleware to check user role
+const requireRole = (allowedRoles: string[]) => {
+  return (req: any, res: any, next: any) => {
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+    next();
+  };
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   
   // Authentication routes
@@ -42,52 +82,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Email and password required" });
       }
 
-      const user = await storage.getUserByEmail(email);
+      const result = await authStorage.verifyPassword(email, password);
       
-      if (!user) {
+      if (!result) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Compare password with bcrypt
-      const isPasswordValid = await bcrypt.compare(password, user.password);
+      const { user, profile } = result;
       
-      if (!isPasswordValid) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      // In a real app, you'd use JWT here
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      // Return user and profile data separately to avoid ID collision
       res.json({ 
+        token,
         user: { 
           id: user.id, 
-          name: user.name, 
           email: user.email, 
           role: user.role,
-          schoolId: user.schoolId 
-        } 
+          linkedId: user.linkedId
+        },
+        profile
       });
     } catch (error) {
+      console.error('Login error:', error);
       res.status(500).json({ message: "Login failed" });
     }
   });
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
-      const existingUser = await storage.getUserByEmail(userData.email);
+      const { email, password, role, ...profileData } = req.body;
+      
+      if (!email || !password || !role) {
+        return res.status(400).json({ message: "Email, password, and role are required" });
+      }
+      
+      const existingUser = await authStorage.getUserByEmail(email);
       
       if (existingUser) {
         return res.status(400).json({ message: "User already exists" });
       }
 
-      const user = await storage.createUser(userData);
+      const { user, profile } = await authStorage.createUserWithProfile(email, password, role, profileData);
+      
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      // Return user and profile data separately to avoid ID collision
       res.json({ 
+        token,
         user: { 
           id: user.id, 
-          name: user.name, 
           email: user.email, 
           role: user.role,
-          schoolId: user.schoolId 
-        } 
+          linkedId: user.linkedId
+        },
+        profile
       });
     } catch (error) {
       res.status(400).json({ message: "Registration failed" });
@@ -95,47 +154,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.get("/api/users/me/:userId", async (req, res) => {
+  app.get("/api/users/me/:userId", requireAuth, requireSelfAccess, async (req, res) => {
     try {
       const { userId } = req.params;
-      const user = await storage.getUser(userId);
+      const profile = await authStorage.getUserProfile(userId);
       
-      if (!user) {
+      if (!profile) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      res.json({ 
-        id: user.id, 
-        name: user.name, 
-        email: user.email, 
-        role: user.role,
-        schoolId: user.schoolId 
-      });
+      res.json(profile);
     } catch (error) {
+      console.error('Get user profile error:', error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
 
   // User profile update (JSON) - for regular profile updates without files
-  app.put("/api/users/:userId/profile", async (req, res) => {
+  app.put("/api/users/:userId/profile", requireAuth, requireSelfAccess, async (req, res) => {
     try {
       const { userId } = req.params;
-      const updateData = req.body;
+      const { role, ...updateData } = req.body;
       
-      const updatedUser = await storage.updateUser(userId, updateData);
-      
-      if (!updatedUser) {
+      // Get current user to determine role
+      const currentProfile = await authStorage.getUserProfile(userId);
+      if (!currentProfile) {
         return res.status(404).json({ message: "User not found" });
       }
+      
+      const updatedProfile = await authStorage.updateUserProfile(userId, currentProfile.role, updateData);
+      
+      if (!updatedProfile) {
+        return res.status(404).json({ message: "Failed to update profile" });
+      }
 
-      res.json({
-        id: updatedUser.id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        role: updatedUser.role,
-        schoolId: updatedUser.schoolId,
-        profilePicUrl: updatedUser.profilePicUrl
-      });
+      res.json(updatedProfile);
     } catch (error) {
       console.error('Update user profile error:', error);
       res.status(500).json({ message: "Failed to update user" });
@@ -202,7 +255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Password change endpoint
-  app.post("/api/users/:userId/change-password", async (req, res) => {
+  app.post("/api/users/:userId/change-password", requireAuth, requireSelfAccess, async (req, res) => {
     try {
       const { userId } = req.params;
       const { currentPassword, newPassword } = req.body;
@@ -215,23 +268,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "New password must be at least 6 characters long" });
       }
 
-      // Get user to verify current password
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Verify current password with bcrypt
-      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      // Verify current password using centralized auth
+      const isCurrentPasswordValid = await authStorage.verifyCurrentPassword(userId, currentPassword);
       if (!isCurrentPasswordValid) {
         return res.status(400).json({ message: "Current password is incorrect" });
       }
-
-      const saltRounds = 10;
-      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-
-      // Update user password
-      await storage.updateUser(userId, { password: hashedPassword });
+      
+      // Use centralized auth to change password securely
+      await authStorage.changePassword(userId, newPassword);
 
       res.json({ message: "Password updated successfully" });
     } catch (error) {
@@ -327,10 +371,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Interaction routes
-  app.post("/api/posts/:postId/like", async (req, res) => {
+  app.post("/api/posts/:postId/like", requireAuth, async (req, res) => {
     try {
       const { postId } = req.params;
-      const { userId } = req.body;
+      const userId = req.user.id; // Use authenticated user ID
       
       const like = await storage.likePost({ postId, userId });
       res.json(like);
@@ -339,10 +383,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/posts/:postId/like", async (req, res) => {
+  app.delete("/api/posts/:postId/like", requireAuth, async (req, res) => {
     try {
       const { postId } = req.params;
-      const { userId } = req.body;
+      const userId = req.user.id; // Use authenticated user ID
       
       await storage.unlikePost(postId, userId);
       res.json({ message: "Post unliked" });
@@ -351,10 +395,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/posts/:postId/comment", async (req, res) => {
+  app.post("/api/posts/:postId/comment", requireAuth, async (req, res) => {
     try {
       const { postId } = req.params;
-      const commentData = insertPostCommentSchema.parse({ ...req.body, postId });
+      const commentData = insertPostCommentSchema.parse({ ...req.body, postId, userId: req.user.id });
       
       const comment = await storage.commentOnPost(commentData);
       res.json(comment);
@@ -363,10 +407,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/posts/:postId/save", async (req, res) => {
+  app.post("/api/posts/:postId/save", requireAuth, async (req, res) => {
     try {
       const { postId } = req.params;
-      const { userId } = req.body;
+      const userId = req.user.id; // Use authenticated user ID
       
       const save = await storage.savePost({ postId, userId });
       res.json(save);
@@ -603,7 +647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin School Application Routes
-  app.get("/api/admin/school-applications", async (req, res) => {
+  app.get("/api/admin/school-applications", requireAuth, requireRole(['system_admin', 'school_admin']), async (req, res) => {
     try {
       const applications = await storage.getSchoolApplications();
       res.json(applications);
@@ -613,7 +657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/school-applications", async (req, res) => {
+  app.post("/api/admin/school-applications", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const applicationData = insertSchoolApplicationSchema.parse(req.body);
       const application = await storage.createSchoolApplication(applicationData);
@@ -624,7 +668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/school-applications/:id/approve", async (req, res) => {
+  app.post("/api/admin/school-applications/:id/approve", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const { id } = req.params;
       const { reviewerId } = req.body;
@@ -645,7 +689,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/school-applications/:id/reject", async (req, res) => {
+  app.post("/api/admin/school-applications/:id/reject", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const { id } = req.params;
       const { reviewerId, notes } = req.body;
@@ -667,7 +711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin System Settings Routes
-  app.get("/api/admin/system-settings", async (req, res) => {
+  app.get("/api/admin/system-settings", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const settings = await storage.getSystemSettings();
       res.json(settings);
@@ -677,7 +721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/system-settings", async (req, res) => {
+  app.post("/api/admin/system-settings", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const settingData = insertSystemSettingSchema.parse(req.body);
       const setting = await storage.createOrUpdateSystemSetting(settingData);
@@ -688,7 +732,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/admin/system-settings/:key", async (req, res) => {
+  app.delete("/api/admin/system-settings/:key", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const { key } = req.params;
       await storage.deleteSystemSetting(key);
@@ -700,7 +744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin Role Management Routes
-  app.get("/api/admin/roles", async (req, res) => {
+  app.get("/api/admin/roles", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const roles = await storage.getAdminRoles();
       res.json(roles);
@@ -710,7 +754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/roles", async (req, res) => {
+  app.post("/api/admin/roles", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const roleData = insertAdminRoleSchema.parse(req.body);
       const role = await storage.createAdminRole(roleData);
@@ -721,7 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/admin/roles/:userId", async (req, res) => {
+  app.put("/api/admin/roles/:userId", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const { userId } = req.params;
       const updateData = req.body;
@@ -738,7 +782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/admin/roles/:userId", async (req, res) => {
+  app.delete("/api/admin/roles/:userId", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const { userId } = req.params;
       await storage.deleteAdminRole(userId);

@@ -206,6 +206,20 @@ export class AuthStorage {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
+
+  // Get user by ID (for password changes)
+  async getUserById(userId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    return user;
+  }
+
+  // Verify current password for password change
+  async verifyCurrentPassword(userId: string, currentPassword: string): Promise<boolean> {
+    const user = await this.getUserById(userId);
+    if (!user) return false;
+    
+    return await bcrypt.compare(currentPassword, user.passwordHash);
+  }
 }
 
 export const authStorage = new AuthStorage();
