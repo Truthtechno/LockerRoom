@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Users, UserCheck, UserX } from "lucide-react";
@@ -17,6 +19,8 @@ interface FollowingStudent {
   sport: string;
   roleNumber: string;
   position: string;
+  profilePicUrl?: string;
+  profilePic?: string;
   school?: {
     name: string;
   };
@@ -109,11 +113,17 @@ export default function Following() {
                     <div key={student.id} className="bg-card border border-border rounded-xl p-6">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                          <img
-                            className="h-16 w-16 rounded-full"
-                            src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=400&h=400"
-                            alt={student?.user?.name}
-                          />
+                          <Link href={`/profile/${student.user.id}`}>
+                            <Avatar className="h-16 w-16 cursor-pointer hover:opacity-80 transition-opacity" data-testid={`avatar-student-${student.id}`}>
+                              <AvatarImage 
+                                src={student.profilePicUrl || student.profilePic || ""} 
+                                alt={student?.user?.name} 
+                              />
+                              <AvatarFallback className="bg-accent/20 text-accent font-semibold">
+                                {student?.user?.name?.slice(0, 2).toUpperCase() || "S"}
+                              </AvatarFallback>
+                            </Avatar>
+                          </Link>
                           <div>
                             <h3 className="font-semibold text-foreground text-lg">{student?.user?.name}</h3>
                             <p className="text-muted-foreground">
