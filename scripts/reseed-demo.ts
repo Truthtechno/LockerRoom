@@ -103,7 +103,7 @@ async function hashPassword(password: string): Promise<string> {
 
 async function reseedDemo() {
   try {
-    console.log("🌱 Starting demo data reseeding...");
+    console.log("🌱 Starting comprehensive demo data reseeding...");
 
     // Clear existing data in dependency order
     console.log("🧹 Clearing existing data...");
@@ -116,8 +116,8 @@ async function reseedDemo() {
     await db.delete(viewers);
     await db.delete(schoolAdmins);
     await db.delete(systemAdmins);
-    await db.delete(schools);
     await db.delete(users);
+    await db.delete(schools);
 
     // Create schools
     console.log("🏫 Creating demo schools...");
@@ -295,6 +295,19 @@ async function reseedDemo() {
       }
     }
     
+    // Viewers also like posts
+    for (const viewerUser of viewerUsers) {
+      const numLikes = 2 + Math.floor(Math.random() * 4);
+      const shuffledPosts = [...createdPosts].sort(() => 0.5 - Math.random());
+      
+      for (let i = 0; i < numLikes && i < shuffledPosts.length; i++) {
+        likesData.push({
+          postId: shuffledPosts[i].id,
+          userId: viewerUser.id
+        });
+      }
+    }
+    
     if (likesData.length > 0) {
       await db.insert(postLikes).values(likesData);
     }
@@ -304,33 +317,44 @@ async function reseedDemo() {
     const commentsData: InsertPostComment[] = [];
     const commentTexts = [
       "Great shot! 🔥",
-      "Amazing skills!",
-      "Keep up the good work! 💪",
-      "Nice game! 👏",
-      "Inspirational! 🙌",
-      "Well played!",
-      "Awesome technique!",
-      "Keep grinding! 💯"
+      "Amazing skills! Keep it up!",
+      "Inspirational work! 💪",
+      "Nice game! Well played! 👏",
+      "Love the dedication! 🙌",
+      "Excellent technique!",
+      "Keep grinding! 💯",
+      "Fantastic effort!",
+      "So proud of you!",
+      "Beast mode activated! 🦁"
     ];
 
-    // Each student comments on some posts
-    for (const student of createdStudents) {
-      for (const studentUser of studentUsers) {
-        if (studentUser.linkedId === student.id) {
-          // This student comments on 2-4 random posts
-          const numComments = 2 + Math.floor(Math.random() * 3);
-          const shuffledPosts = [...createdPosts].sort(() => 0.5 - Math.random());
-          
-          for (let i = 0; i < numComments && i < shuffledPosts.length; i++) {
-            const randomComment = commentTexts[Math.floor(Math.random() * commentTexts.length)];
-            commentsData.push({
-              postId: shuffledPosts[i].id,
-              userId: studentUser.id,
-              content: randomComment
-            });
-          }
-          break;
-        }
+    // Students comment on posts
+    for (const studentUser of studentUsers) {
+      const numComments = 2 + Math.floor(Math.random() * 3);
+      const shuffledPosts = [...createdPosts].sort(() => 0.5 - Math.random());
+      
+      for (let i = 0; i < numComments && i < shuffledPosts.length; i++) {
+        const randomComment = commentTexts[Math.floor(Math.random() * commentTexts.length)];
+        commentsData.push({
+          postId: shuffledPosts[i].id,
+          userId: studentUser.id,
+          content: randomComment
+        });
+      }
+    }
+
+    // Viewers comment on posts
+    for (const viewerUser of viewerUsers) {
+      const numComments = 1 + Math.floor(Math.random() * 3);
+      const shuffledPosts = [...createdPosts].sort(() => 0.5 - Math.random());
+      
+      for (let i = 0; i < numComments && i < shuffledPosts.length; i++) {
+        const randomComment = commentTexts[Math.floor(Math.random() * commentTexts.length)];
+        commentsData.push({
+          postId: shuffledPosts[i].id,
+          userId: viewerUser.id,
+          content: randomComment
+        });
       }
     }
 
@@ -343,21 +367,28 @@ async function reseedDemo() {
     const savesData: InsertSavedPost[] = [];
     
     // Each student saves some posts
-    for (const student of createdStudents) {
-      for (const studentUser of studentUsers) {
-        if (studentUser.linkedId === student.id) {
-          // This student saves 1-3 random posts
-          const numSaves = 1 + Math.floor(Math.random() * 3);
-          const shuffledPosts = [...createdPosts].sort(() => 0.5 - Math.random());
-          
-          for (let i = 0; i < numSaves && i < shuffledPosts.length; i++) {
-            savesData.push({
-              postId: shuffledPosts[i].id,
-              userId: studentUser.id
-            });
-          }
-          break;
-        }
+    for (const studentUser of studentUsers) {
+      const numSaves = 1 + Math.floor(Math.random() * 3);
+      const shuffledPosts = [...createdPosts].sort(() => 0.5 - Math.random());
+      
+      for (let i = 0; i < numSaves && i < shuffledPosts.length; i++) {
+        savesData.push({
+          postId: shuffledPosts[i].id,
+          userId: studentUser.id
+        });
+      }
+    }
+
+    // Viewers save posts too
+    for (const viewerUser of viewerUsers) {
+      const numSaves = 1 + Math.floor(Math.random() * 2);
+      const shuffledPosts = [...createdPosts].sort(() => 0.5 - Math.random());
+      
+      for (let i = 0; i < numSaves && i < shuffledPosts.length; i++) {
+        savesData.push({
+          postId: shuffledPosts[i].id,
+          userId: viewerUser.id
+        });
       }
     }
 
@@ -369,10 +400,10 @@ async function reseedDemo() {
     console.log("👥 Creating demo follows...");
     const followsData: InsertStudentFollower[] = [];
     
-    // Create follow relationships between students
+    // Create follow relationships between students and viewers
     for (let i = 0; i < createdStudents.length; i++) {
       for (let j = 0; j < createdStudents.length; j++) {
-        if (i !== j && Math.random() > 0.5) { // 50% chance to follow
+        if (i !== j && Math.random() > 0.6) { // 40% chance to follow
           // Find the user for follower
           const followerUser = studentUsers.find(user => user.linkedId === createdStudents[i].id);
           if (followerUser) {
@@ -385,13 +416,26 @@ async function reseedDemo() {
       }
     }
 
+    // Viewers follow students
+    for (const viewerUser of viewerUsers) {
+      const numFollows = 1 + Math.floor(Math.random() * 3);
+      const shuffledStudents = [...createdStudents].sort(() => 0.5 - Math.random());
+      
+      for (let i = 0; i < numFollows && i < shuffledStudents.length; i++) {
+        followsData.push({
+          followerUserId: viewerUser.id,
+          studentId: shuffledStudents[i].id
+        });
+      }
+    }
+
     if (followsData.length > 0) {
       await db.insert(studentFollowers).values(followsData);
     }
 
     // Summary
-    console.log("\n✅ Demo data seeded successfully!");
-    console.log(`\n📊 Summary:`);
+    console.log("\\n✅ Demo data seeded successfully!");
+    console.log(`\\n📊 Summary:`);
     console.log(`   🏫 Schools: ${createdSchools.length}`);
     console.log(`   👑 System Admins: 1`);
     console.log(`   🎓 School Admins: 1`);
@@ -403,7 +447,7 @@ async function reseedDemo() {
     console.log(`   💾 Saves: ${savesData.length}`);
     console.log(`   👥 Follows: ${followsData.length}`);
     
-    console.log(`\n🔑 Demo Accounts:`);
+    console.log(`\\n🔑 Demo Accounts:`);
     console.log(`   System Admin: admin@lockerroom.com / admin123`);
     console.log(`   School Admin: principal@lincoln.edu / principal123`);
     console.log(`   Student 1: marcus.rodriguez@student.com / student123`);
@@ -411,6 +455,77 @@ async function reseedDemo() {
     console.log(`   Student 3: jordan.williams@student.com / student123`);
     console.log(`   Viewer 1: sarah.johnson@viewer.com / viewer123`);
     console.log(`   Viewer 2: mike.thompson@viewer.com / viewer123`);
+
+    // Write credentials to file
+    const credentialsContent = `# LockerRoom Demo Credentials
+
+## System Admin
+- **Email**: admin@lockerroom.com
+- **Password**: admin123
+- **Access**: Full platform control, school management, user management
+
+## School Admin  
+- **Email**: principal@lincoln.edu
+- **Password**: principal123
+- **School**: Lincoln High School
+- **Access**: Student management, school settings, analytics
+
+## Students
+### Marcus Rodriguez (Team Captain)
+- **Email**: marcus.rodriguez@student.com
+- **Password**: student123
+- **School**: Lincoln High School
+- **Position**: Midfielder (#10)
+- **Access**: Content creation, social interactions
+
+### Sophia Chen
+- **Email**: sophia.chen@student.com  
+- **Password**: student123
+- **School**: Lincoln High School
+- **Position**: Forward (#7)
+- **Access**: Content creation, social interactions
+
+### Jordan Williams
+- **Email**: jordan.williams@student.com
+- **Password**: student123
+- **School**: Roosevelt Academy  
+- **Position**: Goalkeeper (#1)
+- **Access**: Content creation, social interactions
+
+## Viewers
+### Sarah Johnson
+- **Email**: sarah.johnson@viewer.com
+- **Password**: viewer123
+- **Bio**: Proud parent following soccer journey
+- **Access**: Browse content, follow students, comment
+
+### Mike Thompson
+- **Email**: mike.thompson@viewer.com
+- **Password**: viewer123  
+- **Bio**: Local sports enthusiast and team supporter
+- **Access**: Browse content, follow students, comment
+
+## Demo Data Includes:
+- **2 Schools**: Lincoln High School (premium), Roosevelt Academy (standard)
+- **10 Posts**: Mix of images and videos with engaging captions
+- **Social Interactions**: ${likesData.length} likes, ${commentsData.length} comments, ${savesData.length} saves, ${followsData.length} follows
+- **Realistic Content**: Unsplash images, sample videos, authentic sports content
+
+## Usage Instructions:
+1. Run \`npm run reseed\` to reset demo data
+2. Start app with \`npm run dev\`
+3. Login with any account above to test functionality
+4. All passwords use bcrypt hashing for security
+5. Cloudinary integration ready for new uploads
+
+*Generated: ${new Date().toISOString()}*
+`;
+
+    // Ensure docs directory exists
+    await import('fs/promises').then(fs => fs.mkdir('docs', { recursive: true }));
+    await import('fs/promises').then(fs => fs.writeFile('docs/demo_credentials.md', credentialsContent));
+    
+    console.log("\\n📝 Demo credentials written to docs/demo_credentials.md");
 
   } catch (error) {
     console.error("❌ Error seeding demo data:", error);
@@ -420,7 +535,7 @@ async function reseedDemo() {
 
 // Run the reseeding
 reseedDemo().then(() => {
-  console.log("\n🎉 Demo data reseeding completed!");
+  console.log("\\n🎉 Demo data reseeding completed successfully!");
   process.exit(0);
 }).catch((error) => {
   console.error("❌ Reseeding failed:", error);

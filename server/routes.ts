@@ -444,7 +444,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/posts/:postId/comment", requireAuth, async (req, res) => {
+  // GET comments for a post
+  app.get("/api/posts/:postId/comments", async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const limit = req.query.limit === 'all' ? undefined : 20;
+      const comments = await storage.getPostComments(postId, limit);
+      res.json(comments);
+    } catch (error) {
+      console.error('Get post comments error:', error);
+      res.status(500).json({ message: "Failed to fetch comments" });
+    }
+  });
+
+  app.post("/api/posts/:postId/comments", requireAuth, async (req, res) => {
     try {
       const { postId } = req.params;
       const commentData = insertPostCommentSchema.parse({ ...req.body, postId, userId: req.user.id });

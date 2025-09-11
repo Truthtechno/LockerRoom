@@ -1,0 +1,84 @@
+### LockerRoom API Examples
+### VS Code REST Client compatible
+
+# Variables
+@baseUrl = http://localhost:5000/api
+@contentType = application/json
+
+### Register new viewer
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "new.viewer@example.com",
+  "password": "password123",
+  "role": "viewer",
+  "name": "New Viewer",
+  "bio": "Testing the API",
+  "phone": "555-0123"
+}
+
+### Register new student  
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "new.student@example.com",
+  "password": "password123", 
+  "role": "student",
+  "name": "New Student",
+  "schoolId": "6e132e9d-f5a7-49b7-85bb-43e7b529dd24",
+  "sport": "Soccer",
+  "position": "Midfielder",
+  "bio": "Testing student account"
+}
+
+### Login as system admin
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@lockerroom.com",
+  "password": "admin123"
+}
+
+### Login as school admin
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "principal@lincoln.edu", 
+  "password": "principal123"
+}
+
+### Login as student
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "marcus.rodriguez@student.com",
+  "password": "student123"
+}
+
+### Login as viewer
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "sarah.johnson@viewer.com",
+  "password": "viewer123"
+}
+
+### Change password (requires auth token)
+POST {{baseUrl}}/users/user-id-here/change-password
+Content-Type: {{contentType}}
+Authorization: Bearer your-jwt-token-here
+
+{
+  "currentPassword": "viewer123",
+  "newPassword": "newpassword123"
+}
+
+### Get user profile (requires auth token)
+GET {{baseUrl}}/users/me/user-id-here
+Authorization: Bearer your-jwt-token-here
