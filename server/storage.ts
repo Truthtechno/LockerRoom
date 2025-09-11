@@ -548,8 +548,8 @@ export class MemStorage implements IStorage {
       totalViews += Math.floor(Math.random() * 1000) + 100; // Mock views
     });
 
-    const followersCount = Array.from(this.follows.values()).filter(follow => follow.followingId === student.id).length;
-    const followingCount = Array.from(this.follows.values()).filter(follow => follow.followerId === userId).length;
+    const followersCount = Array.from(this.studentFollowers.values()).filter(follow => follow.studentId === student.id).length;
+    const followingCount = Array.from(this.studentFollowers.values()).filter(follow => follow.followerUserId === userId).length;
 
     return {
       ...student,
@@ -766,34 +766,34 @@ export class MemStorage implements IStorage {
       id,
       createdAt: new Date()
     };
-    this.follows.set(id, follow);
+    this.studentFollowers.set(id, follow);
     return follow;
   }
 
   async unfollowStudent(followerId: string, followingId: string): Promise<void> {
-    const follow = Array.from(this.follows.values()).find(
-      follow => follow.followerId === followerId && follow.followingId === followingId
+    const follow = Array.from(this.studentFollowers.values()).find(
+      follow => follow.followerUserId === followerId && follow.studentId === followingId
     );
     if (follow) {
-      this.follows.delete(follow.id);
+      this.studentFollowers.delete(follow.id);
     }
   }
 
   async getFollowers(studentId: string): Promise<User[]> {
-    const followRecords = Array.from(this.follows.values()).filter(follow => follow.followingId === studentId);
-    return followRecords.map(follow => this.users.get(follow.followerId)!).filter(Boolean);
+    const followRecords = Array.from(this.studentFollowers.values()).filter(follow => follow.studentId === studentId);
+    return followRecords.map(follow => this.users.get(follow.followerUserId)!).filter(Boolean);
   }
 
   async getFollowing(userId: string): Promise<Student[]> {
-    const followRecords = Array.from(this.follows.values()).filter(follow => follow.followerId === userId);
+    const followRecords = Array.from(this.studentFollowers.values()).filter(follow => follow.followerUserId === userId);
     return followRecords.map(follow => 
-      Array.from(this.students.values()).find(student => student.id === follow.followingId)
+      Array.from(this.students.values()).find(student => student.id === follow.studentId)
     ).filter(Boolean) as Student[];
   }
 
   async isFollowing(followerId: string, followingId: string): Promise<boolean> {
-    return Array.from(this.follows.values()).some(
-      follow => follow.followerId === followerId && follow.followingId === followingId
+    return Array.from(this.studentFollowers.values()).some(
+      follow => follow.followerUserId === followerId && follow.studentId === followingId
     );
   }
 
@@ -809,7 +809,7 @@ export class MemStorage implements IStorage {
       const searchableText = `${user.name} ${student.sport || ''} ${student.position || ''}`.toLowerCase();
       if (searchableText.includes(searchTerm)) {
         const school = user.schoolId ? this.schools.get(user.schoolId) : undefined;
-        const followersCount = Array.from(this.follows.values()).filter(follow => follow.followingId === student.id).length;
+        const followersCount = Array.from(this.studentFollowers.values()).filter(follow => follow.studentId === student.id).length;
         const isFollowing = currentUserId ? await this.isFollowing(currentUserId, student.id) : false;
 
         results.push({
@@ -1573,8 +1573,8 @@ export class PostgresStorage implements IStorage {
         createdAt: users.createdAt,
       })
       .from(follows)
-      .innerJoin(users, eq(follows.followerId, users.id))
-      .where(eq(follows.followingId, studentId));
+      .innerJoin(users, eq(studentFollowers.followerUserId, users.id))
+      .where(eq(studentFollowers.studentId, studentId));
     return result;
   }
 
@@ -1593,17 +1593,17 @@ export class PostgresStorage implements IStorage {
         coverPhoto: students.coverPhoto,
       })
       .from(follows)
-      .innerJoin(students, eq(follows.followingId, students.id))
-      .where(eq(follows.followerId, userId));
+      .innerJoin(students, eq(studentFollowers.studentId, students.id))
+      .where(eq(studentFollowers.followerUserId, userId));
     return result;
   }
 
   async isFollowing(followerId: string, followingId: string): Promise<boolean> {
     if (!isDbConnected) throw new Error('Database not connected');
     const result = await db
-      .select({ id: follows.id })
-      .from(follows)
-      .where(sql`${follows.followerId} = ${followerId} AND ${follows.followingId} = ${followingId}`)
+      .select({ id: studentFollowers.id })
+      .from(studentFollowers)
+      .where(sql`${studentFollowers.followerUserId} = ${followerId} AND ${studentFollowers.studentId} = ${followingId}`)
       .limit(1);
     return result.length > 0;
   }
@@ -1617,19 +1617,19 @@ export class PostgresStorage implements IStorage {
         student: students,
         user: users,
         school: schools,
-        followersCount: sql<number>`COUNT(${follows.id})`.as('followersCount'),
+        followersCount: sql<number>`COUNT(${studentFollowers.id})`.as('followersCount'),
       })
       .from(students)
       .innerJoin(users, eq(students.userId, users.id))
       .leftJoin(schools, eq(users.schoolId, schools.id))
-      .leftJoin(follows, eq(follows.followingId, students.id))
+      .leftJoin(studentFollowers, eq(studentFollowers.studentId, students.id))
       .where(
         sql`LOWER(${users.name}) LIKE ${searchTerm} OR 
             LOWER(${students.sport}) LIKE ${searchTerm} OR 
             LOWER(${students.position}) LIKE ${searchTerm}`
       )
       .groupBy(students.id, users.id, schools.id)
-      .orderBy(sql`COUNT(${follows.id}) DESC`);
+      .orderBy(sql`COUNT(${studentFollowers.id}) DESC`);
 
     // Check if current user is following each student
     const resultsWithFollowStatus = await Promise.all(
