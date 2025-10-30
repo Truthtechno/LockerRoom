@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -44,7 +45,16 @@ export default function Signup() {
 
   const signupMutation = useMutation({
     mutationFn: async (data: Omit<SignupForm, "confirmPassword">) => {
-      return apiRequest("POST", "/api/auth/signup", data);
+      const response = await apiRequest("POST", "/api/auth/signup", data);
+      const result = await response.json();
+      
+      // Store token and user data
+      if (result.token) {
+        localStorage.setItem("token", result.token);
+        localStorage.setItem("auth_user", JSON.stringify(result.user));
+      }
+      
+      return result;
     },
     onSuccess: (data) => {
       updateUser(data.user);

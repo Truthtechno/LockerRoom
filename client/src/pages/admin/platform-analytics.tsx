@@ -2,8 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, TrendingUp, Users, Building2, FileText, Calendar, Activity } from "lucide-react";
+import { TrendingUp, Users, Building2, FileText, Calendar, Activity } from "lucide-react";
 import { useLocation } from "wouter";
+import Sidebar from "@/components/navigation/sidebar";
+import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 type AnalyticsStats = {
@@ -112,93 +115,108 @@ export default function PlatformAnalytics() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLocation("/system-admin")}
-                className="mr-4"
-                data-testid="back-to-admin"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Admin
-              </Button>
-              <div>
-                <h1 className="text-xl font-semibold text-foreground">Platform Analytics</h1>
-                <p className="text-sm text-muted-foreground">Real-time insights and performance metrics</p>
+      <Sidebar />
+      <MobileNav />
+      
+      <div className="lg:pl-64 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
+        {/* Header */}
+        <div className="bg-card border-b border-border shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-accent/20 rounded-lg">
+                  <Activity className="h-6 w-6 text-accent" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-foreground">Platform Analytics</h1>
+                  <p className="text-sm text-muted-foreground mt-1">Real-time insights and performance metrics</p>
+                </div>
               </div>
-            </div>
-            
-            <div className="flex items-center space-x-2 bg-muted px-3 py-2 rounded-lg">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-foreground">Live Data</span>
+              
+              <div className="flex items-center space-x-2 bg-muted px-4 py-2.5 rounded-lg border border-border/50">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-foreground">Live Data</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card data-testid="stat-total-events">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Events</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Overview Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <Card data-testid="stat-total-events" className="shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-sm font-semibold">Total Events</CardTitle>
+              <div className="h-9 w-9 rounded-lg bg-accent/20 flex items-center justify-center">
+                <Activity className="h-4 w-4 text-accent" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analyticsStats?.totalEvents || 0}</div>
+              <div className="text-3xl font-bold mb-1">{analyticsStats?.totalEvents || 0}</div>
               <p className="text-xs text-muted-foreground">All tracked activities</p>
             </CardContent>
           </Card>
 
-          <Card data-testid="stat-user-signups">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">User Signups</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+          <Card data-testid="stat-user-signups" className="shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-sm font-semibold">User Signups</CardTitle>
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Users className="h-4 w-4 text-primary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analyticsStats?.userSignups || 0}</div>
+              <div className="text-3xl font-bold mb-1">{analyticsStats?.userSignups || 0}</div>
               <p className="text-xs text-muted-foreground">New registrations</p>
             </CardContent>
           </Card>
 
-          <Card data-testid="stat-posts-created">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Posts Created</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
+          <Card data-testid="stat-posts-created" className="shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-sm font-semibold">Posts Created</CardTitle>
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analyticsStats?.postCreated || 0}</div>
+              <div className="text-3xl font-bold mb-1">{analyticsStats?.postCreated || 0}</div>
               <p className="text-xs text-muted-foreground">Content uploads</p>
             </CardContent>
           </Card>
 
-          <Card data-testid="stat-schools-onboarded">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Schools Onboarded</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
+          <Card data-testid="stat-schools-onboarded" className="shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-sm font-semibold">Schools Onboarded</CardTitle>
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Building2 className="h-4 w-4 text-primary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analyticsStats?.schoolOnboarded || 0}</div>
+              <div className="text-3xl font-bold mb-1">{analyticsStats?.schoolOnboarded || 0}</div>
               <p className="text-xs text-muted-foreground">Approved schools</p>
             </CardContent>
           </Card>
-        </div>
+          </div>
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Charts Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
           {/* Growth Trends */}
-          <Card data-testid="chart-growth-trends">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <TrendingUp className="w-5 h-5 mr-2 text-accent" />
-                Growth Trends
+          <Card data-testid="chart-growth-trends" className="shadow-sm">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="flex items-center text-lg">
+                <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <div className="font-semibold">Growth Trends</div>
+                  <CardDescription className="text-xs mt-1">Platform growth over the last 6 months</CardDescription>
+                </div>
               </CardTitle>
-              <CardDescription>Platform growth over the last 6 months</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -217,10 +235,17 @@ export default function PlatformAnalytics() {
           </Card>
 
           {/* School Distribution */}
-          <Card data-testid="chart-school-distribution">
-            <CardHeader>
-              <CardTitle>School Plan Distribution</CardTitle>
-              <CardDescription>Breakdown of subscription plans</CardDescription>
+          <Card data-testid="chart-school-distribution" className="shadow-sm">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="flex items-center text-lg">
+                <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                  <Building2 className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <div className="font-semibold">School Plan Distribution</div>
+                  <CardDescription className="text-xs mt-1">Breakdown of subscription plans</CardDescription>
+                </div>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -246,10 +271,17 @@ export default function PlatformAnalytics() {
           </Card>
 
           {/* Engagement Analytics */}
-          <Card data-testid="chart-engagement">
-            <CardHeader>
-              <CardTitle>Weekly Engagement</CardTitle>
-              <CardDescription>User interactions across the week</CardDescription>
+          <Card data-testid="chart-engagement" className="shadow-sm">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="flex items-center text-lg">
+                <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                  <Users className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <div className="font-semibold">Weekly Engagement</div>
+                  <CardDescription className="text-xs mt-1">User interactions across the week</CardDescription>
+                </div>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -268,10 +300,17 @@ export default function PlatformAnalytics() {
           </Card>
 
           {/* Revenue Analytics */}
-          <Card data-testid="chart-revenue">
-            <CardHeader>
-              <CardTitle>Revenue Insights</CardTitle>
-              <CardDescription>Monthly recurring revenue breakdown</CardDescription>
+          <Card data-testid="chart-revenue" className="shadow-sm">
+            <CardHeader className="border-b border-border/50">
+              <CardTitle className="flex items-center text-lg">
+                <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <div className="font-semibold">Revenue Insights</div>
+                  <CardDescription className="text-xs mt-1">Monthly recurring revenue breakdown</CardDescription>
+                </div>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -310,16 +349,20 @@ export default function PlatformAnalytics() {
               </div>
             </CardContent>
           </Card>
-        </div>
+          </div>
 
-        {/* Recent Activity */}
-        <Card data-testid="recent-activity">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Activity className="w-5 h-5 mr-2 text-accent" />
-              Recent Activity
+          {/* Recent Activity */}
+          <Card data-testid="recent-activity" className="shadow-sm">
+          <CardHeader className="border-b border-border/50">
+            <CardTitle className="flex items-center text-lg">
+              <div className="p-2 bg-primary/10 rounded-lg mr-3">
+                <Activity className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <div className="font-semibold">Recent Activity</div>
+                <CardDescription className="text-xs mt-1">Latest platform events and activities</CardDescription>
+              </div>
             </CardTitle>
-            <CardDescription>Latest platform events and activities</CardDescription>
           </CardHeader>
           <CardContent>
             {recentLogs && recentLogs.length > 0 ? (
@@ -355,7 +398,8 @@ export default function PlatformAnalytics() {
               </div>
             )}
           </CardContent>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   );

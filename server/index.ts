@@ -1,9 +1,24 @@
+// Polyfill fetch for Node 16 compatibility
+if (typeof globalThis.fetch === 'undefined') {
+  await (async () => {
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
+    const nodeFetch = require('node-fetch');
+    globalThis.fetch = nodeFetch.default || nodeFetch;
+    globalThis.Headers = nodeFetch.Headers;
+    globalThis.Request = nodeFetch.Request;
+    globalThis.Response = nodeFetch.Response;
+  })();
+}
+
 import express, { type Request, Response, NextFunction } from "express";
 import "dotenv/config";
 import helmet from "helmet";
 import cors from "cors";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { ensureSysAdmin } from "./ensure-sysadmin";
 
 const app = express();
 
@@ -38,11 +53,46 @@ app.use(cors({
   origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400 // 24 hours
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Additional security headers
+app.use((req: Request, res: Response, next: NextFunction) => {
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // XSS Protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  // Referrer Policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  // Remove X-Powered-By header
+  res.removeHeader('X-Powered-By');
+  
+  next();
+});
+
+// Response compression
+app.use(compression());
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+
+// Cache headers for static assets
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path.match(/\.(css|js|png|jpg|jpeg|gif|ico|svg)$/)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+  } else if (req.path.startsWith('/api/')) {
+    // API responses - short cache
+    res.setHeader('Cache-Control', 'private, max-age=60'); // 1 minute
+  }
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -77,6 +127,9 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  // Ensure system admin user exists
+  await ensureSysAdmin();
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -99,11 +152,14 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5174', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  
+  // Windows-compatible listen configuration
+  const isWindows = process.platform === 'win32';
+  const listenConfig = isWindows 
+    ? { port, host: "127.0.0.1" as const }
+    : { port, host: "0.0.0.0" as const, reusePort: true };
+  
+  server.listen(listenConfig, () => {
     log(`serving on port ${port}`);
   });
 })();

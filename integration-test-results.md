@@ -210,7 +210,7 @@
 ### Analytics Endpoints
 | Endpoint | Method | Status | Response Time | Notes |
 |----------|--------|--------|---------------|-------|
-| `/api/users/:id/saved-posts` | GET | ✅ PASS | <150ms | Saved posts retrieval |
+| `/api/users/:userId/saved-posts` | GET | ✅ PASS | <150ms | Saved posts retrieval |
 | `/api/users/:id/following` | GET | ✅ PASS | <200ms | Following list |
 
 ---

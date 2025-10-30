@@ -7,60 +7,69 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { ArrowLeft, Settings, Palette, ToggleLeft, ToggleRight, Plus, Trash2, Save, Mail } from "lucide-react";
+import { Settings, Palette, CreditCard, Upload, Image as ImageIcon, Phone, Mail, Globe, MapPin, Link2 } from "lucide-react";
 import { useLocation } from "wouter";
+import Sidebar from "@/components/navigation/sidebar";
+import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 
-type SystemSetting = {
-  id: string;
-  key: string;
-  value: string;
-  category: string;
-  description?: string;
-  updatedBy: string;
-  updatedAt: string;
+type SystemBranding = {
+  name?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  companyName?: string;
+  companyAddress?: string;
+  companyCity?: string;
+  companyState?: string;
+  companyZip?: string;
+  companyCountry?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  websiteUrl?: string;
+  socialFacebook?: string;
+  socialTwitter?: string;
+  socialInstagram?: string;
+  socialLinkedin?: string;
 };
 
-const addSettingFormSchema = z.object({
-  key: z.string().min(1, "Key is required").regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Key must be valid identifier"),
-  value: z.string().min(1, "Value is required"),
-  category: z.enum(["general", "theme", "features", "email"]),
-  description: z.string().optional(),
-});
+type SystemAppearance = {
+  themeMode?: string;
+  lightModePrimaryColor?: string;
+  lightModeSecondaryColor?: string;
+  lightModeAccentColor?: string;
+  lightModeBackground?: string;
+  lightModeForeground?: string;
+  lightModeMuted?: string;
+  lightModeBorder?: string;
+  darkModePrimaryColor?: string;
+  darkModeSecondaryColor?: string;
+  darkModeAccentColor?: string;
+  darkModeBackground?: string;
+  darkModeForeground?: string;
+  darkModeMuted?: string;
+  darkModeBorder?: string;
+  fontFamily?: string;
+  fontSizeBase?: string;
+};
 
-type AddSettingFormData = z.infer<typeof addSettingFormSchema>;
-
-const predefinedSettings = {
-  theme: [
-    { key: "primary_color", value: "#FFD700", description: "Primary brand color (XEN Gold)" },
-    { key: "secondary_color", value: "#000000", description: "Secondary color (Black)" },
-    { key: "accent_color", value: "#FFFFFF", description: "Accent color (White)" },
-    { key: "dark_mode_enabled", value: "true", description: "Enable dark mode support" },
-  ],
-  features: [
-    { key: "public_signup_enabled", value: "true", description: "Allow public user registration" },
-    { key: "media_upload_enabled", value: "true", description: "Enable media uploads" },
-    { key: "comments_enabled", value: "true", description: "Enable post comments" },
-    { key: "follow_system_enabled", value: "true", description: "Enable follow/unfollow system" },
-    { key: "search_enabled", value: "true", description: "Enable student search" },
-  ],
-  email: [
-    { key: "welcome_email_enabled", value: "true", description: "Send welcome emails to new users" },
-    { key: "notification_email_enabled", value: "true", description: "Send notification emails" },
-    { key: "admin_email", value: "admin@lockerroom.com", description: "Administrator contact email" },
-  ],
-  general: [
-    { key: "platform_name", value: "LockerRoom", description: "Platform display name" },
-    { key: "max_file_size_mb", value: "50", description: "Maximum file upload size in MB" },
-    { key: "session_timeout_hours", value: "24", description: "User session timeout in hours" },
-  ],
+type SystemPayment = {
+  mockModeEnabled?: boolean;
+  provider?: string;
+  stripePublishableKey?: string;
+  stripeSecretKeyEncrypted?: string;
+  stripeWebhookSecretEncrypted?: string;
+  paypalClientId?: string;
+  paypalClientSecretEncrypted?: string;
+  paypalMode?: string;
+  currency?: string;
+  xenScoutPriceCents?: number;
+  enableSubscriptions?: boolean;
+  subscriptionMonthlyPriceCents?: number;
+  subscriptionYearlyPriceCents?: number;
 };
 
 export default function SystemConfig() {
@@ -68,156 +77,118 @@ export default function SystemConfig() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [showAddSetting, setShowAddSetting] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>("general");
+  const [activeTab, setActiveTab] = useState("branding");
+  const [previewColors, setPreviewColors] = useState<any>({});
 
-  const addSettingForm = useForm<AddSettingFormData>({
-    resolver: zodResolver(addSettingFormSchema),
-    defaultValues: {
-      category: "general",
-    },
+  // Fetch branding configuration
+  const { data: branding, isLoading: brandingLoading } = useQuery<SystemBranding>({
+    queryKey: ["/api/admin/system-config/branding"],
   });
 
-  const { data: settings, isLoading } = useQuery<SystemSetting[]>({
-    queryKey: ["/api/admin/system-settings"],
+  // Fetch appearance configuration
+  const { data: appearance, isLoading: appearanceLoading } = useQuery<SystemAppearance>({
+    queryKey: ["/api/admin/system-config/appearance"],
   });
 
-  const updateSettingMutation = useMutation({
-    mutationFn: async ({ key, value }: { key: string; value: string }) => {
-      return apiRequest("/api/admin/system-settings", {
-        method: "POST",
-        body: {
-          key,
-          value,
-          category: settings?.find(s => s.key === key)?.category || "general",
-          updatedBy: user?.id,
-        },
+  // Fetch payment configuration
+  const { data: payment, isLoading: paymentLoading } = useQuery<SystemPayment>({
+    queryKey: ["/api/admin/system-config/payment"],
+  });
+
+  // Branding mutation
+  const updateBrandingMutation = useMutation({
+    mutationFn: async (data: SystemBranding) => {
+      return apiRequest("/api/admin/system-config/branding", {
+        method: "PUT",
+        body: data,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/system-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/system-config/branding"] });
       toast({
-        title: "Setting Updated",
-        description: "System setting has been updated successfully.",
+        title: "Branding Updated",
+        description: "System branding has been updated successfully.",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to update system setting.",
+        description: "Failed to update branding.",
         variant: "destructive",
       });
     },
   });
 
-  const addSettingMutation = useMutation({
-    mutationFn: async (data: AddSettingFormData) => {
-      return apiRequest("/api/admin/system-settings", {
-        method: "POST",
-        body: {
-          ...data,
-          updatedBy: user?.id,
-        },
+  // Appearance mutation
+  const updateAppearanceMutation = useMutation({
+    mutationFn: async (data: SystemAppearance) => {
+      return apiRequest("/api/admin/system-config/appearance", {
+        method: "PUT",
+        body: data,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/system-settings"] });
-      addSettingForm.reset();
-      setShowAddSetting(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/system-config/appearance"] });
       toast({
-        title: "Setting Added",
-        description: "New system setting has been created.",
+        title: "Appearance Updated",
+        description: "System appearance has been updated successfully.",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to create system setting.",
+        description: "Failed to update appearance.",
         variant: "destructive",
       });
     },
   });
 
-  const deleteSettingMutation = useMutation({
-    mutationFn: async (key: string) => {
-      return apiRequest(`/api/admin/system-settings/${key}`, {
-        method: "DELETE",
+  // Payment mutation
+  const updatePaymentMutation = useMutation({
+    mutationFn: async (data: SystemPayment) => {
+      return apiRequest("/api/admin/system-config/payment", {
+        method: "PUT",
+        body: data,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/system-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/system-config/payment"] });
       toast({
-        title: "Setting Deleted",
-        description: "System setting has been removed.",
+        title: "Payment Settings Updated",
+        description: "Payment settings have been updated successfully.",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to delete system setting.",
+        description: "Failed to update payment settings.",
         variant: "destructive",
       });
     },
   });
 
-  const initializeDefaultSettings = async () => {
-    const allSettings = Object.values(predefinedSettings).flat();
-    for (const setting of allSettings) {
-      try {
-        await apiRequest("/api/admin/system-settings", {
-          method: "POST",
-          body: {
-            ...setting,
-            category: Object.entries(predefinedSettings).find(([_, settings]) => 
-              settings.some(s => s.key === setting.key)
-            )?.[0] || "general",
-            updatedBy: user?.id,
-          },
-        });
-      } catch (error) {
-        console.log(`Setting ${setting.key} might already exist`);
-      }
-    }
-    queryClient.invalidateQueries({ queryKey: ["/api/admin/system-settings"] });
-    toast({
-      title: "Default Settings Initialized",
-      description: "Platform has been configured with default settings.",
+  const handleBrandingUpdate = (field: string, value: string) => {
+    updateBrandingMutation.mutate({
+      ...branding,
+      [field]: value,
     });
   };
 
-  const onAddSetting = (data: AddSettingFormData) => {
-    addSettingMutation.mutate(data);
+  const handleAppearanceUpdate = (field: string, value: string) => {
+    updateAppearanceMutation.mutate({
+      ...appearance,
+      [field]: value,
+    });
   };
 
-  const getSetting = (key: string) => {
-    return settings?.find(s => s.key === key);
+  const handlePaymentUpdate = (field: string, value: any) => {
+    updatePaymentMutation.mutate({
+      ...payment,
+      [field]: value,
+    });
   };
 
-  const getSettingValue = (key: string, defaultValue = "") => {
-    return getSetting(key)?.value || defaultValue;
-  };
-
-  const updateSetting = (key: string, value: string) => {
-    updateSettingMutation.mutate({ key, value });
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "theme":
-        return <Palette className="w-5 h-5" />;
-      case "features":
-        return <ToggleLeft className="w-5 h-5" />;
-      case "email":
-        return <Mail className="w-5 h-5" />;
-      default:
-        return <Settings className="w-5 h-5" />;
-    }
-  };
-
-  const filteredSettings = settings?.filter(s => s.category === activeCategory) || [];
-  const categories = ["general", "theme", "features", "email"];
-
-  if (isLoading) {
+  if (brandingLoading || appearanceLoading || paymentLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
@@ -227,273 +198,645 @@ export default function SystemConfig() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLocation("/system-admin")}
-                className="mr-4"
-                data-testid="back-to-admin"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Admin
-              </Button>
-              <div>
-                <h1 className="text-xl font-semibold text-foreground">System Configuration</h1>
-                <p className="text-sm text-muted-foreground">Manage platform-wide settings and preferences</p>
+      <Sidebar />
+      <MobileNav />
+      
+      <div className="lg:pl-64 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
+        {/* Header */}
+        <div className="bg-card border-b border-border shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Settings className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-foreground">System Configuration</h1>
+                  <p className="text-sm text-muted-foreground mt-1">Configure branding, appearance, and payment settings</p>
+                </div>
               </div>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              {(!settings || settings.length === 0) && (
-                <Button
-                  onClick={initializeDefaultSettings}
-                  variant="outline"
-                  data-testid="button-initialize-defaults"
-                >
-                  Initialize Defaults
-                </Button>
-              )}
-              <Dialog open={showAddSetting} onOpenChange={setShowAddSetting}>
-                <DialogTrigger asChild>
-                  <Button className="gold-gradient text-accent-foreground" data-testid="button-add-setting">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Setting
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add System Setting</DialogTitle>
-                    <DialogDescription>
-                      Create a new platform-wide configuration setting.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Form {...addSettingForm}>
-                    <form onSubmit={addSettingForm.handleSubmit(onAddSetting)} className="space-y-4">
-                      <FormField
-                        control={addSettingForm.control}
-                        name="key"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Setting Key</FormLabel>
-                            <FormControl>
-                              <Input placeholder="setting_name" {...field} data-testid="input-setting-key" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={addSettingForm.control}
-                        name="value"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Value</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Setting value" {...field} data-testid="input-setting-value" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={addSettingForm.control}
-                        name="category"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Category</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger data-testid="select-setting-category">
-                                  <SelectValue placeholder="Select category" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="general">General</SelectItem>
-                                <SelectItem value="theme">Theme</SelectItem>
-                                <SelectItem value="features">Features</SelectItem>
-                                <SelectItem value="email">Email</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={addSettingForm.control}
-                        name="description"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Description (Optional)</FormLabel>
-                            <FormControl>
-                              <Textarea 
-                                placeholder="Describe what this setting controls..." 
-                                {...field} 
-                                data-testid="textarea-setting-description"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <DialogFooter>
-                        <Button 
-                          type="submit" 
-                          disabled={addSettingMutation.isPending}
-                          data-testid="button-submit-setting"
-                        >
-                          {addSettingMutation.isPending ? "Adding..." : "Add Setting"}
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Category Sidebar */}
-          <div className="lg:col-span-1">
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="branding" className="flex items-center gap-2">
+              <ImageIcon className="w-4 h-4" />
+              Branding
+            </TabsTrigger>
+            <TabsTrigger value="appearance" className="flex items-center gap-2">
+              <Palette className="w-4 h-4" />
+              Appearance
+            </TabsTrigger>
+            <TabsTrigger value="payment" className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4" />
+              Payment
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Branding Tab */}
+          <TabsContent value="branding" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Categories</CardTitle>
-                <CardDescription>Select a settings category</CardDescription>
+                <CardTitle>Brand Identity</CardTitle>
+                <CardDescription>Configure your platform's brand identity</CardDescription>
               </CardHeader>
-              <CardContent className="p-0">
-                <div className="space-y-1">
-                  {categories.map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => setActiveCategory(category)}
-                      className={`w-full flex items-center space-x-3 px-4 py-3 text-left transition-colors hover:bg-muted ${
-                        activeCategory === category ? "bg-muted border-r-2 border-accent" : ""
-                      }`}
-                      data-testid={`category-${category}`}
-                    >
-                      {getCategoryIcon(category)}
-                      <span className="font-medium capitalize">{category}</span>
-                    </button>
-                  ))}
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Platform Name</Label>
+                    <Input
+                      id="name"
+                      value={branding?.name || ""}
+                      onChange={(e) => handleBrandingUpdate("name", e.target.value)}
+                      placeholder="LockerRoom"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="logoUrl">Logo URL</Label>
+                    <Input
+                      id="logoUrl"
+                      value={branding?.logoUrl || ""}
+                      onChange={(e) => handleBrandingUpdate("logoUrl", e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="faviconUrl">Favicon URL</Label>
+                    <Input
+                      id="faviconUrl"
+                      value={branding?.faviconUrl || ""}
+                      onChange={(e) => handleBrandingUpdate("faviconUrl", e.target.value)}
+                      placeholder="https://example.com/favicon.ico"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          {/* Settings Content */}
-          <div className="lg:col-span-3">
             <Card>
               <CardHeader>
-                <div className="flex items-center space-x-3">
-                  {getCategoryIcon(activeCategory)}
-                  <div>
-                    <CardTitle className="capitalize">{activeCategory} Settings</CardTitle>
-                    <CardDescription>
-                      Configure {activeCategory} settings for the platform
-                    </CardDescription>
+                <CardTitle>Company Information</CardTitle>
+                <CardDescription>Set up your company's contact information</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Company Name</Label>
+                    <Input
+                      id="companyName"
+                      value={branding?.companyName || ""}
+                      onChange={(e) => handleBrandingUpdate("companyName", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyAddress">Address</Label>
+                    <Input
+                      id="companyAddress"
+                      value={branding?.companyAddress || ""}
+                      onChange={(e) => handleBrandingUpdate("companyAddress", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyCity">City</Label>
+                    <Input
+                      id="companyCity"
+                      value={branding?.companyCity || ""}
+                      onChange={(e) => handleBrandingUpdate("companyCity", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyState">State/Province</Label>
+                    <Input
+                      id="companyState"
+                      value={branding?.companyState || ""}
+                      onChange={(e) => handleBrandingUpdate("companyState", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyZip">ZIP/Postal Code</Label>
+                    <Input
+                      id="companyZip"
+                      value={branding?.companyZip || ""}
+                      onChange={(e) => handleBrandingUpdate("companyZip", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyCountry">Country</Label>
+                    <Input
+                      id="companyCountry"
+                      value={branding?.companyCountry || ""}
+                      onChange={(e) => handleBrandingUpdate("companyCountry", e.target.value)}
+                    />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Contact Information</CardTitle>
+                <CardDescription>Configure contact details for your platform</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="contactEmail">Contact Email</Label>
+                    <Input
+                      id="contactEmail"
+                      type="email"
+                      value={branding?.contactEmail || ""}
+                      onChange={(e) => handleBrandingUpdate("contactEmail", e.target.value)}
+                      placeholder="contact@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contactPhone">Contact Phone</Label>
+                    <Input
+                      id="contactPhone"
+                      value={branding?.contactPhone || ""}
+                      onChange={(e) => handleBrandingUpdate("contactPhone", e.target.value)}
+                      placeholder="+1 (555) 123-4567"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="websiteUrl">Website URL</Label>
+                    <Input
+                      id="websiteUrl"
+                      type="url"
+                      value={branding?.websiteUrl || ""}
+                      onChange={(e) => handleBrandingUpdate("websiteUrl", e.target.value)}
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Social Media</CardTitle>
+                <CardDescription>Connect your social media accounts</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="socialFacebook">Facebook</Label>
+                    <Input
+                      id="socialFacebook"
+                      value={branding?.socialFacebook || ""}
+                      onChange={(e) => handleBrandingUpdate("socialFacebook", e.target.value)}
+                      placeholder="https://facebook.com/yourpage"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="socialTwitter">Twitter</Label>
+                    <Input
+                      id="socialTwitter"
+                      value={branding?.socialTwitter || ""}
+                      onChange={(e) => handleBrandingUpdate("socialTwitter", e.target.value)}
+                      placeholder="https://twitter.com/yourhandle"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="socialInstagram">Instagram</Label>
+                    <Input
+                      id="socialInstagram"
+                      value={branding?.socialInstagram || ""}
+                      onChange={(e) => handleBrandingUpdate("socialInstagram", e.target.value)}
+                      placeholder="https://instagram.com/yourhandle"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="socialLinkedin">LinkedIn</Label>
+                    <Input
+                      id="socialLinkedin"
+                      value={branding?.socialLinkedin || ""}
+                      onChange={(e) => handleBrandingUpdate("socialLinkedin", e.target.value)}
+                      placeholder="https://linkedin.com/company/yourcompany"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Appearance Tab */}
+          <TabsContent value="appearance" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Theme Mode</CardTitle>
+                <CardDescription>Configure default theme settings</CardDescription>
               </CardHeader>
               <CardContent>
-                {filteredSettings.length > 0 ? (
-                  <div className="space-y-6">
-                    {filteredSettings.map((setting) => (
-                      <div key={setting.id} className="border border-border rounded-lg p-4" data-testid={`setting-${setting.key}`}>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 mr-4">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Label className="font-medium">{setting.key.replace(/_/g, ' ')}</Label>
-                              <code className="px-2 py-1 bg-muted text-xs rounded">{setting.key}</code>
-                            </div>
-                            {setting.description && (
-                              <p className="text-sm text-muted-foreground mb-3">{setting.description}</p>
-                            )}
-                            
-                            {/* Dynamic input based on value type */}
-                            {setting.value === "true" || setting.value === "false" ? (
-                              <div className="flex items-center space-x-2">
-                                <Switch
-                                  checked={setting.value === "true"}
-                                  onCheckedChange={(checked) => updateSetting(setting.key, checked.toString())}
-                                  data-testid={`switch-${setting.key}`}
-                                />
-                                <span className="text-sm">{setting.value === "true" ? "Enabled" : "Disabled"}</span>
-                              </div>
-                            ) : setting.key.includes("color") ? (
-                              <div className="flex items-center space-x-2">
-                                <Input
-                                  type="color"
-                                  value={setting.value}
-                                  onChange={(e) => updateSetting(setting.key, e.target.value)}
-                                  className="w-16 h-10"
-                                  data-testid={`color-${setting.key}`}
-                                />
-                                <Input
-                                  value={setting.value}
-                                  onChange={(e) => updateSetting(setting.key, e.target.value)}
-                                  placeholder="Color value"
-                                  className="flex-1"
-                                  data-testid={`input-${setting.key}`}
-                                />
-                              </div>
-                            ) : (
-                              <Input
-                                value={setting.value}
-                                onChange={(e) => updateSetting(setting.key, e.target.value)}
-                                placeholder="Setting value"
-                                data-testid={`input-${setting.key}`}
-                              />
-                            )}
+                <div className="space-y-2">
+                  <Label htmlFor="themeMode">Theme Mode</Label>
+                  <Select
+                    value={appearance?.themeMode || "auto"}
+                    onValueChange={(value) => handleAppearanceUpdate("themeMode", value)}
+                  >
+                    <SelectTrigger id="themeMode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto (System Default)</SelectItem>
+                      <SelectItem value="light">Light Mode</SelectItem>
+                      <SelectItem value="dark">Dark Mode</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
 
-                            <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-                              <span>Last updated: {new Date(setting.updatedAt).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => deleteSettingMutation.mutate(setting.key)}
-                            disabled={deleteSettingMutation.isPending}
-                            data-testid={`button-delete-${setting.key}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+            <Card>
+              <CardHeader>
+                <CardTitle>Light Mode Colors</CardTitle>
+                <CardDescription>Configure light mode color scheme</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Primary Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={appearance?.lightModePrimaryColor || "#FFD700"}
+                        onChange={(e) => handleAppearanceUpdate("lightModePrimaryColor", e.target.value)}
+                        className="w-16 h-10"
+                      />
+                      <Input
+                        value={appearance?.lightModePrimaryColor || "#FFD700"}
+                        onChange={(e) => handleAppearanceUpdate("lightModePrimaryColor", e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <Settings className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-foreground mb-2">No {activeCategory} Settings</h3>
-                    <p className="text-muted-foreground mb-6">
-                      No settings found in the {activeCategory} category.
-                    </p>
-                    <Button 
-                      onClick={() => setShowAddSetting(true)}
-                      className="gold-gradient text-accent-foreground"
-                      data-testid="button-add-first-setting"
+                  <div className="space-y-2">
+                    <Label>Secondary Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={appearance?.lightModeSecondaryColor || "#000000"}
+                        onChange={(e) => handleAppearanceUpdate("lightModeSecondaryColor", e.target.value)}
+                        className="w-16 h-10"
+                      />
+                      <Input
+                        value={appearance?.lightModeSecondaryColor || "#000000"}
+                        onChange={(e) => handleAppearanceUpdate("lightModeSecondaryColor", e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Accent Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={appearance?.lightModeAccentColor || "#FFFFFF"}
+                        onChange={(e) => handleAppearanceUpdate("lightModeAccentColor", e.target.value)}
+                        className="w-16 h-10"
+                      />
+                      <Input
+                        value={appearance?.lightModeAccentColor || "#FFFFFF"}
+                        onChange={(e) => handleAppearanceUpdate("lightModeAccentColor", e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Background</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={appearance?.lightModeBackground || "#FFFFFF"}
+                        onChange={(e) => handleAppearanceUpdate("lightModeBackground", e.target.value)}
+                        className="w-16 h-10"
+                      />
+                      <Input
+                        value={appearance?.lightModeBackground || "#FFFFFF"}
+                        onChange={(e) => handleAppearanceUpdate("lightModeBackground", e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Dark Mode Colors</CardTitle>
+                <CardDescription>Configure dark mode color scheme</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Primary Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={appearance?.darkModePrimaryColor || "#FFD700"}
+                        onChange={(e) => handleAppearanceUpdate("darkModePrimaryColor", e.target.value)}
+                        className="w-16 h-10"
+                      />
+                      <Input
+                        value={appearance?.darkModePrimaryColor || "#FFD700"}
+                        onChange={(e) => handleAppearanceUpdate("darkModePrimaryColor", e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Secondary Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={appearance?.darkModeSecondaryColor || "#FFFFFF"}
+                        onChange={(e) => handleAppearanceUpdate("darkModeSecondaryColor", e.target.value)}
+                        className="w-16 h-10"
+                      />
+                      <Input
+                        value={appearance?.darkModeSecondaryColor || "#FFFFFF"}
+                        onChange={(e) => handleAppearanceUpdate("darkModeSecondaryColor", e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Accent Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={appearance?.darkModeAccentColor || "#000000"}
+                        onChange={(e) => handleAppearanceUpdate("darkModeAccentColor", e.target.value)}
+                        className="w-16 h-10"
+                      />
+                      <Input
+                        value={appearance?.darkModeAccentColor || "#000000"}
+                        onChange={(e) => handleAppearanceUpdate("darkModeAccentColor", e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Background</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={appearance?.darkModeBackground || "#0A0A0A"}
+                        onChange={(e) => handleAppearanceUpdate("darkModeBackground", e.target.value)}
+                        className="w-16 h-10"
+                      />
+                      <Input
+                        value={appearance?.darkModeBackground || "#0A0A0A"}
+                        onChange={(e) => handleAppearanceUpdate("darkModeBackground", e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Typography</CardTitle>
+                <CardDescription>Configure font settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fontFamily">Font Family</Label>
+                    <Input
+                      id="fontFamily"
+                      value={appearance?.fontFamily || "Inter"}
+                      onChange={(e) => handleAppearanceUpdate("fontFamily", e.target.value)}
+                      placeholder="Inter"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fontSizeBase">Base Font Size</Label>
+                    <Input
+                      id="fontSizeBase"
+                      value={appearance?.fontSizeBase || "1rem"}
+                      onChange={(e) => handleAppearanceUpdate("fontSizeBase", e.target.value)}
+                      placeholder="1rem"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payment Tab */}
+          <TabsContent value="payment" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Settings</CardTitle>
+                <CardDescription>Configure payment providers and settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="mockMode">Mock Payment Mode</Label>
+                    <p className="text-sm text-muted-foreground">Enable mock payments for development and testing</p>
+                  </div>
+                  <Switch
+                    id="mockMode"
+                    checked={payment?.mockModeEnabled !== false}
+                    onCheckedChange={(checked) => handlePaymentUpdate("mockModeEnabled", checked)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="provider">Payment Provider</Label>
+                  <Select
+                    value={payment?.provider || "none"}
+                    onValueChange={(value) => handlePaymentUpdate("provider", value)}
+                  >
+                    <SelectTrigger id="provider">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="stripe">Stripe</SelectItem>
+                      <SelectItem value="paypal">PayPal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {payment?.provider === "stripe" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Stripe Configuration</CardTitle>
+                  <CardDescription>Configure your Stripe payment integration</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="stripePublishableKey">Publishable Key</Label>
+                    <Input
+                      id="stripePublishableKey"
+                      type="password"
+                      value={payment?.stripePublishableKey || ""}
+                      onChange={(e) => handlePaymentUpdate("stripePublishableKey", e.target.value)}
+                      placeholder="pk_test_..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="stripeSecretKey">Secret Key</Label>
+                    <Input
+                      id="stripeSecretKey"
+                      type="password"
+                      value={payment?.stripeSecretKeyEncrypted || ""}
+                      onChange={(e) => handlePaymentUpdate("stripeSecretKeyEncrypted", e.target.value)}
+                      placeholder="sk_test_..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="stripeWebhookSecret">Webhook Secret</Label>
+                    <Input
+                      id="stripeWebhookSecret"
+                      type="password"
+                      value={payment?.stripeWebhookSecretEncrypted || ""}
+                      onChange={(e) => handlePaymentUpdate("stripeWebhookSecretEncrypted", e.target.value)}
+                      placeholder="whsec_..."
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {payment?.provider === "paypal" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>PayPal Configuration</CardTitle>
+                  <CardDescription>Configure your PayPal payment integration</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="paypalClientId">Client ID</Label>
+                    <Input
+                      id="paypalClientId"
+                      type="password"
+                      value={payment?.paypalClientId || ""}
+                      onChange={(e) => handlePaymentUpdate("paypalClientId", e.target.value)}
+                      placeholder="PayPal Client ID"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="paypalClientSecret">Client Secret</Label>
+                    <Input
+                      id="paypalClientSecret"
+                      type="password"
+                      value={payment?.paypalClientSecretEncrypted || ""}
+                      onChange={(e) => handlePaymentUpdate("paypalClientSecretEncrypted", e.target.value)}
+                      placeholder="PayPal Client Secret"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="paypalMode">PayPal Mode</Label>
+                    <Select
+                      value={payment?.paypalMode || "sandbox"}
+                      onValueChange={(value) => handlePaymentUpdate("paypalMode", value)}
                     >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add First Setting
-                    </Button>
+                      <SelectTrigger id="paypalMode">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sandbox">Sandbox (Testing)</SelectItem>
+                        <SelectItem value="live">Live (Production)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Pricing Configuration</CardTitle>
+                <CardDescription>Set up pricing for your services</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Input
+                    id="currency"
+                    value={payment?.currency || "USD"}
+                    onChange={(e) => handlePaymentUpdate("currency", e.target.value)}
+                    placeholder="USD"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="xenScoutPrice">XEN Scout Review Price (cents)</Label>
+                  <Input
+                    id="xenScoutPrice"
+                    type="number"
+                    value={payment?.xenScoutPriceCents || 1000}
+                    onChange={(e) => handlePaymentUpdate("xenScoutPriceCents", parseInt(e.target.value))}
+                    placeholder="1000"
+                  />
+                  <p className="text-sm text-muted-foreground">Current price: ${((payment?.xenScoutPriceCents || 1000) / 100).toFixed(2)}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Subscription Settings</CardTitle>
+                <CardDescription>Configure subscription options</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="enableSubscriptions">Enable Subscriptions</Label>
+                    <p className="text-sm text-muted-foreground">Allow monthly and yearly subscriptions</p>
+                  </div>
+                  <Switch
+                    id="enableSubscriptions"
+                    checked={payment?.enableSubscriptions || false}
+                    onCheckedChange={(checked) => handlePaymentUpdate("enableSubscriptions", checked)}
+                  />
+                </div>
+
+                {payment?.enableSubscriptions && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="monthlyPrice">Monthly Price (cents)</Label>
+                      <Input
+                        id="monthlyPrice"
+                        type="number"
+                        value={payment?.subscriptionMonthlyPriceCents || 0}
+                        onChange={(e) => handlePaymentUpdate("subscriptionMonthlyPriceCents", parseInt(e.target.value))}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="yearlyPrice">Yearly Price (cents)</Label>
+                      <Input
+                        id="yearlyPrice"
+                        type="number"
+                        value={payment?.subscriptionYearlyPriceCents || 0}
+                        onChange={(e) => handlePaymentUpdate("subscriptionYearlyPriceCents", parseInt(e.target.value))}
+                        placeholder="0"
+                      />
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
-          </div>
+          </TabsContent>
+        </Tabs>
         </div>
       </div>
     </div>

@@ -284,7 +284,7 @@ GET /api/users/me/:id
 PUT /api/users/:id/profile (JSON)
 PUT /api/users/:id (multipart - profile picture)
 POST /api/users/:id/change-password
-GET /api/users/:id/saved-posts
+GET /api/users/:userId/saved-posts
 GET /api/users/:id/following
 
 Students:

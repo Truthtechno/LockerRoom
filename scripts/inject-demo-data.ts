@@ -13,13 +13,17 @@
 
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
+import { config } from 'dotenv';
 import { 
-  users, schools, students, posts, likes, comments, saves, follows,
+  users, schools, students, posts, postLikes, postComments, savedPosts, studentFollowers,
   type User, type School, type Student, type Post,
   type InsertUser, type InsertSchool, type InsertStudent, type InsertPost,
-  type InsertLike, type InsertComment, type InsertSave, type InsertFollow
+  type InsertPostLike, type InsertPostComment, type InsertSavedPost, type InsertStudentFollower
 } from '../shared/schema';
 import bcrypt from 'bcrypt';
+
+// Load environment variables
+config();
 
 // Initialize database connection
 const sql_client = neon(process.env.DATABASE_URL!);
@@ -276,17 +280,17 @@ const DEMO_COMMENTS = [
 ];
 
 async function hashPassword(password: string): Promise<string> {
-  return await bcrypt.hash(password, 10);
+  return await bcrypt.hash(password, 12); // Match auth storage salt rounds
 }
 
 async function clearDatabase() {
   console.log('🗑️  Clearing existing data...');
   
   // Clear in reverse dependency order
-  await db.delete(follows);
-  await db.delete(saves);
-  await db.delete(comments);
-  await db.delete(likes);
+  await db.delete(studentFollowers);
+  await db.delete(savedPosts);
+  await db.delete(postComments);
+  await db.delete(postLikes);
   await db.delete(posts);
   await db.delete(students);
   await db.delete(users);
@@ -307,11 +311,14 @@ async function createSchools(): Promise<School[]> {
 async function createUsers(schoolList: School[]): Promise<User[]> {
   console.log('👥 Creating users...');
   
-  // Hash all passwords
+  // Hash all passwords and map to correct schema fields
   const usersWithHashedPasswords = await Promise.all(
     DEMO_USERS.map(async (user, index) => ({
-      ...user,
-      password: await hashPassword(user.password),
+      name: user.name,
+      email: user.email,
+      passwordHash: await hashPassword(user.password),
+      role: user.role,
+      linkedId: '', // Will be set after creating role-specific profiles
       schoolId: user.role === "school_admin" 
         ? schoolList[index < 2 ? index : 0]?.id || null
         : user.role === "student" 
@@ -394,7 +401,7 @@ async function createInteractions(userList: User[], postList: Post[], studentLis
     }
   }
   
-  await db.insert(likes).values(likesData as InsertLike[]);
+  await db.insert(postLikes).values(likesData as InsertPostLike[]);
   
   // Create comments
   const commentsData = [];
@@ -412,7 +419,7 @@ async function createInteractions(userList: User[], postList: Post[], studentLis
     }
   }
   
-  await db.insert(comments).values(commentsData as InsertComment[]);
+  await db.insert(postComments).values(commentsData as InsertPostComment[]);
   
   // Create saves
   const savesData = [];
@@ -428,7 +435,7 @@ async function createInteractions(userList: User[], postList: Post[], studentLis
     }
   }
   
-  await db.insert(saves).values(savesData as InsertSave[]);
+  await db.insert(savedPosts).values(savesData as InsertSavedPost[]);
   
   // Create follows  
   const followsData = [];
@@ -438,13 +445,13 @@ async function createInteractions(userList: User[], postList: Post[], studentLis
     
     for (let i = 0; i < numFollows && i < shuffledStudents.length; i++) {
       followsData.push({
-        followerId: viewer.id,
-        followingId: shuffledStudents[i].id
+        followerUserId: viewer.id,
+        studentId: shuffledStudents[i].id
       });
     }
   }
   
-  await db.insert(follows).values(followsData as InsertFollow[]);
+  await db.insert(studentFollowers).values(followsData as InsertStudentFollower[]);
   
   console.log(`✅ Created interactions: ${likesData.length} likes, ${commentsData.length} comments, ${savesData.length} saves, ${followsData.length} follows`);
 }

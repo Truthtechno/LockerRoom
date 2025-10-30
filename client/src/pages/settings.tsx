@@ -1,24 +1,26 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useProfileMedia } from "@/hooks/useProfileMedia";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
+import { ImageCropper } from "@/components/ui/image-cropper";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiRequest } from "@/lib/queryClient";
-import { User, Lock, Bell, Eye, Smartphone, Palette, Camera, Save, Shield, LogOut } from "lucide-react";
+import { User, Lock, Bell, Eye, EyeOff, LogOut, Settings as SettingsIcon, Info } from "lucide-react";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import { logout } from "@/lib/auth";
 import { useLocation } from "wouter";
-import type { StudentWithStats } from "@shared/schema";
 
 export default function Settings() {
   const { user, updateUser } = useAuth();
@@ -26,19 +28,26 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  // Form states
-  const [profileData, setProfileData] = useState({
-    name: "",
-    bio: "",
-    phone: "",
-    position: "",
-    roleNumber: "",
-  });
+  // Profile media handling hook
+  const {
+    profilePicPreview,
+    coverPhotoPreview,
+    handleProfilePicChange,
+    handleCoverPhotoChange,
+    updateProfile,
+    clearPreviews,
+    isUploading,
+    isUpdating,
+    showCropper,
+    selectedImage,
+    handleCropComplete,
+    setShowCropper
+  } = useProfileMedia();
 
-  const [viewerProfileData, setViewerProfileData] = useState({
+  // Form states - only account-level settings
+  const [accountData, setAccountData] = useState({
     name: "",
-    bio: "",
-    phone: "",
+    email: "",
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -46,6 +55,11 @@ export default function Settings() {
     newPassword: "",
     confirmPassword: "",
   });
+
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [notificationSettings, setNotificationSettings] = useState({
     postLikes: true,
@@ -56,8 +70,6 @@ export default function Settings() {
     pushNotifications: true,
   });
 
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-
   const [privacySettings, setPrivacySettings] = useState({
     profileVisibility: "public",
     showStats: true,
@@ -65,67 +77,169 @@ export default function Settings() {
     allowDirectMessages: true,
   });
 
-  const { data: studentProfile, isLoading: studentLoading } = useQuery<StudentWithStats>({
-    queryKey: ["/api/students/profile", user?.id],
+  // Modal states
+  const [emailPermissionModalOpen, setEmailPermissionModalOpen] = useState(false);
+  const [privacyConfirmationModalOpen, setPrivacyConfirmationModalOpen] = useState(false);
+  const [pendingEmailToggle, setPendingEmailToggle] = useState(false);
+  const [pendingStatsToggle, setPendingStatsToggle] = useState(false);
+
+  // Load user data
+  const { data: userData, isLoading } = useQuery({
+    queryKey: ["/api/users/me"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/users/me");
+      return response.json();
+    },
+    enabled: !!user?.id,
+    staleTime: 30_000, // 30 seconds
+  });
+
+  // Load student profile data for students
+  // IMPORTANT: Include user.id in query key to prevent stale data when switching between students
+  const { data: studentProfile } = useQuery({
+    queryKey: ["/api/students/me", user?.id],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/students/me");
+      return response.json();
+    },
     enabled: !!user?.id && user?.role === "student",
+    staleTime: 30_000,
   });
 
-  const { data: userProfile, isLoading: userLoading } = useQuery({
-    queryKey: ["/api/users/me", user?.id],
-    enabled: !!user?.id && user?.role === "viewer",
-  });
-
-  const isLoading = user?.role === "student" ? studentLoading : userLoading;
-
+  // Update form data when user data loads
   useEffect(() => {
-    if (user?.role === "student" && studentProfile) {
-      setProfileData({
-        name: studentProfile.name || "",
-        bio: studentProfile.bio || "",
-        phone: studentProfile.phone || "",
-        position: studentProfile.position || "",
-        roleNumber: studentProfile.roleNumber || "",
-      });
-    } else if (user?.role === "viewer" && userProfile) {
-      setViewerProfileData({
-        name: (userProfile as any).name || user.name || "",
-        bio: (userProfile as any).bio || "",
-        phone: (userProfile as any).phone || "",
+    if (userData) {
+      setAccountData({
+        name: userData.name || "",
+        email: userData.email || "",
       });
     }
-  }, [studentProfile, userProfile, user]);
+  }, [userData]);
 
-  const updateProfileMutation = useMutation({
-    mutationFn: async (updates: any) => {
-      if (user?.role === "student") {
-        return apiRequest(`/api/students/profile/${user?.id}`, "PUT", updates);
-      } else if (user?.role === "viewer") {
-        return apiRequest(`/api/users/${user?.id}/profile`, "PUT", updates);
+  const updateAccountMutation = useMutation({
+    mutationFn: async (updates: { name?: string; email?: string }) => {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please log in again.');
       }
-    },
-    onSuccess: () => {
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully!",
+      
+      const response = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates)
       });
-      if (user?.role === "student") {
-        queryClient.invalidateQueries({ queryKey: ["/api/students/profile"] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to update account');
+      }
+      
+      // Handle 204 No Content or empty responses
+      const text = await response.text();
+      return text ? JSON.parse(text) : {};
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Account updated",
+        description: "Your account information has been updated successfully!",
+      });
+      
+      // Invalidate user queries
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      
+      // Update user context with the updated data
+      if (data.user && user) {
+        const updatedUser = {
+          ...user,
+          name: data.user.name || user.name,
+          email: data.user.email || user.email
+        };
+        updateUser(updatedUser);
       }
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to update profile. Please try again.",
+        description: error.message || "Failed to update account.",
         variant: "destructive",
       });
     },
   });
 
+  // Password validation function
+  const validatePassword = (password: string) => {
+    const minLength = password.length >= 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    
+    return {
+      isValid: minLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar,
+      errors: {
+        minLength: !minLength,
+        hasUpperCase: !hasUpperCase,
+        hasLowerCase: !hasLowerCase,
+        hasNumber: !hasNumber,
+        hasSpecialChar: !hasSpecialChar,
+      }
+    };
+  };
+
   const changePasswordMutation = useMutation({
     mutationFn: async (passwordData: { currentPassword: string; newPassword: string }) => {
-      return apiRequest(`/api/users/${user?.id}/change-password`, "POST", passwordData);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please log in again.');
+      }
+      
+      const response = await fetch(`/api/users/${user?.id}/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(passwordData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        
+        // Handle token expiration/unauthorized
+        if (response.status === 401 || response.status === 403) {
+          // Clear auth data and redirect to login
+          localStorage.removeItem('token');
+          sessionStorage.clear();
+          // Clear any cookies
+          document.cookie.split(";").forEach((c) => {
+            const eqPos = c.indexOf("=");
+            const name = eqPos > -1 ? c.substr(0, eqPos) : c;
+            document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+          });
+          
+          toast({
+            title: "Session expired",
+            description: "Your session has expired. Please log in again.",
+            variant: "destructive",
+          });
+          
+          setTimeout(() => {
+            setLocation("/login");
+          }, 2000);
+          
+          throw new Error('Session expired');
+        }
+        
+        throw new Error(errorData.error?.message || 'Failed to change password');
+      }
+      
+      const text = await response.text();
+      return text ? JSON.parse(text) : {};
     },
     onSuccess: () => {
       toast({
@@ -139,42 +253,81 @@ export default function Settings() {
       });
     },
     onError: (error: any) => {
+      if (error.message !== 'Session expired') {
+        toast({
+          title: "Error",
+          description: error?.message || "Failed to change password.",
+          variant: "destructive",
+        });
+      }
+    },
+  });
+
+  const saveNotificationSettingsMutation = useMutation({
+    mutationFn: async (settings: any) => {
+      return apiRequest(`/api/users/${user?.id}/notification-settings`, "PUT", settings);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Notification settings saved",
+        description: "Your notification preferences have been updated.",
+      });
+    },
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: error?.message || "Failed to change password. Please try again.",
+        description: error?.message || "Failed to save notification settings.",
         variant: "destructive",
       });
     },
   });
 
-  const handleProfileSave = () => {
-    const dataToUpdate = user?.role === "student" ? profileData : viewerProfileData;
-    updateProfileMutation.mutate(dataToUpdate);
-  };
-
-  const handlePasswordChange = () => {
-    if (!passwordData.currentPassword || !passwordData.newPassword) {
+  const savePrivacySettingsMutation = useMutation({
+    mutationFn: async (settings: any) => {
+      return apiRequest(`/api/users/${user?.id}/privacy-settings`, "PUT", settings);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Privacy settings saved",
+        description: "Your privacy preferences have been updated.",
+      });
+    },
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Please fill in all password fields.",
+        description: error?.message || "Failed to save privacy settings.",
         variant: "destructive",
       });
-      return;
-    }
+    },
+  });
 
+  const handleSaveAccount = () => {
+    updateAccountMutation.mutate(accountData);
+  };
+
+
+  const handleChangePassword = () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast({
         title: "Error",
-        description: "New password and confirmation do not match.",
+        description: "New passwords do not match.",
         variant: "destructive",
       });
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
+    const validation = validatePassword(passwordData.newPassword);
+    if (!validation.isValid) {
+      const errors = [];
+      if (validation.errors.minLength) errors.push("at least 8 characters");
+      if (validation.errors.hasUpperCase) errors.push("one uppercase letter");
+      if (validation.errors.hasLowerCase) errors.push("one lowercase letter");
+      if (validation.errors.hasNumber) errors.push("one number");
+      if (validation.errors.hasSpecialChar) errors.push("one special character");
+      
       toast({
-        title: "Error",
-        description: "New password must be at least 6 characters long.",
+        title: "Password requirements not met",
+        description: `Password must contain ${errors.join(", ")}.`,
         variant: "destructive",
       });
       return;
@@ -186,117 +339,80 @@ export default function Settings() {
     });
   };
 
-  const handleLogout = () => {
-    logout();
-    updateUser(null);
-    setLocation("/login");
-  };
-
-  const handleChangePhoto = () => {
-    setIsUploadingPhoto(true);
-    
-    // Check if Cloudinary is loaded
-    if (typeof (window as any).cloudinary === 'undefined') {
-      toast({
-        title: "Error",
-        description: "Photo upload service is not available. Please refresh the page.",
-        variant: "destructive",
-      });
-      setIsUploadingPhoto(false);
-      return;
-    }
-    
-    // @ts-ignore - Cloudinary widget is loaded via script tag
-    const widget = (window as any).cloudinary.createUploadWidget(
-      {
-        cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
-        uploadPreset: 'ml_default', // Default unsigned preset
-        sources: ['local', 'camera'],
-        multiple: false,
-        resourceType: 'image',
-        clientAllowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-        maxFileSize: 5000000, // 5MB
-        cropping: true,
-        croppingAspectRatio: 1,
-        folder: 'profile_photos'
-      },
-      (error: any, result: any) => {
-        setIsUploadingPhoto(false);
-        
-        if (error) {
-          console.error('Cloudinary error:', error);
+  // Handle push notification permission request
+  const handlePushNotificationToggle = async (checked: boolean) => {
+    if (checked && "Notification" in window) {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          setNotificationSettings({ ...notificationSettings, pushNotifications: checked });
+        } else {
           toast({
-            title: "Upload Error",
-            description: "Failed to upload photo. Please try again.",
+            title: "Permission denied",
+            description: "Push notifications were not enabled. Please enable them in your browser settings.",
             variant: "destructive",
           });
-          return;
         }
-        
-        if (result && result.event === 'success') {
-          const imageUrl = result.info.secure_url;
-          
-          // Update profile with new photo
-          const photoUpdate = { profilePicUrl: imageUrl };
-          
-          updateProfileMutation.mutate(photoUpdate, {
-            onSuccess: () => {
-              toast({
-                title: "Photo Updated",
-                description: "Your profile photo has been updated successfully!",
-              });
-              
-              // Update the user context with new photo
-              if (user) {
-                updateUser({ ...user, profilePicUrl: imageUrl } as any);
-              }
-            },
-            onError: () => {
-              toast({
-                title: "Error",
-                description: "Failed to save profile photo. Please try again.",
-                variant: "destructive",
-              });
-            }
-          });
-        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to request notification permission.",
+          variant: "destructive",
+        });
       }
-    );
-    
-    widget.open();
+    } else {
+      setNotificationSettings({ ...notificationSettings, pushNotifications: checked });
+    }
+  };
+
+  // Handle email notification toggle with confirmation
+  const handleEmailNotificationToggle = (checked: boolean) => {
+    setPendingEmailToggle(checked);
+    setEmailPermissionModalOpen(true);
+  };
+
+  const confirmEmailPermission = () => {
+    setNotificationSettings({ ...notificationSettings, emailNotifications: pendingEmailToggle });
+    setEmailPermissionModalOpen(false);
+    saveNotificationSettings();
+  };
+
+  // Handle privacy settings toggle with confirmation
+  const handleShowStatsToggle = (checked: boolean) => {
+    setPendingStatsToggle(checked);
+    setPrivacyConfirmationModalOpen(true);
+  };
+
+  const confirmStatsToggle = () => {
+    setPrivacySettings({ ...privacySettings, showStats: pendingStatsToggle });
+    setPrivacyConfirmationModalOpen(false);
+    savePrivacySettings();
   };
 
   const saveNotificationSettings = () => {
-    // In a real app, this would save to the backend
-    toast({
-      title: "Notification settings saved",
-      description: "Your notification preferences have been updated.",
-    });
-  };
-
-  const updateViewerNotificationSettings = (key: string, value: boolean) => {
-    const updatedSettings = { ...notificationSettings, [key]: value };
-    
-    // For viewers, simplify notification types
-    if (user?.role === "viewer") {
-      setNotificationSettings({
-        ...updatedSettings,
-        postLikes: false, // Viewers don't post content
-        teamUpdates: false, // Viewers aren't on teams
-      });
-    } else {
-      setNotificationSettings(updatedSettings);
-    }
+    saveNotificationSettingsMutation.mutate(notificationSettings);
   };
 
   const savePrivacySettings = () => {
-    // In a real app, this would save to the backend
-    toast({
-      title: "Privacy settings saved",
-      description: "Your privacy preferences have been updated.",
-    });
+    savePrivacySettingsMutation.mutate(privacySettings);
   };
 
+  const handleLogout = () => {
+    logout(); // logout() now handles clearing data and redirecting
+  };
+
+  // Error state
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-destructive">Please log in to access settings.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -308,567 +424,556 @@ export default function Settings() {
     );
   }
 
-  if (user?.role === "student" && !studentProfile && !studentLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-destructive">Student profile not found</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar />
+    <TooltipProvider>
+      <div className="min-h-screen bg-background">
+        <Sidebar />
+        <MobileNav />
       
-      {/* Main Content */}
-      <div className="lg:pl-64 flex flex-col flex-1">
-        {/* Header */}
-        <div className="bg-card border-b border-border px-4 py-4 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-              <p className="text-muted-foreground mt-1">
-                Manage your profile, privacy, and notification preferences
-              </p>
-            </div>
-            <Badge variant="outline" className="flex items-center">
-              <User className="w-4 h-4 mr-2" />
-              {user?.role === "student" ? "Student" : 
-               user?.role === "school_admin" ? "School Admin" : "Viewer"}
-            </Badge>
+      <div className="lg:pl-64 pb-24 lg:pb-0">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-foreground flex items-center">
+              <SettingsIcon className="w-8 h-8 mr-3 text-accent" />
+              Account Settings
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Manage your account preferences and security settings
+            </p>
           </div>
-        </div>
 
-        <div className="p-4 lg:p-8 space-y-8 pb-20 lg:pb-8">
-          {/* Profile Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <User className="w-5 h-5 mr-2" />
-                Profile Information
-              </CardTitle>
-              <CardDescription>
-                {user?.role === "student" 
-                  ? "Update your personal information and sports details"
-                  : user?.role === "school_admin"
-                  ? "School admin profile information (read-only)"
-                  : "Update your personal information and preferences"
-                }
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Profile Picture */}
-              <div className="flex items-center space-x-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage 
-                    src={
-                      user?.role === "student" 
-                        ? studentProfile?.profilePicUrl || studentProfile?.profilePic || "" 
-                        : user?.profilePicUrl || ""
-                    } 
-                    alt={user?.name || "Profile"} 
-                  />
-                  <AvatarFallback>{user?.name?.slice(0, 2).toUpperCase() || "U"}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="font-medium">{user?.name}</h3>
-                  <p className="text-sm text-muted-foreground">{user?.email}</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="mt-2"
-                    onClick={handleChangePhoto}
-                    disabled={isUploadingPhoto || updateProfileMutation.isPending}
-                    data-testid="button-change-photo"
-                  >
-                    <Camera className="w-4 h-4 mr-2" />
-                    {isUploadingPhoto ? "Uploading..." : "Change Photo"}
-                  </Button>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Profile Form */}
-              {user?.role === "student" ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
-                      <Input
-                        id="name"
-                        value={profileData.name}
-                        onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                        data-testid="input-settings-name"
+          <div className="space-y-8">
+            {/* Account Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <User className="w-5 h-5 mr-2 text-accent" />
+                  Account Information
+                </CardTitle>
+                <CardDescription>
+                  Update your basic account details
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Profile Avatar */}
+                <div className="flex items-center space-x-4">
+                  <div className="relative">
+                    <Avatar className="w-20 h-20">
+                      <AvatarImage
+                        src={
+                          profilePicPreview ||
+                          userData?.profilePicUrl || // unified from API
+                          undefined // never pass ""
+                        }
+                        alt={user?.name || "Profile"}
+                        onError={(e) => {
+                          // hide broken img so <AvatarFallback> shows without flicker
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
                       />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <Input
-                        id="phone"
-                        value={profileData.phone}
-                        onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                        placeholder="+1 (555) 123-4567"
-                        data-testid="input-settings-phone"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="position">Position</Label>
-                      <Select value={profileData.position} onValueChange={(value) => setProfileData({ ...profileData, position: value })}>
-                        <SelectTrigger data-testid="select-settings-position">
-                          <SelectValue placeholder="Select position" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="goalkeeper">Goalkeeper</SelectItem>
-                          <SelectItem value="defender">Defender</SelectItem>
-                          <SelectItem value="midfielder">Midfielder</SelectItem>
-                          <SelectItem value="attacking-midfielder">Attacking Midfielder</SelectItem>
-                          <SelectItem value="forward">Forward</SelectItem>
-                          <SelectItem value="striker">Striker</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="roleNumber">Jersey Number</Label>
-                      <Input
-                        id="roleNumber"
-                        value={profileData.roleNumber}
-                        onChange={(e) => setProfileData({ ...profileData, roleNumber: e.target.value })}
-                        placeholder="10"
-                        data-testid="input-settings-jersey"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="bio">Bio</Label>
-                    <Textarea
-                      id="bio"
-                      value={profileData.bio}
-                      onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                      placeholder="Tell everyone about yourself, your achievements, and goals..."
-                      rows={4}
-                      data-testid="textarea-settings-bio"
+                      <AvatarFallback>
+                        {/* initials if name exists, else an icon */}
+                        {user?.name
+                          ? user.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()
+                          : <User className="w-8 h-8 text-muted-foreground" />
+                        }
+                      </AvatarFallback>
+                    </Avatar>
+                    <input
+                      id="settings-profile-pic-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleProfilePicChange(f);
+                      }}
                     />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full p-0"
+                      onClick={() => document.getElementById("settings-profile-pic-upload")?.click()}
+                      disabled={isUploading || isUpdating}
+                    >
+                      <User className="w-4 h-4" />
+                    </Button>
                   </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="viewer-name">Full Name</Label>
-                      <Input
-                        id="viewer-name"
-                        value={viewerProfileData.name}
-                        onChange={(e) => setViewerProfileData({ ...viewerProfileData, name: e.target.value })}
-                        readOnly={user?.role === "school_admin"}
-                        className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
-                        data-testid="input-settings-name"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="viewer-phone">Phone Number</Label>
-                      <Input
-                        id="viewer-phone"
-                        value={viewerProfileData.phone}
-                        onChange={(e) => setViewerProfileData({ ...viewerProfileData, phone: e.target.value })}
-                        placeholder="+1 (555) 123-4567"
-                        readOnly={user?.role === "school_admin"}
-                        className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
-                        data-testid="input-settings-phone"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="viewer-bio">Bio</Label>
-                    <Textarea
-                      id="viewer-bio"
-                      value={viewerProfileData.bio}
-                      onChange={(e) => setViewerProfileData({ ...viewerProfileData, bio: e.target.value })}
-                      placeholder="Tell everyone about yourself and your interests..."
-                      rows={4}
-                      readOnly={user?.role === "school_admin"}
-                      className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
-                      data-testid="textarea-settings-bio"
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex justify-end">
-                <Button 
-                  onClick={handleProfileSave}
-                  disabled={updateProfileMutation.isPending || user?.role === "school_admin"}
-                  className={user?.role === "school_admin" ? "cursor-not-allowed" : ""}
-                  data-testid="button-save-profile"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {user?.role === "school_admin" ? "Read Only" : 
-                   updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Password Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Lock className="w-5 h-5 mr-2" />
-                Password & Security
-              </CardTitle>
-              <CardDescription>
-                {user?.role === "school_admin" 
-                  ? "Password management restricted for school administrators"
-                  : "Change your password to keep your account secure"
-                }
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="current-password">Current Password</Label>
-                  <Input
-                    id="current-password"
-                    type="password"
-                    value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                    placeholder="Enter current password"
-                    readOnly={user?.role === "school_admin"}
-                    className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
-                    data-testid="input-current-password"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">New Password</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    placeholder="Enter new password"
-                    readOnly={user?.role === "school_admin"}
-                    className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
-                    data-testid="input-new-password"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Password must be at least 6 characters long
-                  </p>
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    placeholder="Confirm new password"
-                    readOnly={user?.role === "school_admin"}
-                    className={user?.role === "school_admin" ? "bg-muted cursor-not-allowed" : ""}
-                    data-testid="input-confirm-password"
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="flex justify-between items-center">
-                <div>
-                  <h4 className="font-medium flex items-center">
-                    <Shield className="w-4 h-4 mr-2" />
-                    Account Security
-                  </h4>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Last password change: Never (Demo Account)
-                  </p>
-                </div>
-                <Button 
-                  onClick={handlePasswordChange} 
-                  disabled={changePasswordMutation.isPending || user?.role === "school_admin"}
-                  className={user?.role === "school_admin" ? "cursor-not-allowed" : "bg-accent hover:bg-accent/90"}
-                  data-testid="button-change-password"
-                >
-                  <Lock className="w-4 h-4 mr-2" />
-                  {user?.role === "school_admin" ? "Restricted" : 
-                   changePasswordMutation.isPending ? "Updating..." : "Change Password"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Privacy Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Shield className="w-5 h-5 mr-2" />
-                Privacy & Visibility
-              </CardTitle>
-              <CardDescription>
-                Control who can see your profile and content
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
                   <div>
-                    <Label>Profile Visibility</Label>
-                    <p className="text-sm text-muted-foreground">Who can see your profile</p>
+                    <h3 className="font-medium">{user?.name}</h3>
+                    <p className="text-sm text-muted-foreground">{user?.email}</p>
+                    <p className="text-sm text-muted-foreground capitalize">{user?.role}</p>
+                    {(isUploading || isUpdating) && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {isUploading ? "Uploading..." : "Updating profile..."}
+                      </p>
+                    )}
                   </div>
-                  <Select value={privacySettings.profileVisibility} onValueChange={(value) => setPrivacySettings({ ...privacySettings, profileVisibility: value })}>
-                    <SelectTrigger className="w-32" data-testid="select-profile-visibility">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="public">Public</SelectItem>
-                      <SelectItem value="school">School Only</SelectItem>
-                      <SelectItem value="private">Private</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {user?.role === "student" && (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Show Performance Stats</Label>
-                      <p className="text-sm text-muted-foreground">Display your stats on your profile</p>
-                    </div>
-                    <Switch
-                      checked={privacySettings.showStats}
-                      onCheckedChange={(checked) => setPrivacySettings({ ...privacySettings, showStats: checked })}
-                      data-testid="switch-show-stats"
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Show Contact Information</Label>
-                    <p className="text-sm text-muted-foreground">Show email and phone on profile</p>
-                  </div>
-                  <Switch
-                    checked={privacySettings.showContacts}
-                    onCheckedChange={(checked) => setPrivacySettings({ ...privacySettings, showContacts: checked })}
-                    data-testid="switch-show-contacts"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Allow Direct Messages</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {user?.role === "student" ? "Let other students message you" : "Let students message you"}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={privacySettings.allowDirectMessages}
-                    onCheckedChange={(checked) => setPrivacySettings({ ...privacySettings, allowDirectMessages: checked })}
-                    data-testid="switch-allow-messages"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button onClick={savePrivacySettings} variant="outline" data-testid="button-save-privacy">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Privacy Settings
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Notification Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Bell className="w-5 h-5 mr-2" />
-                Notifications
-              </CardTitle>
-              <CardDescription>
-                Choose what notifications you want to receive
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <h4 className="font-medium flex items-center">
-                  <Smartphone className="w-4 h-4 mr-2" />
-                  Push Notifications
-                </h4>
-
-                <div className="space-y-3 pl-6">
-                  {user?.role === "student" && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label>Post Likes</Label>
-                          <p className="text-sm text-muted-foreground">When someone likes your posts</p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.postLikes}
-                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postLikes: checked })}
-                          data-testid="switch-post-likes"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label>Comments</Label>
-                          <p className="text-sm text-muted-foreground">When someone comments on your posts</p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.postComments}
-                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postComments: checked })}
-                          data-testid="switch-post-comments"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label>New Followers</Label>
-                          <p className="text-sm text-muted-foreground">When someone follows you</p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.newFollowers}
-                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, newFollowers: checked })}
-                          data-testid="switch-new-followers"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label>Team Updates</Label>
-                          <p className="text-sm text-muted-foreground">Academy and team announcements</p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.teamUpdates}
-                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, teamUpdates: checked })}
-                          data-testid="switch-team-updates"
-                        />
-                      </div>
-                    </>
-                  )}
-                  
-                  {user?.role === "viewer" && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label>Student Activity</Label>
-                          <p className="text-sm text-muted-foreground">When students you follow post new content</p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.newFollowers}
-                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, newFollowers: checked })}
-                          data-testid="switch-student-activity"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label>Comment Replies</Label>
-                          <p className="text-sm text-muted-foreground">When someone replies to your comments</p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.postComments}
-                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postComments: checked })}
-                          data-testid="switch-comment-replies"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label>Academy Updates</Label>
-                          <p className="text-sm text-muted-foreground">General announcements from XEN Sports Armoury</p>
-                        </div>
-                        <Switch
-                          checked={notificationSettings.teamUpdates}
-                          onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, teamUpdates: checked })}
-                          data-testid="switch-academy-updates"
-                        />
-                      </div>
-                    </>
-                  )}
                 </div>
 
                 <Separator />
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Receive notifications via email</p>
+                {/* Account Form */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="name">Full Name</Label>
+                      {user?.role === "student" && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-4 h-4 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Managed by your school/organization</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <Input
+                      id="name"
+                      value={accountData.name}
+                      onChange={(e) => setAccountData({ ...accountData, name: e.target.value })}
+                      placeholder="Your full name"
+                      disabled={user?.role === "student"}
+                      className={user?.role === "student" ? "bg-muted" : ""}
+                    />
                   </div>
-                  <Switch
-                    checked={notificationSettings.emailNotifications}
-                    onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, emailNotifications: checked })}
-                    data-testid="switch-email-notifications"
-                  />
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="email">Email Address</Label>
+                      {user?.role === "student" && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-4 h-4 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Managed by your school/organization</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={accountData.email}
+                      onChange={(e) => setAccountData({ ...accountData, email: e.target.value })}
+                      placeholder="your@email.com"
+                      disabled={user?.role === "student"}
+                      className={user?.role === "student" ? "bg-muted" : ""}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex justify-end">
-                <Button onClick={saveNotificationSettings} variant="outline" data-testid="button-save-notifications">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Notification Settings
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Account Management */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Lock className="w-5 h-5 mr-2" />
-                Account Security
-              </CardTitle>
-              <CardDescription>
-                Manage your account security and data
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                  <div>
-                    <h4 className="font-medium">Password</h4>
-                    <p className="text-sm text-muted-foreground">Change your account password</p>
-                  </div>
-                  <Button variant="outline" data-testid="button-change-password">
-                    Change Password
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSaveAccount}
+                    disabled={updateAccountMutation.isPending || user?.role === "student"}
+                    className="bg-accent hover:bg-accent/90"
+                  >
+                    {updateAccountMutation.isPending ? "Saving..." : "Save Account"}
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
 
-                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                  <div>
-                    <h4 className="font-medium">Export Data</h4>
-                    <p className="text-sm text-muted-foreground">Download your posts and profile data</p>
+            {/* Password Change */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Lock className="w-5 h-5 mr-2 text-accent" />
+                  Change Password
+                </CardTitle>
+                <CardDescription>
+                  Update your password for better security
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="currentPassword"
+                        type={showCurrentPassword ? "text" : "password"}
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                        placeholder="Enter current password"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      >
+                        {showCurrentPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                  <Button variant="outline" data-testid="button-export-data">
-                    Export Data
-                  </Button>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="newPassword"
+                        type={showNewPassword ? "text" : "password"}
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                        placeholder="Enter new password"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                        placeholder="Confirm new password"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
-                  <div>
-                    <h4 className="font-medium text-destructive">Sign Out</h4>
-                    <p className="text-sm text-muted-foreground">Sign out of your account</p>
+                {/* Password Requirements */}
+                {passwordData.newPassword && (
+                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                    <h4 className="text-sm font-medium">Password Requirements:</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                      <div className={`flex items-center gap-2 ${passwordData.newPassword.length >= 8 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                        <div className={`w-2 h-2 rounded-full ${passwordData.newPassword.length >= 8 ? 'bg-green-600' : 'bg-muted-foreground'}`} />
+                        At least 8 characters
+                      </div>
+                      <div className={`flex items-center gap-2 ${/[A-Z]/.test(passwordData.newPassword) ? 'text-green-600' : 'text-muted-foreground'}`}>
+                        <div className={`w-2 h-2 rounded-full ${/[A-Z]/.test(passwordData.newPassword) ? 'bg-green-600' : 'bg-muted-foreground'}`} />
+                        One uppercase letter
+                      </div>
+                      <div className={`flex items-center gap-2 ${/[a-z]/.test(passwordData.newPassword) ? 'text-green-600' : 'text-muted-foreground'}`}>
+                        <div className={`w-2 h-2 rounded-full ${/[a-z]/.test(passwordData.newPassword) ? 'bg-green-600' : 'bg-muted-foreground'}`} />
+                        One lowercase letter
+                      </div>
+                      <div className={`flex items-center gap-2 ${/\d/.test(passwordData.newPassword) ? 'text-green-600' : 'text-muted-foreground'}`}>
+                        <div className={`w-2 h-2 rounded-full ${/\d/.test(passwordData.newPassword) ? 'bg-green-600' : 'bg-muted-foreground'}`} />
+                        One number
+                      </div>
+                      <div className={`flex items-center gap-2 ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(passwordData.newPassword) ? 'text-green-600' : 'text-muted-foreground'}`}>
+                        <div className={`w-2 h-2 rounded-full ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(passwordData.newPassword) ? 'bg-green-600' : 'bg-muted-foreground'}`} />
+                        One special character
+                      </div>
+                    </div>
                   </div>
-                  <Button variant="destructive" onClick={handleLogout} data-testid="button-sign-out">
-                    <LogOut className="w-4 h-4 mr-2" />
+                )}
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleChangePassword}
+                    disabled={changePasswordMutation.isPending}
+                    variant="outline"
+                  >
+                    {changePasswordMutation.isPending ? "Changing..." : "Change Password"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Profile Media - HIDDEN for now (cover is managed on Profile page) */}
+            {false && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <User className="w-5 h-5 mr-2 text-accent" />
+                  Profile Media
+                </CardTitle>
+                <CardDescription>
+                  Update your profile picture and cover photo
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Cover Photo */}
+                <div className="space-y-4">
+                  <Label>Cover Photo</Label>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-32 h-20 rounded-lg border-2 border-dashed border-border overflow-hidden">
+                      <img
+                        className="w-full h-full object-cover"
+                        src={coverPhotoPreview || ""}
+                        alt="Cover preview"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleCoverPhotoChange(f);
+                        }}
+                        className="hidden"
+                        id="cover-photo-upload"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => document.getElementById('cover-photo-upload')?.click()}
+                        className="mb-2"
+                        disabled={isUploading || isUpdating}
+                      >
+                        <User className="w-4 h-4 mr-2" />
+                        {isUploading ? "Uploading..." : "Select Cover Photo"}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Recommended: 1200x400px
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            )}
+
+            {/* Notification Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Bell className="w-5 h-5 mr-2 text-accent" />
+                  Notifications
+                </CardTitle>
+                <CardDescription>
+                  Choose what notifications you want to receive
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <Label>Post Likes</Label>
+                      <p className="text-sm text-muted-foreground">Get notified when someone likes your posts</p>
+                    </div>
+                    <Switch
+                      checked={notificationSettings.postLikes}
+                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postLikes: checked })}
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <Label>Post Comments</Label>
+                      <p className="text-sm text-muted-foreground">Get notified when someone comments on your posts</p>
+                    </div>
+                    <Switch
+                      checked={notificationSettings.postComments}
+                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postComments: checked })}
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <Label>New Followers</Label>
+                      <p className="text-sm text-muted-foreground">Get notified when someone follows you</p>
+                    </div>
+                    <Switch
+                      checked={notificationSettings.newFollowers}
+                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, newFollowers: checked })}
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <Label>Push Notifications</Label>
+                      <p className="text-sm text-muted-foreground">Receive browser push notifications</p>
+                    </div>
+                    <Switch
+                      checked={notificationSettings.pushNotifications}
+                      onCheckedChange={handlePushNotificationToggle}
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <Label>Email Notifications</Label>
+                      <p className="text-sm text-muted-foreground">Receive notifications via email</p>
+                    </div>
+                    <Switch
+                      checked={notificationSettings.emailNotifications}
+                      onCheckedChange={handleEmailNotificationToggle}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={saveNotificationSettings}
+                    disabled={saveNotificationSettingsMutation.isPending}
+                    variant="outline"
+                  >
+                    {saveNotificationSettingsMutation.isPending ? "Saving..." : "Save Notifications"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Privacy Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Eye className="w-5 h-5 mr-2 text-accent" />
+                  Privacy
+                </CardTitle>
+                <CardDescription>
+                  Control who can see your information
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <Label>Show Stats</Label>
+                      <p className="text-sm text-muted-foreground">Display your performance statistics publicly</p>
+                    </div>
+                    <Switch
+                      checked={privacySettings.showStats}
+                      onCheckedChange={handleShowStatsToggle}
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1">
+                      <Label>Allow Direct Messages</Label>
+                      <p className="text-sm text-muted-foreground">Let other users send you direct messages</p>
+                    </div>
+                    <Switch
+                      checked={privacySettings.allowDirectMessages}
+                      onCheckedChange={(checked) => setPrivacySettings({ ...privacySettings, allowDirectMessages: checked })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={savePrivacySettings}
+                    disabled={savePrivacySettingsMutation.isPending}
+                    variant="outline"
+                  >
+                    {savePrivacySettingsMutation.isPending ? "Saving..." : "Save Privacy"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Danger Zone */}
+            <Card className="border-destructive/20">
+              <CardHeader>
+                <CardTitle className="flex items-center text-destructive">
+                  <LogOut className="w-5 h-5 mr-2" />
+                  Danger Zone
+                </CardTitle>
+                <CardDescription>
+                  Irreversible actions that affect your account
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex-1">
+                    <h4 className="font-medium">Sign Out</h4>
+                    <p className="text-sm text-muted-foreground">Sign out of your account on this device</p>
+                  </div>
+                  <Button
+                    onClick={handleLogout}
+                    variant="destructive"
+                    className="w-full sm:w-auto"
+                  >
                     Sign Out
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
 
-      <MobileNav />
+      {/* Image Cropper Modal */}
+      {showCropper && selectedImage && (
+        <ImageCropper
+          isOpen={showCropper}
+          onClose={() => setShowCropper(false)}
+          onCropComplete={handleCropComplete}
+          imageSrc={selectedImage}
+        />
+      )}
+
+      {/* Email Permission Modal */}
+      <Dialog open={emailPermissionModalOpen} onOpenChange={setEmailPermissionModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Email Notifications</DialogTitle>
+            <DialogDescription>
+              Allow LockerRoom to send you email updates?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailPermissionModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmEmailPermission}>
+              {pendingEmailToggle ? "Enable" : "Disable"} Email Notifications
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Privacy Confirmation Modal */}
+      <AlertDialog open={privacyConfirmationModalOpen} onOpenChange={setPrivacyConfirmationModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Privacy Change</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to make your stats {pendingStatsToggle ? "public" : "private"}?
+              {pendingStatsToggle ? " This will make your performance statistics visible to other users." : " This will hide your performance statistics from other users."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStatsToggle}>
+              {pendingStatsToggle ? "Make Public" : "Make Private"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+    </TooltipProvider>
   );
 }

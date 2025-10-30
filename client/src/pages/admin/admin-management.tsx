@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,54 +14,39 @@ import { z } from "zod";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { ArrowLeft, Shield, UserPlus, Crown, Settings, Trash2, Edit, Users, Lock } from "lucide-react";
+import { ArrowLeft, Shield, UserPlus, Crown, Settings, Trash2, Edit, Users, Lock, Upload, User, Check, Copy, AlertTriangle, Mail, Phone } from "lucide-react";
 import { useLocation } from "wouter";
+import Sidebar from "@/components/navigation/sidebar";
+import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 
-type User = {
+type ScoutAdmin = {
   id: string;
   name: string;
   email: string;
   role: string;
-  schoolId?: string;
+  xenId: string;
+  profilePicUrl?: string;
   createdAt: string;
 };
 
-type AdminRole = {
-  id: string;
-  userId: string;
-  role: string;
-  permissions: string[];
-  assignedBy: string;
-  createdAt: string;
-};
-
-type AdminRoleWithUser = AdminRole & {
-  user: User;
-};
-
-const adminRoleFormSchema = z.object({
-  userId: z.string().min(1, "User is required"),
-  role: z.enum(["super_admin", "system_admin", "moderator"]),
-  permissions: z.array(z.string()).min(1, "At least one permission is required"),
+const adminFormSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
+  email: z.string().email("Valid email is required").max(255, "Email must be less than 255 characters"),
+  role: z.enum(["system_admin", "moderator", "scout_admin", "xen_scout", "finance", "support", "coach", "analyst"]).default("moderator"),
 });
 
-type AdminRoleFormData = z.infer<typeof adminRoleFormSchema>;
+type AdminFormData = z.infer<typeof adminFormSchema>;
 
-const AVAILABLE_PERMISSIONS = [
-  { id: "manage_schools", label: "Manage Schools", description: "Create, approve, and manage school accounts" },
-  { id: "manage_users", label: "Manage Users", description: "View and manage user accounts" },
-  { id: "manage_content", label: "Manage Content", description: "Moderate posts and user-generated content" },
-  { id: "view_analytics", label: "View Analytics", description: "Access platform analytics and reports" },
-  { id: "manage_settings", label: "Manage Settings", description: "Configure platform-wide settings" },
-  { id: "manage_admins", label: "Manage Administrators", description: "Add and remove administrator roles" },
-  { id: "financial_access", label: "Financial Access", description: "View revenue and financial reports" },
-  { id: "system_maintenance", label: "System Maintenance", description: "Perform system maintenance tasks" },
-];
+// Generate XEN ID with prefix
+const generateXenId = () => {
+  const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `XSA-25${randomNum}`;
+};
 
-const ROLE_PRESETS = {
-  super_admin: AVAILABLE_PERMISSIONS.map(p => p.id),
-  system_admin: ["manage_schools", "manage_users", "manage_content", "view_analytics", "manage_settings"],
-  moderator: ["manage_content", "view_analytics"],
+// Generate OTP
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 export default function AdminManagement() {
@@ -70,135 +54,192 @@ export default function AdminManagement() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [showAddAdmin, setShowAddAdmin] = useState(false);
-  const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
+  const [showAddScout, setShowAddScout] = useState(false);
+  const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
+  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
+  const [otpDisplay, setOtpDisplay] = useState<string | null>(null);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCopied, setOtpCopied] = useState(false);
+  const [scoutData, setScoutData] = useState<any>(null);
 
-  const adminRoleForm = useForm<AdminRoleFormData>({
-    resolver: zodResolver(adminRoleFormSchema),
+  const adminForm = useForm<AdminFormData>({
+    resolver: zodResolver(adminFormSchema),
     defaultValues: {
-      permissions: [],
+      name: "",
+      email: "",
+      role: "moderator",
     },
   });
 
-  const { data: adminRoles, isLoading: rolesLoading } = useQuery<AdminRole[]>({
-    queryKey: ["/api/admin/roles"],
+  const { data: scoutAdmins, isLoading: scoutsLoading } = useQuery<ScoutAdmin[]>({
+    queryKey: ["/api/scout-admins"],
   });
 
-  const { data: allUsers, isLoading: usersLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-  });
+  const createAdminMutation = useMutation({
+    mutationFn: async (data: AdminFormData) => {
+      const formData = new FormData();
+      formData.append('name', data.name);
+      formData.append('email', data.email);
+      formData.append('role', data.role);
+      // Only add xenId and otp for scout roles
+      if (data.role === 'scout_admin' || data.role === 'xen_scout') {
+        formData.append('xenId', generateXenId());
+        formData.append('otp', generateOTP());
+      }
+      
+      if (profilePicFile) {
+        formData.append('profilePic', profilePicFile);
+      }
 
-  const createAdminRoleMutation = useMutation({
-    mutationFn: async (data: AdminRoleFormData) => {
-      return apiRequest("/api/admin/roles", {
+      const response = await fetch('/api/admin/create-admin', {
         method: "POST",
-        body: {
-          ...data,
-          assignedBy: user?.id,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
+        body: formData,
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || error.message || "Failed to create admin");
+      }
+
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/roles"] });
-      adminRoleForm.reset();
-      setShowAddAdmin(false);
-      toast({
-        title: "Admin Role Created",
-        description: "New administrator role has been assigned successfully.",
-      });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scout-admins"] });
+      adminForm.reset();
+      setShowAddScout(false);
+      setProfilePicFile(null);
+      setProfilePicPreview(null);
+      
+      // Show OTP modal if OTP was generated (for scout roles)
+      if (data?.otp) {
+        setOtpDisplay(data.otp);
+        setScoutData(data.scout || data.admin);
+        setShowOtpModal(true);
+      }
+      
+      // For non-scout roles, show a message about coming soon
+      const createdRole = data?.admin?.role;
+      if (createdRole && !['scout_admin', 'xen_scout'].includes(createdRole)) {
+        toast({
+          title: "Admin Created Successfully! 🎉",
+          description: `${createdRole} portal is coming soon. The admin can log in but will see a placeholder page until their portal is implemented.`,
+        });
+      } else {
+        toast({
+          title: "Admin Created Successfully! 🎉",
+          description: data.message || "Admin has been successfully registered. Please share the OTP securely if applicable.",
+        });
+      }
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to create admin role.",
+        description: error.message || "Failed to create admin.",
         variant: "destructive",
       });
     },
   });
 
-  const updateAdminRoleMutation = useMutation({
-    mutationFn: async ({ userId, data }: { userId: string; data: Partial<AdminRole> }) => {
-      return apiRequest(`/api/admin/roles/${userId}`, {
-        method: "PUT",
-        body: data,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/roles"] });
-      setEditingRole(null);
-      toast({
-        title: "Admin Role Updated",
-        description: "Administrator role has been updated successfully.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to update admin role.",
-        variant: "destructive",
-      });
-    },
-  });
+  const onSubmit = (data: AdminFormData) => {
+    createAdminMutation.mutate(data);
+  };
 
-  const deleteAdminRoleMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      return apiRequest(`/api/admin/roles/${userId}`, {
-        method: "DELETE",
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/roles"] });
-      toast({
-        title: "Admin Role Removed",
-        description: "Administrator role has been removed successfully.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to remove admin role.",
-        variant: "destructive",
-      });
-    },
-  });
+  const copyOTP = async () => {
+    if (otpDisplay) {
+      try {
+        await navigator.clipboard.writeText(otpDisplay);
+        setOtpCopied(true);
+        toast({
+          title: "OTP Copied",
+          description: "One-time password copied to clipboard",
+        });
+        setTimeout(() => setOtpCopied(false), 2000);
+      } catch (error) {
+        toast({
+          title: "Copy Failed",
+          description: "Could not copy OTP to clipboard",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
-  const onCreateAdminRole = (data: AdminRoleFormData) => {
-    createAdminRoleMutation.mutate(data);
+  const closeOTPModal = () => {
+    setShowOtpModal(false);
+    setOtpDisplay(null);
+    setScoutData(null);
+    setOtpCopied(false);
+    adminForm.reset();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast({
+          title: "Invalid File",
+          description: "Please select an image file.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: `Please select an image smaller than 5MB. Current file: ${(file.size / (1024 * 1024)).toFixed(1)}MB`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Profile image selected",
+        description: `Image ready for upload (${(file.size / (1024 * 1024)).toFixed(1)}MB)`,
+      });
+
+      setProfilePicFile(file);
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        setProfilePicPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeProfilePic = () => {
+    setProfilePicFile(null);
+    setProfilePicPreview(null);
   };
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case "super_admin":
-        return <Badge variant="destructive" className="bg-red-600"><Crown className="w-3 h-3 mr-1" />Super Admin</Badge>;
       case "system_admin":
-        return <Badge variant="default" className="bg-blue-600"><Shield className="w-3 h-3 mr-1" />System Admin</Badge>;
+        return <Badge variant="default" className="bg-red-600 text-xs"><Crown className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />System Admin</Badge>;
+      case "scout_admin":
+        return <Badge variant="default" className="bg-blue-600 text-xs"><Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />Scout Admin</Badge>;
+      case "xen_scout":
+        return <Badge variant="secondary" className="bg-green-600 text-white text-xs"><User className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />XEN Scout</Badge>;
       case "moderator":
-        return <Badge variant="secondary" className="bg-green-600 text-white"><Settings className="w-3 h-3 mr-1" />Moderator</Badge>;
+        return <Badge variant="outline" className="bg-purple-600 text-white text-xs"><Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />Moderator</Badge>;
+      case "finance":
+        return <Badge variant="outline" className="bg-green-600 text-white text-xs"><User className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />Finance</Badge>;
+      case "support":
+        return <Badge variant="outline" className="bg-blue-600 text-white text-xs"><User className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />Support</Badge>;
+      case "coach":
+        return <Badge variant="outline" className="bg-orange-600 text-white text-xs"><User className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />Coach</Badge>;
+      case "analyst":
+        return <Badge variant="outline" className="bg-indigo-600 text-white text-xs"><User className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />Analyst</Badge>;
       default:
-        return <Badge variant="outline">{role}</Badge>;
+        return <Badge variant="outline" className="text-xs">{role}</Badge>;
     }
   };
 
-  const getPermissionName = (permissionId: string) => {
-    return AVAILABLE_PERMISSIONS.find(p => p.id === permissionId)?.label || permissionId;
-  };
-
-  const adminRolesWithUsers: AdminRoleWithUser[] = adminRoles?.map(role => ({
-    ...role,
-    user: allUsers?.find(u => u.id === role.userId) || {
-      id: role.userId,
-      name: "Unknown User",
-      email: "unknown@example.com",
-      role: "unknown",
-      createdAt: new Date().toISOString(),
-    },
-  })) || [];
-
-  const availableUsers = allUsers?.filter(u => 
-    u.role === "system_admin" && !adminRoles?.some(r => r.userId === u.id)
-  ) || [];
-
-  const isLoading = rolesLoading || usersLoading;
+  const isLoading = scoutsLoading;
 
   if (isLoading) {
     return (
@@ -210,150 +251,178 @@ export default function AdminManagement() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+      <Sidebar />
+      <MobileNav />
+      
+      <div className="lg:pl-64 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
+        {/* Header */}
+        <div className="bg-card border-b border-border">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between py-4 lg:h-16">
             <div className="flex items-center">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setLocation("/system-admin")}
-                className="mr-4"
+                className="lg:hidden mr-4"
                 data-testid="back-to-admin"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Admin
               </Button>
-              <div>
-                <h1 className="text-xl font-semibold text-foreground">Administrator Management</h1>
-                <p className="text-sm text-muted-foreground">Manage administrator roles and permissions</p>
+              <div className="flex flex-col space-y-1">
+                <h1 className="text-lg sm:text-xl font-semibold text-foreground">Admin Management</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">Create and manage administrators and staff members</p>
               </div>
             </div>
             
-            <Dialog open={showAddAdmin} onOpenChange={setShowAddAdmin}>
+            <Dialog open={showAddScout} onOpenChange={setShowAddScout}>
               <DialogTrigger asChild>
-                <Button className="gold-gradient text-accent-foreground" data-testid="button-add-admin">
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Add Administrator
+                <Button className="gold-gradient text-accent-foreground text-xs sm:text-sm" size="sm" data-testid="button-add-admin">
+                  <UserPlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Create Admin</span>
+                  <span className="sm:hidden">Create</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
-                  <DialogTitle>Add Administrator Role</DialogTitle>
+                  <DialogTitle>Create Administrator</DialogTitle>
                   <DialogDescription>
-                    Assign administrator privileges to a user with specific permissions.
+                    Create a new administrator with profile picture and credentials.
                   </DialogDescription>
                 </DialogHeader>
-                <Form {...adminRoleForm}>
-                  <form onSubmit={adminRoleForm.handleSubmit(onCreateAdminRole)} className="space-y-6">
-                    <FormField
-                      control={adminRoleForm.control}
-                      name="userId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Select User</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-user">
-                                <SelectValue placeholder="Choose a user to make admin" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {availableUsers.map((user) => (
-                                <SelectItem key={user.id} value={user.id}>
-                                  {user.name} ({user.email})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={adminRoleForm.control}
-                      name="role"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Administrator Role</FormLabel>
-                          <Select 
-                            onValueChange={(value) => {
-                              field.onChange(value);
-                              // Auto-set permissions based on role preset
-                              const presetPermissions = ROLE_PRESETS[value as keyof typeof ROLE_PRESETS] || [];
-                              adminRoleForm.setValue("permissions", presetPermissions);
-                            }}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-admin-role">
-                                <SelectValue placeholder="Select administrator role" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="super_admin">Super Administrator</SelectItem>
-                              <SelectItem value="system_admin">System Administrator</SelectItem>
-                              <SelectItem value="moderator">Moderator</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={adminRoleForm.control}
-                      name="permissions"
-                      render={() => (
-                        <FormItem>
-                          <FormLabel>Permissions</FormLabel>
-                          <div className="grid grid-cols-1 gap-3 mt-2">
-                            {AVAILABLE_PERMISSIONS.map((permission) => (
-                              <FormField
-                                key={permission.id}
-                                control={adminRoleForm.control}
-                                name="permissions"
-                                render={({ field }) => (
-                                  <FormItem key={permission.id} className="flex flex-row items-start space-x-3 space-y-0 border border-border rounded-lg p-3">
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value?.includes(permission.id)}
-                                        onCheckedChange={(checked) => {
-                                          const updatedPermissions = checked
-                                            ? [...(field.value || []), permission.id]
-                                            : (field.value || []).filter(p => p !== permission.id);
-                                          field.onChange(updatedPermissions);
-                                        }}
-                                        data-testid={`checkbox-${permission.id}`}
-                                      />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                      <FormLabel className="text-sm font-medium">
-                                        {permission.label}
-                                      </FormLabel>
-                                      <p className="text-xs text-muted-foreground">
-                                        {permission.description}
-                                      </p>
-                                    </div>
-                                  </FormItem>
-                                )}
-                              />
-                            ))}
+                <Form {...adminForm}>
+                  <form onSubmit={adminForm.handleSubmit(onSubmit)} className="space-y-6">
+                    {/* Profile Picture Upload */}
+                    <div className="space-y-4">
+                      <Label>Profile Picture</Label>
+                      <div className="flex items-center space-x-4">
+                        {profilePicPreview ? (
+                          <div className="relative">
+                            <img
+                              src={profilePicPreview}
+                              alt="Profile preview"
+                              className="w-24 h-24 rounded-full object-cover border-2 border-border"
+                              data-testid="profile-pic-preview"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="absolute -top-2 -right-2 rounded-full w-6 h-6 p-0"
+                              onClick={removeProfilePic}
+                              data-testid="remove-profile-pic"
+                            >
+                              ×
+                            </Button>
                           </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                        ) : (
+                          <div className="w-24 h-24 rounded-full bg-muted border-2 border-dashed border-border flex items-center justify-center">
+                            <User className="w-8 h-8 text-muted-foreground" />
+                          </div>
+                        )}
+                        
+                        <div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="hidden"
+                            id="profile-pic-input"
+                            data-testid="profile-pic-input"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => document.getElementById("profile-pic-input")?.click()}
+                            data-testid="upload-profile-pic"
+                          >
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload Photo
+                          </Button>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Max 5MB, JPG or PNG
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Basic Information */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={adminForm.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Full Name *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="John Smith" {...field} data-testid="input-name" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={adminForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email Address *</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="email" 
+                                placeholder="john@example.com" 
+                                {...field} 
+                                data-testid="input-email" 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={adminForm.control}
+                        name="role"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Role</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-role">
+                                  <SelectValue placeholder="Select role" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="system_admin">System Admin</SelectItem>
+                                <SelectItem value="moderator">Moderator</SelectItem>
+                                <SelectItem value="scout_admin">Scout Admin</SelectItem>
+                                <SelectItem value="xen_scout">XEN Scout</SelectItem>
+                                <SelectItem value="finance">Finance</SelectItem>
+                                <SelectItem value="support">Support</SelectItem>
+                                <SelectItem value="coach">Coach</SelectItem>
+                                <SelectItem value="analyst">Analyst</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     <DialogFooter>
                       <Button 
                         type="submit" 
-                        disabled={createAdminRoleMutation.isPending}
+                        disabled={createAdminMutation.isPending}
                         data-testid="button-submit-admin"
                       >
-                        {createAdminRoleMutation.isPending ? "Creating..." : "Create Administrator"}
+                        {createAdminMutation.isPending ? "Creating..." : "Create Admin"}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -364,182 +433,211 @@ export default function AdminManagement() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Administrators</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+          <Card className="p-3 sm:p-6">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-0">
+              <CardTitle className="text-xs sm:text-sm font-medium">Total Admins</CardTitle>
+              <User className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{adminRoles?.length || 0}</div>
+            <CardContent className="p-0 pt-2">
+              <div className="text-xl sm:text-2xl font-bold">{scoutAdmins?.length || 0}</div>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Super Admins</CardTitle>
-              <Crown className="h-4 w-4 text-muted-foreground" />
+          <Card className="p-3 sm:p-6">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-0">
+              <CardTitle className="text-xs sm:text-sm font-medium">System Admins</CardTitle>
+              <Crown className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {adminRoles?.filter(r => r.role === "super_admin").length || 0}
+            <CardContent className="p-0 pt-2">
+              <div className="text-xl sm:text-2xl font-bold text-red-600">
+                {scoutAdmins?.filter(s => s.role === "system_admin").length || 0}
               </div>
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Available Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+          <Card className="p-3 sm:p-6">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-0">
+              <CardTitle className="text-xs sm:text-sm font-medium">Scout Admins</CardTitle>
+              <Shield className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{availableUsers.length}</div>
+            <CardContent className="p-0 pt-2">
+              <div className="text-xl sm:text-2xl font-bold text-blue-600">
+                {scoutAdmins?.filter(s => s.role === "scout_admin").length || 0}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="p-3 sm:p-6">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-0">
+              <CardTitle className="text-xs sm:text-sm font-medium">Other Roles</CardTitle>
+              <User className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="p-0 pt-2">
+              <div className="text-xl sm:text-2xl font-bold text-green-600">
+                {scoutAdmins?.filter(s => !["system_admin", "scout_admin", "xen_scout"].includes(s.role)).length || 0}
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Administrators List */}
-        {adminRolesWithUsers.length > 0 ? (
-          <div className="space-y-6">
-            {adminRolesWithUsers.map((adminRole) => (
-              <Card key={adminRole.id} className="overflow-hidden" data-testid={`admin-${adminRole.id}`}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
-                        <Shield className="w-6 h-6 text-accent" />
+        {/* Admins List */}
+        {scoutAdmins && scoutAdmins.length > 0 ? (
+          <div className="space-y-3 sm:space-y-6">
+            {scoutAdmins.map((scout) => (
+              <Card key={scout.id} className="overflow-hidden" data-testid={`scout-${scout.id}`}>
+                <CardHeader className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                    <div className="flex items-center space-x-3 sm:space-x-4">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-accent/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                        {scout.profilePicUrl ? (
+                          <img
+                            src={scout.profilePicUrl}
+                            alt={scout.name}
+                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <User className="w-5 h-5 sm:w-6 sm:h-6 text-accent" />
+                        )}
                       </div>
-                      <div>
-                        <CardTitle className="text-lg">{adminRole.user.name}</CardTitle>
-                        <CardDescription>{adminRole.user.email}</CardDescription>
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="text-base sm:text-lg truncate">{scout.name}</CardTitle>
+                        <CardDescription className="text-xs sm:text-sm truncate">{scout.email}</CardDescription>
+                        {scout.xenId && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            XEN ID: {scout.xenId}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      {getRoleBadge(adminRole.role)}
+                    <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+                      {getRoleBadge(scout.role)}
                       <div className="text-xs text-muted-foreground">
-                        Since {new Date(adminRole.createdAt).toLocaleDateString()}
+                        Since {new Date(scout.createdAt).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
                 </CardHeader>
-                
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-medium text-sm mb-2 flex items-center">
-                        <Lock className="w-4 h-4 mr-2" />
-                        Permissions ({adminRole.permissions.length})
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {adminRole.permissions.map((permission) => (
-                          <Badge key={permission} variant="outline" className="text-xs">
-                            {getPermissionName(permission)}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end space-x-3 pt-4 border-t border-border">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditingRole(adminRole)}
-                        data-testid={`button-edit-${adminRole.id}`}
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit Role
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteAdminRoleMutation.mutate(adminRole.userId)}
-                        disabled={deleteAdminRoleMutation.isPending || adminRole.userId === user?.id}
-                        data-testid={`button-remove-${adminRole.id}`}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        {deleteAdminRoleMutation.isPending ? "Removing..." : "Remove"}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
               </Card>
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-foreground mb-2">No Administrators</h3>
-            <p className="text-muted-foreground mb-6">
-              No administrator roles have been assigned yet.
+          <div className="text-center py-8 sm:py-12">
+            <User className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-foreground mb-2">No Administrators</h3>
+            <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 px-4">
+              No administrators have been created yet.
             </p>
             <Button 
-              onClick={() => setShowAddAdmin(true)}
-              className="gold-gradient text-accent-foreground"
+              onClick={() => setShowAddScout(true)}
+              className="gold-gradient text-accent-foreground text-xs sm:text-sm"
+              size="sm"
               data-testid="button-add-first-admin"
             >
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add First Administrator
+              <UserPlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              Create First Administrator
             </Button>
           </div>
         )}
 
-        {/* Edit Role Dialog */}
-        {editingRole && (
-          <Dialog open={!!editingRole} onOpenChange={() => setEditingRole(null)}>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Edit Administrator Role</DialogTitle>
-                <DialogDescription>
-                  Update permissions for {adminRolesWithUsers.find(r => r.id === editingRole.id)?.user.name}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Current Role</Label>
-                  <div className="mt-1">{getRoleBadge(editingRole.role)}</div>
+        {/* OTP Success Modal */}
+        <Dialog open={showOtpModal} onOpenChange={setShowOtpModal}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center text-green-600">
+                <Check className="w-6 h-6 mr-2" />
+                Administrator Created Successfully!
+              </DialogTitle>
+              <DialogDescription>
+                The administrator has been registered and a temporary password has been generated.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              {/* Admin Info */}
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <h4 className="font-medium mb-2">Administrator Information</h4>
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">Name:</span> {scoutData?.name}</p>
+                  <p><span className="font-medium">Email:</span> {scoutData?.email}</p>
+                  {scoutData?.xenId && <p><span className="font-medium">XEN ID:</span> {scoutData?.xenId}</p>}
+                  <p><span className="font-medium">Role:</span> {scoutData?.role}</p>
                 </div>
-                <div>
-                  <Label>Permissions</Label>
-                  <div className="grid grid-cols-1 gap-3 mt-2">
-                    {AVAILABLE_PERMISSIONS.map((permission) => (
-                      <div key={permission.id} className="flex items-center space-x-2 border border-border rounded-lg p-3">
-                        <Checkbox
-                          checked={editingRole.permissions.includes(permission.id)}
-                          onCheckedChange={(checked) => {
-                            const updatedPermissions = checked
-                              ? [...editingRole.permissions, permission.id]
-                              : editingRole.permissions.filter(p => p !== permission.id);
-                            setEditingRole({ ...editingRole, permissions: updatedPermissions });
-                          }}
-                          data-testid={`edit-checkbox-${permission.id}`}
-                        />
-                        <div>
-                          <div className="text-sm font-medium">{permission.label}</div>
-                          <div className="text-xs text-muted-foreground">{permission.description}</div>
-                        </div>
-                      </div>
-                    ))}
+              </div>
+
+              {/* OTP Display */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Temporary Password (OTP)</Label>
+                <div className="flex items-center space-x-2">
+                  <div className="flex-1 p-3 bg-muted rounded-lg border-2 border-dashed border-muted-foreground/25">
+                    <code className="text-lg font-mono font-bold text-primary tracking-wider">
+                      {otpDisplay}
+                    </code>
+                  </div>
+                  <Button
+                    onClick={copyOTP}
+                    variant="outline"
+                    size="sm"
+                    className="px-3"
+                  >
+                    {otpCopied ? (
+                      <Check className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Security Warning */}
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">
+                      Important Security Notice
+                    </p>
+                    <ul className="text-amber-700 dark:text-amber-300 space-y-1">
+                      <li>• Share this OTP securely with the administrator</li>
+                      <li>• Administrator must reset password after first login</li>
+                      <li>• This OTP can only be used once</li>
+                      <li>• Store securely - it won't be shown again</li>
+                    </ul>
                   </div>
                 </div>
               </div>
-              <DialogFooter>
+
+              {/* Notification Status */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Notification Status</h4>
+                <div className="flex items-center space-x-2 text-sm">
+                  <Mail className="w-4 h-4 text-blue-600" />
+                  <span>Welcome email sent to administrator</span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex space-x-3 pt-4">
                 <Button
-                  onClick={() => updateAdminRoleMutation.mutate({ 
-                    userId: editingRole.userId, 
-                    data: { permissions: editingRole.permissions } 
-                  })}
-                  disabled={updateAdminRoleMutation.isPending}
-                  data-testid="button-update-admin"
+                  onClick={closeOTPModal}
+                  className="flex-1"
                 >
-                  {updateAdminRoleMutation.isPending ? "Updating..." : "Update Role"}
+                  Create Another Admin
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
+                <Button
+                  onClick={() => setLocation("/system-admin")}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Back to Dashboard
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
       </div>
     </div>
   );

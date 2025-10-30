@@ -2,17 +2,20 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    // Clone the response before reading so the original stream isn't consumed
+    const clonedRes = res.clone();
     let errorMessage = res.statusText;
     try {
-      const errorData = await res.json();
+      const errorData = await clonedRes.json();
       if (errorData.error && errorData.error.message) {
         errorMessage = errorData.error.message;
       } else if (errorData.message) {
         errorMessage = errorData.message;
       }
     } catch {
-      // If JSON parsing fails, use the text response
-      const text = await res.text();
+      // If JSON parsing fails, clone again and try text
+      const textRes = res.clone();
+      const text = await textRes.text();
       if (text) {
         errorMessage = text;
       }
@@ -30,10 +33,30 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {};
+  
+  // Always attach token if available
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  
+  let body: string | FormData | undefined;
+  
+  if (data) {
+    if (data instanceof FormData) {
+      // Don't set Content-Type for FormData - let the browser set it with boundary
+      body = data;
+    } else {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(data);
+    }
+  }
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    headers,
+    body,
     credentials: "include",
   });
 
@@ -47,7 +70,16 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = {};
+    
+    // Always attach token if available
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    
     const res = await fetch(queryKey.join("/") as string, {
+      headers,
       credentials: "include",
     });
 
@@ -65,8 +97,13 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      staleTime: 30 * 1000, // 30 seconds
+      retry: (failureCount, error: any) => {
+        // Don't retry on 404 (profile not found)
+        if (error?.status === 404) return false;
+        return failureCount < 3;
+      },
+      gcTime: 2 * 60 * 1000, // 2 minutes
     },
     mutations: {
       retry: false,

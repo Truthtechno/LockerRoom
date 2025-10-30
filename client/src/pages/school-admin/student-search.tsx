@@ -17,6 +17,9 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ArrowLeft, Search, User, Star, Plus, Edit, Trash2, Mail, Phone } from "lucide-react";
 import { useLocation } from "wouter";
+import Sidebar from "@/components/navigation/sidebar";
+import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 
 type Student = {
   id: string;
@@ -100,17 +103,19 @@ export default function StudentSearch() {
 
   const addRatingMutation = useMutation({
     mutationFn: async (data: AddRatingFormData) => {
-      return apiRequest(`/api/students/${selectedStudent?.id}/ratings`, {
-        method: "POST",
-        body: {
-          ...data,
-          ratedBy: user?.id,
-        },
+      const response = await apiRequest("POST", `/api/students/${selectedStudent?.id}/ratings`, {
+        ...data,
+        ratedBy: user?.id,
       });
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/students", selectedStudent?.id, "ratings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/schools", user?.schoolId, "analytics"] });
+      // Also invalidate school admin dashboard queries
+      queryClient.invalidateQueries({ queryKey: ["/api/schools", user?.schoolId, "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schools", user?.schoolId, "recent-activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schools", user?.schoolId, "top-performers"] });
       ratingForm.reset();
       setShowAddRating(false);
       toast({
@@ -129,12 +134,15 @@ export default function StudentSearch() {
 
   const deleteRatingMutation = useMutation({
     mutationFn: async (ratingId: string) => {
-      return apiRequest(`/api/ratings/${ratingId}`, {
-        method: "DELETE",
-      });
+      const response = await apiRequest("DELETE", `/api/ratings/${ratingId}`);
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/students", selectedStudent?.id, "ratings"] });
+      // Also invalidate school admin dashboard queries
+      queryClient.invalidateQueries({ queryKey: ["/api/schools", user?.schoolId, "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schools", user?.schoolId, "recent-activity"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schools", user?.schoolId, "top-performers"] });
       toast({
         title: "Rating Deleted",
         description: "Student rating has been removed.",
@@ -174,21 +182,36 @@ export default function StudentSearch() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLocation("/school-admin")}
-                className="mr-4"
-                data-testid="back-to-admin"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Admin
-              </Button>
+      <Sidebar />
+      <MobileNav />
+      
+      <div className="lg:pl-64 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+          {/* Mobile Back Button and Title */}
+          <div className="bg-card border-b border-border px-4 py-4 space-y-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocation("/school-admin")}
+              className="w-full justify-start -ml-2"
+              data-testid="back-to-admin"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Admin
+            </Button>
+            <div>
+              <h1 className="text-xl font-semibold text-foreground">Student Search & Ratings</h1>
+              <p className="text-sm text-muted-foreground">Search students and manage their performance ratings</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Desktop Header */}
+        <div className="hidden lg:block bg-card border-b border-border">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Student Search & Ratings</h1>
                 <p className="text-sm text-muted-foreground">Search students and manage their performance ratings</p>
@@ -196,10 +219,9 @@ export default function StudentSearch() {
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Search & Student List */}
           <div className="lg:col-span-1 space-y-6">
             {/* Search Bar */}
@@ -561,6 +583,7 @@ export default function StudentSearch() {
                 </p>
               </div>
             )}
+          </div>
           </div>
         </div>
       </div>

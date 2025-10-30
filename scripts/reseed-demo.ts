@@ -26,6 +26,7 @@ import {
   type InsertSavedPost,
   type InsertStudentFollower
 } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("❌ DATABASE_URL not set. Please define it in your .env");
@@ -107,21 +108,20 @@ async function hashPassword(password: string): Promise<string> {
 
 async function reseedDemo() {
   try {
-    console.log("🌱 Starting comprehensive demo data reseeding...");
+    console.log("🌱 Starting safe demo data reseeding...");
+    console.log("⚠️  WARNING: This will only add demo accounts if they don't exist. Existing data will be preserved.");
 
-    // Clear existing data in dependency order
-    console.log("🧹 Clearing existing data...");
-    await db.delete(studentFollowers);
-    await db.delete(savedPosts);
-    await db.delete(postComments);
-    await db.delete(postLikes);
-    await db.delete(posts);
-    await db.delete(students);
-    await db.delete(viewers);
-    await db.delete(schoolAdmins);
-    await db.delete(systemAdmins);
-    await db.delete(users);
-    await db.delete(schools);
+    // Check if demo data already exists
+    const existingDemoUsers = await db.select().from(users).where(eq(users.email, "admin@lockerroom.com"));
+    if (existingDemoUsers.length > 0) {
+      console.log("✅ Demo data already exists. Skipping reseed to preserve existing data.");
+      console.log("🔑 Existing demo accounts:");
+      console.log(`   System Admin: admin@lockerroom.com / admin123`);
+      console.log(`   School Admin: principal@lincoln.edu / principal123`);
+      return;
+    }
+
+    console.log("📝 No existing demo data found. Creating demo accounts...");
 
     // Create schools
     console.log("🏫 Creating demo schools...");
@@ -217,13 +217,22 @@ async function reseedDemo() {
     const studentUsers = [];
 
     for (const studentData of studentDataList) {
-      const [studentProfile] = await db.insert(students).values(studentData).returning();
+      // Create user first
       const [studentUser] = await db.insert(users).values({
         email: `${studentData.name.toLowerCase().replace(' ', '.')}@student.com`,
         passwordHash: await hashPassword("student123"),
         role: "student",
-        linkedId: studentProfile.id
+        linkedId: "temp" // Will be updated after student creation
       } as InsertUser).returning();
+      
+      // Create student profile with userId
+      const [studentProfile] = await db.insert(students).values({
+        ...studentData,
+        userId: studentUser.id
+      }).returning();
+      
+      // Update user with correct linkedId
+      await db.update(users).set({ linkedId: studentProfile.id }).where(eq(users.id, studentUser.id));
       
       createdStudents.push(studentProfile);
       studentUsers.push(studentUser);

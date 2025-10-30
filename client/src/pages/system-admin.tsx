@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import StatsCard from "@/components/stats/stats-card";
@@ -6,13 +6,30 @@ import { useAuth } from "@/hooks/use-auth";
 import { logout } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Users, FileText, DollarSign, BarChart3, Settings, UserPlus, Shield, LogOut } from "lucide-react";
+import { Building2, Users, FileText, DollarSign, BarChart3, Settings, UserPlus, Shield, LogOut, ChevronDown, MapPin, Calendar, MoreHorizontal, Ban, Trash2, AlertTriangle, ChevronRight, Megaphone } from "lucide-react";
 import { Loader2 } from "lucide-react";
+import { AvatarWithFallback } from "@/components/ui/avatar-with-fallback";
+import { SchoolAvatar } from "@/components/ui/school-avatar";
+import { EditProfileModal } from "@/components/ui/edit-profile-modal";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useRef, useState } from "react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AnnouncementModal } from "@/components/ui/announcement-modal";
+import { AnnouncementManagement } from "@/components/admin/announcement-management";
+import { AdminFeed } from "@/components/admin/admin-feed";
+import Sidebar from "@/components/navigation/sidebar";
+import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 
 export default function SystemAdmin() {
   const { user, updateUser } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const { data: systemStats, isLoading } = useQuery<{
     totalSchools: number;
@@ -25,18 +42,83 @@ export default function SystemAdmin() {
     queryKey: ["/api/system/stats"],
   });
 
-  const { data: schools } = useQuery<any[]>({
-    queryKey: ["/api/schools"],
+  const { data: schoolsData } = useQuery({
+    queryKey: ["/api/system-admin/schools"],
+    queryFn: async () => {
+      const response = await fetch('/api/system-admin/schools', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch schools');
+      const data = await response.json();
+      
+      // Sort by createdAt descending and take only the 3 most recent
+      const recentSchools = data.schools
+        ?.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        ?.slice(0, 3) || [];
+      return { ...data, schools: recentSchools };
+    },
   });
 
-  const handleLogout = () => {
-    logout();
-    updateUser(null);
-    setLocation("/login");
+  const uploadSchoolProfilePic = async (schoolId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('profilePic', file);
+
+    const response = await fetch(`/api/system-admin/schools/${schoolId}/profile-pic`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to upload profile picture');
+    }
+
+    return response.json();
   };
 
-  const handleReviewApplications = () => {
-    setLocation("/admin/school-applications");
+  const handleSchoolAvatarClick = (schoolId: string) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.setAttribute('data-school-id', schoolId);
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const schoolId = event.target.getAttribute('data-school-id');
+    
+    if (!file || !schoolId) return;
+
+    try {
+      await uploadSchoolProfilePic(schoolId, file);
+      
+      toast({
+        title: "Success",
+        description: "School profile picture updated successfully",
+      });
+      
+      // Refetch schools data to update the UI
+      await queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/system-admin/schools"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to upload profile picture",
+        variant: "destructive",
+      });
+    }
+
+    // Reset the input
+    event.target.value = '';
+  };
+
+  const handleLogout = () => {
+    logout(); // logout() now handles clearing data and redirecting
   };
 
   const handlePlatformAnalytics = () => {
@@ -51,6 +133,90 @@ export default function SystemAdmin() {
     setLocation("/admin/admin-management");
   };
 
+  const handleCreateSchool = () => {
+    setLocation("/system-admin/create-school");
+  };
+
+  const handleCreateSchoolAdmin = () => {
+    setLocation("/system-admin/create-school-admin");
+  };
+
+  const handleDisableSchool = async (schoolId: string, schoolName: string) => {
+    setActionLoading(schoolId);
+    try {
+      const response = await fetch(`/api/system-admin/schools/${schoolId}/disable`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to disable school');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "School Disabled",
+        description: result.message,
+      });
+
+      // Refetch schools data
+      await queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/system-admin/schools"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to disable school",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteSchool = async (schoolId: string, schoolName: string) => {
+    setActionLoading(schoolId);
+    try {
+      const response = await fetch(`/api/system-admin/schools/${schoolId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to delete school');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "School Deleted",
+        description: result.message,
+      });
+
+      // Refetch schools data
+      await queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/system-admin/schools"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete school",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -61,53 +227,43 @@ export default function SystemAdmin() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <div className="w-10 h-10 gold-gradient rounded-lg flex items-center justify-center">
-                <span className="text-accent-foreground font-bold text-lg">XEN</span>
-              </div>
-              <div className="ml-4">
-                <h1 className="text-xl font-semibold text-foreground">System Administration</h1>
-                <p className="text-sm text-muted-foreground">XEN Sports Armoury Platform</p>
-              </div>
+      <Sidebar />
+      <MobileNav />
+      
+      <div className="lg:pl-64 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
+        {/* Page Title */}
+        <div className="mb-8 px-4 sm:px-6 lg:px-8 pt-8">
+          <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold text-foreground mb-2">System Administration</h1>
+              <p className="text-muted-foreground text-sm lg:text-base">XEN Sports Armoury Platform</p>
             </div>
-            
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-2 bg-muted px-3 py-2 rounded-lg">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="text-sm text-foreground">System Online</span>
               </div>
-              <div className="flex items-center space-x-3">
-                <ThemeToggle />
-                <Button
-                  onClick={handleLogout}
-                  variant="outline"
-                  size="icon"
-                  data-testid="system-admin-logout"
-                >
-                  <LogOut className="w-4 h-4" />
-                </Button>
-                <div className="flex items-center space-x-3">
-                  <img
-                    className="h-8 w-8 rounded-full"
-                    src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&h=400"
-                    alt="System admin"
-                  />
-                  <span className="text-sm font-medium text-foreground">{user?.name}</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Dashboard */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Global Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Main Dashboard */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-8">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="announcements">Announcements</TabsTrigger>
+              <TabsTrigger value="feed">Feed</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="overview" className="space-y-8">
+            {/* Global Stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 lg:gap-6 mb-4 sm:mb-8">
           <StatsCard
             title="Total Schools"
             value={systemStats?.totalSchools || 0}
@@ -139,71 +295,152 @@ export default function SystemAdmin() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {/* Platform Analytics */}
           <div className="lg:col-span-2 space-y-8">
             {/* Recent School Registrations */}
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-              <div className="px-6 py-4 border-b border-border">
+              <div className="px-4 sm:px-6 py-4 border-b border-border">
                 <h2 className="text-lg font-semibold text-foreground">Recent School Registrations</h2>
                 <p className="text-sm text-muted-foreground">New schools joining the platform</p>
               </div>
               <div className="divide-y divide-border">
-                {/* Mock recent schools */}
-                <div className="p-6 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <img
-                        className="h-12 w-12 rounded-lg object-cover"
-                        src="https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=400&h=400"
-                        alt="School"
-                      />
-                      <div>
-                        <h3 className="font-medium text-foreground">Lincoln High School</h3>
-                        <p className="text-sm text-muted-foreground">Springfield, IL • Premium Plan • 450 students</p>
+                {schoolsData?.schools?.length > 0 ? (
+                  schoolsData.schools.map((school: any) => {
+                    const registrationDate = new Date(school.createdAt);
+                    const daysAgo = Math.floor((Date.now() - registrationDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const status = school.subscriptionPlan === 'premium' ? 'Active' : 'Pending';
+                    const statusColor = status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+                    
+                    return (
+                      <div key={school.id} className="p-3 sm:p-6 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3 sm:space-x-4">
+                            <SchoolAvatar
+                              key={`${school.id}-${school.profilePicUrl || 'no-image'}`}
+                              src={school.profilePicUrl}
+                              name={school.name}
+                              className="h-10 w-10 sm:h-12 sm:w-12"
+                              clickable={true}
+                              onClick={() => handleSchoolAvatarClick(school.id)}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-medium text-foreground text-sm sm:text-base truncate">{school.name}</h3>
+                              <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 text-xs sm:text-sm text-muted-foreground">
+                                {school.address && (
+                                  <div className="flex items-center space-x-1">
+                                    <MapPin className="w-3 h-3" />
+                                    <span className="truncate">{school.address}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center space-x-1">
+                                  <span className="capitalize">{school.subscriptionPlan} Plan</span>
+                                  <span>•</span>
+                                  <span>{school.maxStudents} students</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <div className="text-right">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                                {status}
+                              </span>
+                              <div className="flex items-center text-sm text-muted-foreground mt-1">
+                                <Calendar className="w-3 h-3 mr-1" />
+                                <span>
+                                  {daysAgo === 0 ? 'Registered today' : 
+                                   daysAgo === 1 ? 'Registered yesterday' : 
+                                   `Registered ${daysAgo} days ago`}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* School Management Actions */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  disabled={actionLoading === school.id}
+                                >
+                                  {actionLoading === school.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => handleDisableSchool(school.id, school.name)}
+                                  className="text-yellow-600 focus:text-yellow-600"
+                                >
+                                  <Ban className="w-4 h-4 mr-2" />
+                                  Disable School
+                                </DropdownMenuItem>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => e.preventDefault()}
+                                      className="text-red-600 focus:text-red-600"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete School
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle className="flex items-center">
+                                        <AlertTriangle className="w-5 h-5 mr-2 text-red-500" />
+                                        Delete School Permanently
+                                      </AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This action cannot be undone. This will permanently delete:
+                                        <ul className="mt-2 ml-4 list-disc">
+                                          <li>School "{school.name}"</li>
+                                          <li>All school admin accounts</li>
+                                          <li>All student accounts</li>
+                                          <li>All posts and content</li>
+                                        </ul>
+                                        Are you absolutely sure you want to proceed?
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDeleteSchool(school.id, school.name)}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        Delete Permanently
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Active
-                      </span>
-                      <p className="text-sm text-muted-foreground mt-1">Registered 2 days ago</p>
-                    </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-6 text-center text-muted-foreground">
+                    <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>No schools registered yet</p>
                   </div>
-                </div>
-                
-                <div className="p-6 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <img
-                        className="h-12 w-12 rounded-lg object-cover"
-                        src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=400&h=400"
-                        alt="School"
-                      />
-                      <div>
-                        <h3 className="font-medium text-foreground">Roosevelt Academy</h3>
-                        <p className="text-sm text-muted-foreground">Portland, OR • Standard Plan • 320 students</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                        Pending
-                      </span>
-                      <p className="text-sm text-muted-foreground mt-1">Registered 4 days ago</p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
             {/* Platform Health Metrics */}
-            <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-              <div className="mb-6">
+            <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm">
+              <div className="mb-4 sm:mb-6">
                 <h2 className="text-lg font-semibold text-foreground">Platform Health</h2>
                 <p className="text-sm text-muted-foreground">System performance and usage metrics</p>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                 <div className="text-center">
                   <div className="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-2">
                     <div className="text-2xl font-bold text-green-600">99.8%</div>
@@ -232,21 +469,46 @@ export default function SystemAdmin() {
           </div>
 
           {/* System Management */}
-          <div className="space-y-6">
-            {/* System Actions */}
-            <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground mb-4">System Management</h2>
-              <div className="space-y-3">
+          <div className="space-y-4 sm:space-y-6">
+            {/* System Actions - Accordion on mobile */}
+            <div className="bg-card border border-border rounded-xl shadow-sm">
+              <Disclosure>
+                {({ open }: { open: boolean }) => (
+                  <>
+                    <DisclosureButton className="w-full px-4 sm:px-6 py-4 text-left flex items-center justify-between hover:bg-muted/50 transition-colors">
+                      <h2 className="text-lg font-semibold text-foreground">System Management</h2>
+                      <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} />
+                    </DisclosureButton>
+                    <DisclosurePanel className="px-4 sm:px-6 pb-4 sm:pb-6">
+                      <div className="space-y-3">
                 <Button
-                  onClick={handleReviewApplications}
-                  className="w-full justify-between bg-accent hover:bg-accent/90 text-accent-foreground"
-                  data-testid="button-review-applications"
+                  onClick={handleCreateSchool}
+                  className="w-full justify-start bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   <div className="flex items-center">
                     <Building2 className="w-5 h-5 mr-3" />
-                    Review School Applications
+                    Create New School
                   </div>
-                  <span className="bg-accent-foreground/20 text-accent-foreground px-2 py-1 rounded text-sm">3</span>
+                </Button>
+
+                <Button
+                  onClick={handleCreateSchoolAdmin}
+                  className="w-full justify-start bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  <div className="flex items-center">
+                    <UserPlus className="w-5 h-5 mr-3" />
+                    Create School Admin
+                  </div>
+                </Button>
+
+                <Button
+                  onClick={() => setLocation("/system-admin/manage-schools")}
+                  className="w-full justify-start bg-accent hover:bg-accent/90 text-accent-foreground"
+                >
+                  <div className="flex items-center">
+                    <Building2 className="w-5 h-5 mr-3" />
+                    Manage Schools
+                  </div>
                 </Button>
                 
                 <Button
@@ -278,11 +540,26 @@ export default function SystemAdmin() {
                   <Shield className="w-5 h-5 mr-3" />
                   Manage Administrators
                 </Button>
-              </div>
+                
+                <AnnouncementModal userRole="system_admin">
+                  <Button
+                    variant="secondary"
+                    className="w-full justify-start"
+                    data-testid="button-create-announcement"
+                  >
+                    <Megaphone className="w-5 h-5 mr-3" />
+                    Create Announcement
+                  </Button>
+                </AnnouncementModal>
+                      </div>
+                    </DisclosurePanel>
+                  </>
+                )}
+              </Disclosure>
             </div>
 
             {/* Subscription Overview */}
-            <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+            <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-foreground mb-4">Subscription Plans</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -292,7 +569,7 @@ export default function SystemAdmin() {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-foreground">{systemStats?.premiumSchools || 0}</p>
-                    <p className="text-sm text-accent">$150/month each</p>
+                    <p className="text-sm text-accent dark:text-accent">$150/month each</p>
                   </div>
                 </div>
                 
@@ -303,21 +580,21 @@ export default function SystemAdmin() {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-foreground">{systemStats?.standardSchools || 0}</p>
-                    <p className="text-sm text-accent">$75/month each</p>
+                    <p className="text-sm text-accent dark:text-accent">$75/month each</p>
                   </div>
                 </div>
                 
                 <div className="pt-4 border-t border-border">
                   <div className="flex items-center justify-between">
                     <p className="font-medium text-foreground">Total MRR</p>
-                    <p className="text-xl font-bold text-accent">${(systemStats?.monthlyRevenue || 0).toLocaleString()}</p>
+                    <p className="text-xl font-bold text-accent dark:text-accent">${(systemStats?.monthlyRevenue || 0).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* System Alerts */}
-            <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+            <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-foreground mb-4">System Alerts</h2>
               <div className="space-y-3">
                 <div className="flex items-start space-x-3 p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -347,6 +624,28 @@ export default function SystemAdmin() {
             </div>
           </div>
         </div>
+          </TabsContent>
+
+          <TabsContent value="announcements" className="space-y-8">
+            <AnnouncementManagement userRole="system_admin" />
+          </TabsContent>
+
+          <TabsContent value="feed" className="space-y-8">
+            <div className="bg-card border border-border rounded-xl p-2 sm:p-4 lg:p-6 shadow-sm">
+              <AdminFeed userRole="system_admin" />
+            </div>
+          </TabsContent>
+          </Tabs>
+        </div>
+        
+        {/* Hidden file input for school profile picture uploads */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
     </div>
   );

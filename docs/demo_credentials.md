@@ -49,7 +49,7 @@
 ## Demo Data Includes:
 - **2 Schools**: Lincoln High School (premium), Roosevelt Academy (standard)
 - **10 Posts**: Mix of images and videos with engaging captions
-- **Social Interactions**: 21 likes, 14 comments, 9 saves, 5 follows
+- **Social Interactions**: 8 likes, 14 comments, 7 saves, 2 follows
 - **Realistic Content**: Unsplash images, sample videos, authentic sports content
 
 ## Usage Instructions:
@@ -59,4 +59,4 @@
 4. All passwords use bcrypt hashing for security
 5. Cloudinary integration ready for new uploads
 
-*Generated: 2025-09-11T16:09:20.621Z*
+*Generated: 2025-09-23T06:13:04.237Z*

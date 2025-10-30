@@ -7,51 +7,80 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { login } from "@/lib/auth";
 import { useAuth } from "@/hooks/use-auth";
+import { PasswordResetModal } from "@/components/PasswordResetModal";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const { updateUser } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isPasswordResetModalOpen, setIsPasswordResetModalOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
 
   const demoAccounts = [
-    { role: "System Admin", email: "admin@lockerroom.com", password: "Admin123!" },
-    { role: "School Admin", email: "school@lockerroom.com", password: "School123!" },
-    { role: "Student", email: "student@lockerroom.com", password: "Student123!" },
-    { role: "Public Viewer", email: "viewer@lockerroom.com", password: "Viewer123!" },
+    { role: "System Admin", email: "sysadmin@lockerroom.com", password: "SuperSecure123!" },
+    { role: "Scout Admin", email: "adminscout@xen.com", password: "123933" },
+    { role: "School Admin", email: "godwin@xen-hub.com", password: "Admin123$" },
+    { role: "Student", email: "thiago@gmail.com", password: "admin123" },
+    { role: "Public Viewer", email: "brayamooti@gmail.com", password: "Pkw0epLSFG" },
   ];
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      const user = await login(formData.email, formData.password);
-      updateUser(user);
+      // Force clear any residual auth data before login
+      localStorage.removeItem("auth_user");
+      localStorage.removeItem("token");
+      localStorage.removeItem("schoolId");
+      sessionStorage.clear();
+      
+      const result = await login(formData.email, formData.password);
+      updateUser(result.user);
+      
+      // Check if password reset is required (OTP users)
+      if (result.requiresPasswordReset || result.user.is_one_time_password) {
+        toast({
+          title: "Welcome! Please set your password",
+          description: "You need to create a new password to continue.",
+        });
+        setLocation("/reset-password");
+        return;
+      }
       
       toast({
         title: "Login successful",
-        description: `Welcome back, ${user.name}!`,
+        description: `Welcome back, ${result.user.name}!`,
       });
 
-      // Redirect based on role
-      switch (user.role) {
-        case "system_admin":
-          setLocation("/system-admin");
-          break;
-        case "school_admin":
-          setLocation("/school-admin");
-          break;
-        case "student":
-          setLocation("/feed");
-          break;
-        default:
-          setLocation("/feed");
-      }
+      // Use window.location for hard navigation to clear any cached state
+      const redirectPath = (() => {
+        switch (result.user.role) {
+          case "system_admin":
+            return "/system-admin";
+          case "scout_admin":
+            return "/scouts/admin";
+          case "school_admin":
+            return "/school-admin";
+          case "student":
+            return "/feed";
+          default:
+            return "/feed";
+        }
+      })();
+      
+      // Force hard navigation with cache busting
+      const timestamp = Date.now();
+      setTimeout(() => {
+        window.location.href = redirectPath + '?_=' + timestamp + '&nocache=' + timestamp;
+      }, 100);
     } catch (error) {
       toast({
         title: "Login failed",
@@ -106,16 +135,40 @@ export default function Login() {
                   
                   <div>
                     <Label htmlFor="password" className="text-sm font-medium text-foreground">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="Enter your password"
-                      className="mt-2"
-                      data-testid="input-password"
-                      required
-                    />
+                    <div className="relative mt-2">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        placeholder="Enter your password"
+                        data-testid="input-password"
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => setIsPasswordResetModalOpen(true)}
+                      className="text-sm text-primary hover:underline cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
                   </div>
                   
                   <Button 
@@ -167,6 +220,11 @@ export default function Login() {
           </Card>
         </div>
       </div>
+      
+      <PasswordResetModal 
+        isOpen={isPasswordResetModalOpen}
+        onClose={() => setIsPasswordResetModalOpen(false)}
+      />
     </div>
   );
 }

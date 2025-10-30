@@ -44,15 +44,10 @@ describe('Admin API Tests', () => {
   });
 
   describe('School Admin - Add Student', () => {
-    test('should add student successfully', async () => {
+    test('should add student successfully with minimal fields (name + email)', async () => {
       const studentData = {
-        schoolId: schoolId,
-        name: 'Test Student',
-        email: `test.student.${Date.now()}@student.com`,
-        phone: '555-0123',
-        sport: 'Basketball',
-        position: 'Guard',
-        bio: 'Test student bio'
+        name: 'Test Student Minimal',
+        email: `test.student.minimal.${Date.now()}@student.com`
       };
 
       const response = await request(API_BASE)
@@ -63,21 +58,63 @@ describe('Admin API Tests', () => {
 
       expect(response.body).toHaveProperty('message', 'Student added successfully');
       expect(response.body).toHaveProperty('student');
-      expect(response.body.student).toHaveProperty('oneTimePassword');
+      expect(response.body).toHaveProperty('oneTimePassword');
       expect(response.body.student.email).toBe(studentData.email);
+      expect(response.body.student.name).toBe(studentData.name);
+      expect(response.body.student.phone).toBeNull();
       
       newStudentId = response.body.student.id;
     });
 
-    test('should return 400 for duplicate email', async () => {
+    test('should add student successfully with all optional fields', async () => {
       const studentData = {
-        schoolId: schoolId,
-        name: 'Test Student',
-        email: 'marcus.rodriguez@student.com', // Existing email
+        name: 'Test Student Complete',
+        email: `test.student.complete.${Date.now()}@student.com`,
         phone: '555-0123',
         sport: 'Basketball',
         position: 'Guard',
-        bio: 'Test student bio'
+        bio: 'Test student bio',
+        grade: 'Grade 10',
+        gender: 'male',
+        dateOfBirth: '2005-01-01',
+        guardianContact: 'Parent Name - 555-9999',
+        roleNumber: '7'
+      };
+
+      const response = await request(API_BASE)
+        .post('/api/school-admin/add-student')
+        .set('Authorization', `Bearer ${schoolAdminToken}`)
+        .send(studentData)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('message', 'Student added successfully');
+      expect(response.body).toHaveProperty('student');
+      expect(response.body).toHaveProperty('oneTimePassword');
+      expect(response.body.student.email).toBe(studentData.email);
+      expect(response.body.student.name).toBe(studentData.name);
+      expect(response.body.student.phone).toBe(studentData.phone);
+    });
+
+    test('should return 400 for duplicate email', async () => {
+      const studentData = {
+        name: 'Test Student',
+        email: 'marcus.rodriguez@student.com' // Existing email
+      };
+
+      const response = await request(API_BASE)
+        .post('/api/school-admin/add-student')
+        .set('Authorization', `Bearer ${schoolAdminToken}`)
+        .send(studentData)
+        .expect(409);
+
+      expect(response.body.error.code).toBe('email_taken');
+      expect(response.body.error.message).toBe('Email already registered');
+    });
+
+    test('should return 400 for missing required fields', async () => {
+      const studentData = {
+        email: `test.student.missing.name.${Date.now()}@student.com`
+        // Missing name
       };
 
       const response = await request(API_BASE)
@@ -86,18 +123,14 @@ describe('Admin API Tests', () => {
         .send(studentData)
         .expect(400);
 
-      expect(response.body.message).toBe('Email already registered');
+      expect(response.body.error.code).toBe('validation_error');
+      expect(response.body.error.message).toBe('Name and email are required');
     });
 
     test('should return 403 for non-school-admin users', async () => {
       const studentData = {
-        schoolId: schoolId,
         name: 'Test Student',
-        email: `test.student.${Date.now()}@student.com`,
-        phone: '555-0123',
-        sport: 'Basketball',
-        position: 'Guard',
-        bio: 'Test student bio'
+        email: `test.student.unauthorized.${Date.now()}@student.com`
       };
 
       const response = await request(API_BASE)

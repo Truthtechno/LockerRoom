@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -44,14 +45,16 @@ export default function SearchPage() {
       if (!response.ok) throw new Error('Search failed');
       return response.json();
     },
+    staleTime: 30_000, // Cache search results for 30 seconds
+    retry: 2,
   });
 
   const followMutation = useMutation({
-    mutationFn: async ({ studentId, action }: { studentId: string; action: 'follow' | 'unfollow' }) => {
+    mutationFn: async ({ userId, action }: { userId: string; action: 'follow' | 'unfollow' }) => {
       if (action === 'follow') {
-        return apiRequest("POST", `/api/students/${studentId}/follow`, { userId: user?.id });
+        return apiRequest("POST", `/api/users/${userId}/follow`);
       } else {
-        return apiRequest("DELETE", `/api/students/${studentId}/follow`, { userId: user?.id });
+        return apiRequest("DELETE", `/api/users/${userId}/follow`);
       }
     },
     onSuccess: (_, variables) => {
@@ -74,7 +77,7 @@ export default function SearchPage() {
     },
   });
 
-  const handleFollow = (studentId: string, isCurrentlyFollowing: boolean) => {
+  const handleFollow = (userId: string, isCurrentlyFollowing: boolean) => {
     if (!user) {
       toast({
         title: "Login Required",
@@ -85,7 +88,7 @@ export default function SearchPage() {
     }
 
     followMutation.mutate({
-      studentId,
+      userId,
       action: isCurrentlyFollowing ? 'unfollow' : 'follow'
     });
   };
@@ -95,7 +98,7 @@ export default function SearchPage() {
       <Sidebar />
       
       {/* Main Content */}
-      <div className="lg:pl-64 flex flex-col flex-1">
+      <div className="lg:pl-64 flex flex-col flex-1 pb-24 lg:pb-0">
         {/* Mobile Header */}
         <div className="lg:hidden bg-card border-b border-border px-4 py-4">
           <div className="flex items-center">
@@ -107,7 +110,7 @@ export default function SearchPage() {
         </div>
 
         {/* Search Content */}
-        <main className="flex-1 pb-20 lg:pb-0">
+        <main className="flex-1">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Search Header */}
             <div className="mb-8">
@@ -175,15 +178,11 @@ export default function SearchPage() {
                             {/* Profile Picture and Basic Info */}
                             <div className="flex items-start justify-between mb-4">
                               <div className="flex items-center space-x-3">
-                                <Avatar className="w-12 h-12">
-                                  <AvatarImage 
-                                    src={student.profilePicUrl || student.profilePic || ""} 
-                                    alt={student.user.name} 
-                                  />
-                                  <AvatarFallback className="bg-accent/20 text-accent font-semibold">
-                                    {student.user.name?.slice(0, 2).toUpperCase() || "S"}
-                                  </AvatarFallback>
-                                </Avatar>
+                                <AvatarWithFallback 
+                                  src={student.profilePicUrl || student.profilePic}
+                                  alt={student.user.name}
+                                  size="lg"
+                                />
                                 <div>
                                   <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{student.user.name}</h3>
                                   <div className="flex items-center text-sm text-muted-foreground">
@@ -224,7 +223,7 @@ export default function SearchPage() {
                             <Button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleFollow(student.id, student.isFollowing || false);
+                                handleFollow(student.userId, student.isFollowing || false);
                               }}
                               disabled={followMutation.isPending}
                               variant={student.isFollowing ? "outline" : "default"}

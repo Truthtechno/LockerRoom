@@ -1,0 +1,1 @@
+ALTER TABLE "students" ADD COLUMN "user_id" varchar NOT NULL;

@@ -230,4 +230,111 @@ describe('Posts API Tests', () => {
       expect(response.body.message).toBe('Access denied');
     });
   });
+
+  describe('POST /api/upload/retry/:postId', () => {
+    test('should return 401 without authentication', async () => {
+      const response = await request(API_BASE)
+        .post(`/api/upload/retry/${testPostId}`)
+        .expect(401);
+
+      expect(response.body.message).toBe('Authentication required');
+    });
+
+    test('should return 404 for non-existent post', async () => {
+      const response = await request(API_BASE)
+        .post('/api/upload/retry/non-existent-post-id')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .expect(404);
+
+      expect(response.body.error).toBe('Post not found');
+    });
+
+    test('should return 403 for unauthorized retry', async () => {
+      // Create a post as student, then try to retry as viewer
+      const postData = {
+        caption: 'Test post for retry test'
+      };
+
+      const createResponse = await request(API_BASE)
+        .post('/api/posts/create')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send(postData)
+        .expect(200);
+
+      const response = await request(API_BASE)
+        .post(`/api/upload/retry/${createResponse.body.id}`)
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .expect(403);
+
+      expect(response.body.error).toBe('Unauthorized to retry this post');
+    });
+  });
+
+  describe('DELETE /api/posts/:postId', () => {
+    test('should delete post successfully', async () => {
+      // Create a post first
+      const postData = {
+        caption: 'Test post for deletion'
+      };
+
+      const createResponse = await request(API_BASE)
+        .post('/api/posts/create')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send(postData)
+        .expect(200);
+
+      const postId = createResponse.body.id;
+
+      // Delete the post
+      const response = await request(API_BASE)
+        .delete(`/api/posts/${postId}`)
+        .set('Authorization', `Bearer ${studentToken}`)
+        .expect(200);
+
+      expect(response.body.message).toBe('Post deleted successfully');
+
+      // Verify post is deleted by trying to get it
+      const getResponse = await request(API_BASE)
+        .get(`/api/posts/${postId}`)
+        .set('Authorization', `Bearer ${studentToken}`)
+        .expect(404);
+    });
+
+    test('should return 401 without authentication', async () => {
+      const response = await request(API_BASE)
+        .delete(`/api/posts/${testPostId}`)
+        .expect(401);
+
+      expect(response.body.message).toBe('Authentication required');
+    });
+
+    test('should return 403 for unauthorized deletion', async () => {
+      // Create a post as student, then try to delete as viewer
+      const postData = {
+        caption: 'Test post for unauthorized deletion'
+      };
+
+      const createResponse = await request(API_BASE)
+        .post('/api/posts/create')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .send(postData)
+        .expect(200);
+
+      const response = await request(API_BASE)
+        .delete(`/api/posts/${createResponse.body.id}`)
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .expect(403);
+
+      expect(response.body.message).toBe('You can only delete your own posts');
+    });
+
+    test('should return 404 for non-existent post', async () => {
+      const response = await request(API_BASE)
+        .delete('/api/posts/non-existent-post-id')
+        .set('Authorization', `Bearer ${studentToken}`)
+        .expect(404);
+
+      expect(response.body.message).toBe('Post not found');
+    });
+  });
 });

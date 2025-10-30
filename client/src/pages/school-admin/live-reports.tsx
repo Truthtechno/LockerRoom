@@ -6,6 +6,9 @@ import { ArrowLeft, TrendingUp, Users, Award, Activity, GraduationCap } from "lu
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import Sidebar from "@/components/navigation/sidebar";
+import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 
 type SchoolAnalytics = {
   totalStudents: number;
@@ -91,36 +94,56 @@ export default function LiveReports() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLocation("/school-admin")}
-                className="mr-4"
-                data-testid="back-to-admin"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Admin
-              </Button>
+      <Sidebar />
+      <MobileNav />
+      
+      <div className="lg:pl-64 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+          {/* Mobile Back Button and Title */}
+          <div className="bg-card border-b border-border px-4 py-4 space-y-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocation("/school-admin")}
+              className="w-full justify-start -ml-2"
+              data-testid="back-to-admin"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Admin
+            </Button>
+            <div className="space-y-3">
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Live Reports & Analytics</h1>
                 <p className="text-sm text-muted-foreground">Real-time insights into student performance and engagement</p>
               </div>
-            </div>
-            
-            <div className="flex items-center space-x-2 bg-muted px-3 py-2 rounded-lg">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-foreground">Live Data</span>
+              <div className="flex items-center space-x-2 bg-muted px-3 py-2 rounded-lg self-start">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-foreground">Live Data</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+        
+        {/* Desktop Header */}
+        <div className="hidden lg:block bg-card border-b border-border">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div>
+                <h1 className="text-xl font-semibold text-foreground">Live Reports & Analytics</h1>
+                <p className="text-sm text-muted-foreground">Real-time insights into student performance and engagement</p>
+              </div>
+              
+              <div className="flex items-center space-x-2 bg-muted px-3 py-2 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-foreground">Live Data</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Overview Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card data-testid="stat-total-students">
@@ -341,6 +364,7 @@ export default function LiveReports() {
             </div>
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   );
