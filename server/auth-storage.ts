@@ -173,8 +173,60 @@ export class AuthStorage {
     };
     
     // Get role-specific profile
-    const profile = await this.getUserProfile(user.id);
-    if (!profile) {
+    let profile = await this.getUserProfile(user.id);
+    
+    // Check if linkedId is valid - if not, try to fix it
+    const rolesRequiringLinkedId = ['student', 'school_admin', 'system_admin', 'viewer', 'public_viewer'];
+    if (rolesRequiringLinkedId.includes(user.role) && !profile) {
+      console.log('🔐 Profile not found for user:', user.id, 'role:', user.role, 'linkedId:', user.linkedId);
+      console.log('🔐 Attempting to fix broken linkedId reference...');
+      
+      // Try to fix the linkedId
+      const fixed = await this.fixLinkedId(user.id);
+      if (fixed) {
+        console.log('🔐 Successfully fixed linkedId for user:', user.id);
+        // Re-fetch user and profile after fix
+        const [updatedUser] = await db.select().from(users).where(eq(users.id, user.id));
+        if (updatedUser) {
+          userWithSchoolId.schoolId = user.role === 'school_admin' ? user.schoolIdFromProfile : updatedUser.schoolId;
+          userWithSchoolId.linkedId = updatedUser.linkedId;
+          profile = await this.getUserProfile(user.id);
+        }
+      }
+      
+      // If still no profile after fix attempt, handle it
+      if (!profile) {
+        console.log('🔐 Failed to fix linkedId for user:', user.id, 'allowing login with minimal profile');
+        
+        // For students, we need schoolId - if missing, we can't proceed
+        if (user.role === 'student' && !user.schoolId && !finalSchoolId) {
+          console.log('🔐 Student login failed: missing schoolId and cannot create profile');
+          return null;
+        }
+        
+        // Create a minimal profile object for users without profiles
+        const minimalProfile: UserProfile = {
+          id: user.id,
+          name: user.name || 'User',
+          email: user.email,
+          role: user.role,
+          schoolId: finalSchoolId,
+          profilePicUrl: null,
+          bio: null,
+          phone: null
+        };
+        
+        // Get updated user with potentially fixed linkedId
+        const [updatedUser] = await db.select().from(users).where(eq(users.id, user.id));
+        if (updatedUser) {
+          userWithSchoolId.linkedId = updatedUser.linkedId || user.linkedId;
+        }
+        
+        return { user: userWithSchoolId, profile: minimalProfile };
+      }
+    }
+    // Handle case where profile is still not found after fix attempt (for roles not requiring linkedId)
+    if (!profile && !rolesRequiringLinkedId.includes(user.role)) {
       console.log('🔐 Profile not found for user:', user.id, 'role:', user.role, 'linkedId:', user.linkedId);
       console.log('🔐 Allowing login without profile - user will need to complete profile setup');
       
@@ -239,8 +291,60 @@ export class AuthStorage {
       };
       
       // Get role-specific profile
-      const profile = await this.getUserProfile(user.id);
-      if (!profile) {
+      let profile = await this.getUserProfile(user.id);
+      
+      // Check if linkedId is valid - if not, try to fix it
+      const rolesRequiringLinkedId = ['student', 'school_admin', 'system_admin', 'viewer', 'public_viewer'];
+      if (rolesRequiringLinkedId.includes(user.role) && !profile) {
+        console.log('🔐 OTP verification: Profile not found for user:', user.id, 'role:', user.role, 'linkedId:', user.linkedId);
+        console.log('🔐 Attempting to fix broken linkedId reference...');
+        
+        // Try to fix the linkedId
+        const fixed = await this.fixLinkedId(user.id);
+        if (fixed) {
+          console.log('🔐 Successfully fixed linkedId for user:', user.id);
+          // Re-fetch user and profile after fix
+          const [updatedUser] = await db.select().from(users).where(eq(users.id, user.id));
+          if (updatedUser) {
+            userWithSchoolId.schoolId = user.role === 'school_admin' ? user.schoolIdFromProfile : updatedUser.schoolId;
+            userWithSchoolId.linkedId = updatedUser.linkedId;
+            profile = await this.getUserProfile(user.id);
+          }
+        }
+        
+        // If still no profile after fix attempt, handle it
+        if (!profile) {
+          console.log('🔐 Failed to fix linkedId for user:', user.id, 'allowing OTP login with minimal profile');
+          
+          // For students, we need schoolId - if missing, we can't proceed
+          if (user.role === 'student' && !user.schoolId && !finalSchoolId) {
+            console.log('🔐 Student OTP login failed: missing schoolId and cannot create profile');
+            return null;
+          }
+          
+          // Create a minimal profile object for users without profiles
+          const minimalProfile: UserProfile = {
+            id: user.id,
+            name: user.name || 'User',
+            email: user.email,
+            role: user.role,
+            schoolId: finalSchoolId,
+            profilePicUrl: null,
+            bio: null,
+            phone: null
+          };
+          
+          // Get updated user with potentially fixed linkedId
+          const [updatedUser] = await db.select().from(users).where(eq(users.id, user.id));
+          if (updatedUser) {
+            userWithSchoolId.linkedId = updatedUser.linkedId || user.linkedId;
+          }
+          
+          return { user: userWithSchoolId, profile: minimalProfile, requiresPasswordReset: user.isOneTimePassword || false };
+        }
+      }
+      // Handle case where profile is still not found after fix attempt (for roles not requiring linkedId)
+      if (!profile && !rolesRequiringLinkedId.includes(user.role)) {
         console.log('🔐 OTP verification: Profile not found for user:', user.id, 'role:', user.role, 'linkedId:', user.linkedId);
         console.log('🔐 Allowing OTP login without profile - user will need to complete profile setup');
         

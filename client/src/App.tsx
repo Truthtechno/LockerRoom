@@ -20,6 +20,7 @@ import StudentStats from "./pages/stats";
 import StudentSettings from "./pages/settings";
 import Saved from "./pages/saved";
 import Following from "./pages/following";
+import Notifications from "./pages/notifications";
 import SchoolAdmin from "./pages/school-admin";
 import SystemAdmin from "./pages/system-admin";
 import CreateSchool from "./pages/system-admin/create-school";
@@ -145,6 +146,12 @@ function Router() {
       <Route path="/following">
         <ProtectedRoute>
           <Following />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/notifications">
+        <ProtectedRoute>
+          <Notifications />
         </ProtectedRoute>
       </Route>
       

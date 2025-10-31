@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users, Eye, Bot, Menu, X, LayoutDashboard, TrendingUp, UserPlus, Building2, Shield, Megaphone } from "lucide-react";
+import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users, Eye, Bot, Menu, X, LayoutDashboard, TrendingUp, UserPlus, Building2, Shield, Megaphone, Bell } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { logout } from "@/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -62,6 +62,8 @@ export default function MobileNav() {
   const getDrawerItems = () => {
     if (user?.role === "student") {
       return [
+        { name: "Following", href: "/following", icon: Users },
+        { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Stats", href: "/stats", icon: BarChart3 },
         { name: "XEN Watch", href: "/xen-watch", icon: Eye },
         { name: "ScoutAI", href: "/scoutai", icon: Bot },
@@ -71,6 +73,7 @@ export default function MobileNav() {
       return [
         { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
+        { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "XEN Watch", href: "/xen-watch", icon: Eye },
         { name: "ScoutAI", href: "/scoutai", icon: Bot },
         { name: "Settings", href: "/settings", icon: Settings },
@@ -79,6 +82,8 @@ export default function MobileNav() {
       return [
         { name: "Feed", href: "/school-admin/feed", icon: Home },
         { name: "Dashboard", href: "/school-admin", icon: LayoutDashboard },
+        { name: "Following", href: "/following", icon: Users },
+        { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Announcements", href: "/school-admin/announcements", icon: Megaphone },
         { name: "Add Student", href: "/school-admin/add-student", icon: UserPlus },
         { name: "Live Reports", href: "/school-admin/live-reports", icon: BarChart3 },
@@ -89,6 +94,8 @@ export default function MobileNav() {
     } else if (user?.role === "system_admin") {
       return [
         { name: "Feed", href: "/system-admin/feed", icon: Home },
+        { name: "Following", href: "/following", icon: Users },
+        { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone },
         { name: "Create School", href: "/system-admin/create-school", icon: Building2 },
         { name: "Create Admin", href: "/system-admin/create-school-admin", icon: UserPlus },
@@ -99,6 +106,8 @@ export default function MobileNav() {
       ];
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
       const scoutNav = [
+        { name: "Following", href: "/following", icon: Users },
+        { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye },
       ];
       

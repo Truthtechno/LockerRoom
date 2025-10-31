@@ -19,6 +19,27 @@ import { Loader2 } from "lucide-react";
 import type { StudentWithStats, PostWithDetails, PostCommentWithUser } from "@shared/schema";
 import { ProfileByIdSkeleton } from "@/components/ui/profile-skeleton";
 
+// Type for following list (matches FollowingStudent from following.tsx)
+interface FollowingStudent {
+  id: string;
+  userId: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  sport: string;
+  roleNumber: string;
+  position: string;
+  profilePicUrl?: string;
+  profilePic?: string;
+  school?: {
+    id: string;
+    name: string;
+  };
+  followersCount: number;
+}
+
 export default function ProfileById() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -302,7 +323,7 @@ export default function ProfileById() {
     },
   });
 
-  // Follow/Unfollow mutation
+  // Follow/Unfollow mutation with optimistic updates for instant UI feedback
   const followMutation = useMutation({
     mutationFn: async () => {
       // Get the latest profile data from the cache to avoid stale closures
@@ -320,20 +341,81 @@ export default function ProfileById() {
       
       return response.json();
     },
+    onMutate: async () => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["/api/students", id] });
+      await queryClient.cancelQueries({ queryKey: ["/api/users", user?.id, "following"] });
+      
+      // Snapshot the previous value for rollback
+      const previousProfile = queryClient.getQueryData<StudentWithStats & { isFollowing: boolean }>(["/api/students", id]);
+      const previousFollowingList = queryClient.getQueryData<FollowingStudent[]>(["/api/users", user?.id, "following"]);
+      
+      // Optimistically update the profile button immediately
+      if (previousProfile) {
+        const newFollowingStatus = !previousProfile.isFollowing;
+        queryClient.setQueryData(["/api/students", id], {
+          ...previousProfile,
+          isFollowing: newFollowingStatus,
+          followersCount: newFollowingStatus 
+            ? (previousProfile.followersCount || 0) + 1 
+            : Math.max(0, (previousProfile.followersCount || 1) - 1)
+        });
+        
+        // Optimistically update following list
+        if (previousProfile && user) {
+          const followingList = previousFollowingList || [];
+          
+          if (newFollowingStatus) {
+            // Following: add to list if not already there
+            const isAlreadyInList = followingList.some(s => s.id === previousProfile.id);
+            if (!isAlreadyInList) {
+              queryClient.setQueryData<FollowingStudent[]>(["/api/users", user.id, "following"], [
+                ...followingList,
+                {
+                  id: previousProfile.id,
+                  userId: previousProfile.userId,
+                  user: {
+                    id: previousProfile.userId,
+                    name: previousProfile.name,
+                    email: '',
+                  },
+                  sport: previousProfile.sport || '',
+                  roleNumber: previousProfile.roleNumber || '',
+                  position: previousProfile.position || '',
+                  profilePicUrl: previousProfile.profilePicUrl,
+                  profilePic: previousProfile.profilePic,
+                  school: previousProfile.school,
+                  followersCount: previousProfile.followersCount || 0,
+                }
+              ]);
+            }
+          } else {
+            // Unfollowing: remove from list
+            queryClient.setQueryData<FollowingStudent[]>(["/api/users", user.id, "following"], 
+              followingList.filter(s => s.id !== previousProfile.id)
+            );
+          }
+        }
+      }
+      
+      // Return context for rollback
+      return { previousProfile, previousFollowingList };
+    },
     onSuccess: (data) => {
-      // Update the profile in the cache with server response
+      // Update with server response (more accurate than optimistic update)
       queryClient.setQueryData(["/api/students", id], (oldData: any) => {
         if (!oldData) return oldData;
-        const updatedData = {
+        return {
           ...oldData,
           isFollowing: data.isFollowing,
           followersCount: data.followersCount !== undefined ? data.followersCount : oldData.followersCount
         };
-        return updatedData;
       });
       
-      // Invalidate related queries to ensure consistency across the app
+      // Invalidate and refetch related queries to ensure consistency across the app
       queryClient.invalidateQueries({ queryKey: ["/api/users", user?.id, "following"] });
+      // Trigger a refetch to immediately update the following page if it's currently viewed
+      queryClient.refetchQueries({ queryKey: ["/api/users", user?.id, "following"] });
       
       // Get updated profile name for toast
       const updatedProfile = queryClient.getQueryData<StudentWithStats & { isFollowing: boolean }>(["/api/students", id]);
@@ -344,7 +426,20 @@ export default function ProfileById() {
         description: `You are ${data.isFollowing ? 'now following' : 'no longer following'} ${profileName}`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
+      // Rollback optimistic updates on error
+      if (context?.previousProfile) {
+        queryClient.setQueryData(["/api/students", id], context.previousProfile);
+      }
+      if (context?.previousFollowingList !== undefined) {
+        queryClient.setQueryData(["/api/users", user?.id, "following"], context.previousFollowingList);
+      }
+      
+      // If the error is "already following", refetch the profile to update the UI
+      if (error?.message?.includes("already following") || error?.message?.includes("Already following")) {
+        queryClient.invalidateQueries({ queryKey: ["/api/students", id] });
+      }
+      
       toast({
         title: "Error",
         description: error?.message || "Failed to update follow status. Please try again.",

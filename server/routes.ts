@@ -26,6 +26,7 @@ import {
   insertStudentSchema,
   insertStudentRatingSchema,
   insertSchoolSettingSchema,
+  insertNotificationSchema,
   users,
   students,
   schoolAdmins,
@@ -388,13 +389,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (otpResult) {
         const { user, profile, requiresPasswordReset } = otpResult;
 
+        // Validate linkedId is present for roles that require it
+        const rolesRequiringLinkedId = ['student', 'school_admin', 'system_admin', 'viewer', 'public_viewer'];
+        if (rolesRequiringLinkedId.includes(user.role) && !user.linkedId) {
+          console.error('🔐 OTP Login failed: Missing linkedId for user:', user.id, 'role:', user.role);
+          return res.status(500).json({ 
+            error: { 
+              code: "missing_linkedId", 
+              message: "User profile link is missing. Please contact support." 
+            } 
+          });
+        }
+
         // Generate JWT token with required fields
         const tokenPayload: any = {
           id: user.id,
           email: user.email,
           role: user.role,
           schoolId: user.schoolId || null,
-          linkedId: user.linkedId // Include linkedId from database
+          linkedId: user.linkedId || null // Include linkedId from database
         };
 
         const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
@@ -437,13 +450,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { user, profile } = result;
       
+      // Validate linkedId is present for roles that require it
+      const rolesRequiringLinkedId = ['student', 'school_admin', 'system_admin', 'viewer', 'public_viewer'];
+      if (rolesRequiringLinkedId.includes(user.role) && !user.linkedId) {
+        console.error('🔐 Login failed: Missing linkedId for user:', user.id, 'role:', user.role);
+        return res.status(500).json({ 
+          error: { 
+            code: "missing_linkedId", 
+            message: "User profile link is missing. Please contact support." 
+          } 
+        });
+      }
+      
       // Generate JWT token with required fields
       const tokenPayload: any = { 
         id: user.id, 
         email: user.email, 
         role: user.role, 
         schoolId: user.schoolId || null,
-        linkedId: user.linkedId // Include linkedId from database
+        linkedId: user.linkedId || null // Include linkedId from database
       };
       
       const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
@@ -2882,6 +2907,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const post = await storage.createPost(postData);
       console.log('Post created successfully:', post.id);
       
+      // Create notifications for users who follow this student
+      try {
+        if (post && post.studentId) {
+          const student = await storage.getStudent(post.studentId);
+          if (student) {
+            // Get all users who follow this student
+            const followers = await storage.getStudentFollowers(post.studentId);
+            
+            // Create notifications for each follower
+            for (const follower of followers) {
+              try {
+                // follower should have an id field from UserProfile
+                const followerUserId = (follower as any).id || follower.id;
+                await storage.createNotification({
+                  userId: followerUserId,
+                  type: 'following_posted',
+                  title: 'New Post',
+                  message: `${student.name} posted something new`,
+                  entityType: 'post',
+                  entityId: post.id,
+                  relatedUserId: student.userId,
+                });
+              } catch (e) {
+                console.error(`Error creating notification for follower ${follower.id}:`, e);
+              }
+            }
+          }
+        }
+      } catch (notifError) {
+        console.error('Error creating post notifications:', notifError);
+        // Don't fail the post creation if notification creation fails
+      }
+      
       // Return the full post with details
       const postWithDetails = await storage.getPost(post.id);
       res.json({ id: post.id, ...postWithDetails });
@@ -2898,6 +2956,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req as any).auth.id; // Use authenticated user ID
       
       const like = await storage.likePost({ postId, userId });
+      
+      // Create notification for post owner when someone likes their post
+      try {
+        const post = await storage.getPost(postId);
+        if (post && post.studentId) {
+          const student = await storage.getStudent(post.studentId);
+          if (student && student.userId !== userId) { // Don't notify if user liked their own post
+            const likerUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+            if (likerUser[0]) {
+              await storage.createNotification({
+                userId: student.userId,
+                type: 'post_like',
+                title: 'New Like',
+                message: `${likerUser[0].name || 'Someone'} liked your post`,
+                entityType: 'post',
+                entityId: postId,
+                relatedUserId: userId,
+              });
+            }
+          }
+        }
+      } catch (notifError) {
+        console.error('Error creating like notification:', notifError);
+        // Don't fail the like request if notification creation fails
+      }
       
       // Get updated post with counts
       const updatedPost = await storage.getPostWithUserContext(postId, userId);
@@ -2953,6 +3036,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const commentData = insertPostCommentSchema.parse({ ...req.body, postId, userId: (req as any).auth.id });
       
       const comment = await storage.commentOnPost(commentData);
+      
+      // Create notification for post owner when someone comments on their post
+      try {
+        const post = await storage.getPost(postId);
+        if (post && post.studentId) {
+          const student = await storage.getStudent(post.studentId);
+          if (student && student.userId !== (req as any).auth.id) { // Don't notify if user commented on their own post
+            const commenterUser = await db.select().from(users).where(eq(users.id, (req as any).auth.id)).limit(1);
+            if (commenterUser[0]) {
+              const commentText = commentData.content.length > 50 
+                ? commentData.content.substring(0, 50) + '...' 
+                : commentData.content;
+              await storage.createNotification({
+                userId: student.userId,
+                type: 'post_comment',
+                title: 'New Comment',
+                message: `${commenterUser[0].name || 'Someone'} commented: "${commentText}"`,
+                entityType: 'post',
+                entityId: postId,
+                relatedUserId: (req as any).auth.id,
+              });
+            }
+          }
+        }
+      } catch (notifError) {
+        console.error('Error creating comment notification:', notifError);
+        // Don't fail the comment request if notification creation fails
+      }
       
       // Get updated post with counts
       const updatedPost = await storage.getPostWithUserContext(postId, (req as any).auth.id);
@@ -3545,7 +3656,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Insert into studentFollowers table (source of truth for following)
       await storage.followStudent({ followerUserId: userId, studentId });
+      
+      // Also add to userFollows for consistency
+      try {
+        await storage.followUser(userId, student.userId);
+      } catch (e) {
+        // Ignore if already exists
+      }
+      
+      // Create notification for the student being followed
+      try {
+        const followerUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        if (followerUser[0]) {
+          console.log(`🔔 Creating follow notification: ${followerUser[0].name} followed student ${student.name}`);
+          await storage.createNotification({
+            userId: student.userId, // The student being followed receives the notification
+            type: 'new_follower',
+            title: 'New Follower',
+            message: `${followerUser[0].name || 'Someone'} started following you`,
+            entityType: 'user',
+            entityId: student.userId,
+            relatedUserId: userId, // The person who followed
+          });
+          console.log(`✅ Follow notification created successfully`);
+        }
+      } catch (notifError: any) {
+        console.error('❌ Error creating follow notification:', notifError);
+        if (notifError?.message?.includes('does not exist') || notifError?.message?.includes('relation "notifications"')) {
+          console.error('⚠️ Notifications table does not exist! Please run the migration: migrations/2025-01-31_notifications_system.sql');
+        }
+        // Don't fail the follow request if notification creation fails
+      }
       
       // Get updated followers count
       const followersCount = await storage.getStudentFollowers(studentId).then(followers => followers.length);
@@ -3581,7 +3724,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get the student's user ID
+      // Get the student record to find the user ID
       const student = await storage.getStudent(studentId);
       if (!student) {
         return res.status(404).json({ 
@@ -3592,7 +3735,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      await storage.unfollowStudent(userId, studentId);
+      const studentUserId = student.userId;
+
+      // Unfollow from both tables to ensure consistency
+      // 1. Try unfollowing from studentFollowers table
+      try {
+        await storage.unfollowStudent(userId, studentId);
+      } catch (e) {
+        // Ignore if not found in studentFollowers
+      }
+
+      // 2. Also unfollow from userFollows table (which is what getFollowing uses)
+      try {
+        await storage.unfollowUser(userId, studentUserId);
+      } catch (e) {
+        // Ignore if not found in userFollows
+      }
       
       // Get updated followers count
       const followersCount = await storage.getStudentFollowers(studentId).then(followers => followers.length);
@@ -3627,10 +3785,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/users/:userId/following", async (req, res) => {
     try {
       const { userId } = req.params;
-      const following = await storage.getFollowing(userId);
-      res.json(following);
+      
+      if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+      
+      console.log('📋 Fetching following list for user:', userId);
+      const followingStudents = await storage.getFollowing(userId);
+      console.log('📋 Found', followingStudents.length, 'students being followed');
+      
+      // Return empty array if no students are being followed
+      if (!followingStudents || followingStudents.length === 0) {
+        return res.json([]);
+      }
+      
+      // Enrich the data with user info, school info, and followers count
+      const enrichedFollowing = await Promise.all(
+        followingStudents.map(async (student) => {
+          try {
+            // Get user info
+            const studentUser = await db.select().from(users).where(eq(users.id, student.userId)).limit(1);
+            const user = studentUser[0] || null;
+            
+            // Get school info
+            let school = null;
+            if (student.schoolId) {
+              const schoolData = await db.select().from(schools).where(eq(schools.id, student.schoolId)).limit(1);
+              school = schoolData[0] ? { id: schoolData[0].id, name: schoolData[0].name } : null;
+            }
+            
+            // Get followers count
+            const followersResult = await db
+              .select({ count: sql<number>`COUNT(*)` })
+              .from(studentFollowers)
+              .where(eq(studentFollowers.studentId, student.id));
+            const followersCount = Number(followersResult[0]?.count || 0);
+            
+            return {
+              id: student.id,
+              userId: student.userId,
+              name: student.name,
+              sport: student.sport || '',
+              roleNumber: student.roleNumber || '',
+              position: student.position || '',
+              profilePicUrl: student.profilePicUrl,
+              profilePic: student.profilePic,
+              user: user ? {
+                id: user.id,
+                name: user.name || student.name,
+                email: user.email,
+              } : {
+                id: student.userId,
+                name: student.name,
+                email: '',
+              },
+              school: school,
+              followersCount: followersCount,
+            };
+          } catch (studentError) {
+            console.error('Error enriching student data:', studentError);
+            // Return basic student data even if enrichment fails
+            return {
+              id: student.id,
+              userId: student.userId,
+              name: student.name,
+              sport: student.sport || '',
+              roleNumber: student.roleNumber || '',
+              position: student.position || '',
+              profilePicUrl: student.profilePicUrl,
+              profilePic: student.profilePic,
+              user: {
+                id: student.userId,
+                name: student.name,
+                email: '',
+              },
+              school: null,
+              followersCount: 0,
+            };
+          }
+        })
+      );
+      
+      console.log('✅ Returning', enrichedFollowing.length, 'enriched following students');
+      res.json(enrichedFollowing);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch following" });
+      console.error('❌ Error fetching following:', error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch following";
+      res.status(500).json({ 
+        message: errorMessage,
+        error: process.env.NODE_ENV === 'development' ? String(error) : undefined
+      });
     }
   });
 
@@ -3663,6 +3907,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(isFollowing);
     } catch (error) {
       res.status(500).json({ message: "Failed to check follow status" });
+    }
+  });
+
+  // Notification routes
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).auth.id;
+      const { limit, offset, unreadOnly } = req.query;
+      
+      const options = {
+        limit: limit ? parseInt(limit as string) : undefined,
+        offset: offset ? parseInt(offset as string) : undefined,
+        unreadOnly: unreadOnly === 'true',
+      };
+      
+      console.log(`📬 Fetching notifications for user ${userId}`, options);
+      const notifications = await storage.getNotifications(userId, options);
+      console.log(`✅ Found ${notifications.length} notifications`);
+      res.json(notifications);
+    } catch (error: any) {
+      console.error('❌ Notifications fetch error:', error);
+      // If it's a table doesn't exist error, provide helpful message
+      if (error?.message?.includes('does not exist') || error?.message?.includes('relation "notifications"')) {
+        return res.status(500).json({ 
+          error: { 
+            code: "notifications_table_missing", 
+            message: "Notifications table not found. Please run the database migration: migrations/2025-01-31_notifications_system.sql"
+          } 
+        });
+      }
+      res.status(500).json({ 
+        error: { 
+          code: "notifications_fetch_failed", 
+          message: error?.message || "Failed to fetch notifications" 
+        } 
+      });
+    }
+  });
+
+  app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).auth.id;
+      const count = await storage.getUnreadNotificationCount(userId);
+      res.json({ count });
+    } catch (error) {
+      console.error('Unread count error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "unread_count_failed", 
+          message: "Failed to get unread count" 
+        } 
+      });
+    }
+  });
+
+  app.put("/api/notifications/:notificationId/read", requireAuth, async (req, res) => {
+    try {
+      const { notificationId } = req.params;
+      const userId = (req as any).auth.id;
+      
+      await storage.markNotificationAsRead(notificationId, userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Mark as read error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "mark_read_failed", 
+          message: "Failed to mark notification as read" 
+        } 
+      });
+    }
+  });
+
+  app.put("/api/notifications/read-all", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).auth.id;
+      
+      await storage.markAllNotificationsAsRead(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Mark all as read error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "mark_all_read_failed", 
+          message: "Failed to mark all notifications as read" 
+        } 
+      });
     }
   });
 

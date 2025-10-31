@@ -34,14 +34,25 @@ export default function Following() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const { data: followingStudents, isLoading, error } = useQuery<FollowingStudent[]>({
+  const { data: followingStudents, isLoading, error, refetch } = useQuery<FollowingStudent[]>({
     queryKey: ["/api/users", user?.id, "following"],
     queryFn: async () => {
       if (!user) return [];
       const response = await apiRequest("GET", `/api/users/${user.id}/following`);
-      return response.json();
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: "Failed to fetch following list" }));
+        const error = new Error(errorData.message || "Failed to fetch following list");
+        console.error('❌ Following page fetch error:', errorData);
+        throw error;
+      }
+      const data = await response.json();
+      console.log('✅ Following page loaded:', Array.isArray(data) ? data.length : 0, 'students');
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!user,
+    retry: 2,
+    staleTime: 0, // Always refetch to get latest data
+    refetchOnWindowFocus: true,
   });
 
   const unfollowMutation = useMutation({
@@ -50,11 +61,22 @@ export default function Following() {
       return response.json();
     },
     onSuccess: (data, studentId) => {
+      // Optimistically remove from list immediately
+      queryClient.setQueryData<FollowingStudent[]>(["/api/users", user?.id, "following"], (oldData) => {
+        if (!oldData) return [];
+        return oldData.filter(s => s.id !== studentId);
+      });
+      
+      // Also invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: ["/api/users", user?.id, "following"] });
+      
+      // Invalidate profile queries to update follow buttons elsewhere
+      queryClient.invalidateQueries({ queryKey: ["/api/students"] });
+      
       const student = followingStudents?.find(s => s.id === studentId);
       toast({
         title: "Unfollowed",
-        description: `You are no longer following ${student?.user.name}`,
+        description: `You are no longer following ${student?.user?.name || student?.name || 'this student'}`,
       });
     },
     onError: (error: any) => {
@@ -77,15 +99,15 @@ export default function Following() {
       {/* Main Content */}
       <div className="lg:pl-64 flex flex-col flex-1 pb-24 lg:pb-0">
         {/* Header */}
-        <div className="bg-card border-b border-border px-4 py-6 lg:px-8">
-          <div className="max-w-2xl mx-auto">
+        <div className="bg-card border-b border-border px-4 sm:px-6 lg:px-8 py-6">
+          <div className="max-w-7xl mx-auto">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center">
                 <Users className="w-6 h-6 text-accent" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Following</h1>
-                <p className="text-muted-foreground">Student athletes you're following</p>
+                <p className="text-muted-foreground">Students you're following</p>
               </div>
             </div>
           </div>
@@ -93,7 +115,7 @@ export default function Following() {
 
         {/* Content */}
         <main className="flex-1 pb-20 lg:pb-0">
-          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -117,37 +139,41 @@ export default function Following() {
                 <p className="text-sm text-muted-foreground mb-6">
                   Following {followingStudents.length} student athlete{followingStudents.length !== 1 ? 's' : ''}
                 </p>
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {followingStudents.map((student) => (
-                    <div key={student.id} className="bg-card border border-border rounded-xl p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <Link href={`/profile/${student.user?.id || student.id}`}>
+                    <div key={student.id} className="bg-card border border-border rounded-xl p-6 hover:shadow-lg transition-shadow">
+                      <div className="flex flex-col">
+                        <div className="flex items-start justify-between mb-4">
+                          <Link href={`/profile/${student.id}`} className="flex items-center space-x-3 flex-1">
                             <AvatarWithFallback 
                               src={student.profilePicUrl || student.profilePic}
-                              alt={student?.user?.name || (student as any).name}
-                              size="xl"
-                              className="cursor-pointer hover:opacity-80 transition-opacity"
+                              alt={student?.user?.name || student.name}
+                              size="lg"
+                              className="cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
                             />
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-semibold text-foreground truncate">{student?.user?.name || student.name}</h3>
+                              {student.school && (
+                                <p className="text-xs text-muted-foreground truncate">{student.school.name}</p>
+                              )}
+                            </div>
                           </Link>
-                          <div>
-                            <h3 className="font-semibold text-foreground text-lg">{student?.user?.name || (student as any).name}</h3>
-                            <p className="text-muted-foreground">
-                              {student.sport} • #{student.roleNumber} • {student.position}
-                            </p>
-                            {student.school && (
-                              <p className="text-sm text-muted-foreground">{student.school.name}</p>
-                            )}
+                        </div>
+                        <div className="space-y-2 mb-4">
+                          {(student.sport || student.roleNumber || student.position) && (
                             <p className="text-sm text-muted-foreground">
-                              {student.followersCount} followers
+                              {[student.sport, student.roleNumber && `#${student.roleNumber}`, student.position].filter(Boolean).join(' • ')}
                             </p>
-                          </div>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {student.followersCount || 0} follower{student.followersCount !== 1 ? 's' : ''}
+                          </p>
                         </div>
                         <Button
                           onClick={() => handleUnfollow(student.id)}
                           disabled={unfollowMutation.isPending}
                           variant="outline"
-                          className="bg-background hover:bg-destructive hover:text-destructive-foreground"
+                          className="w-full bg-background hover:bg-destructive hover:text-destructive-foreground"
                           data-testid={`unfollow-${student.id}`}
                         >
                           {unfollowMutation.isPending ? (
@@ -163,20 +189,18 @@ export default function Following() {
                 </div>
               </div>
             ) : (
-              <div className="text-center py-16">
-                <div className="flex flex-col items-center space-y-6">
-                  <div className="w-24 h-24 bg-gradient-to-br from-accent/20 to-accent/10 rounded-full flex items-center justify-center">
-                    <Users className="w-12 h-12 text-accent" />
+              <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="max-w-md w-full bg-card border border-border rounded-2xl p-12 text-center shadow-lg">
+                  <div className="w-20 h-20 bg-gradient-to-br from-accent/20 to-accent/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Users className="w-10 h-10 text-accent" />
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-xl font-semibold text-foreground">Not following anyone yet</h3>
-                    <p className="text-muted-foreground max-w-sm">
-                      Discover amazing student athletes and follow them to see their posts, achievements, and updates.
-                    </p>
-                  </div>
+                  <h3 className="text-2xl font-bold text-foreground mb-3">Start Following Students</h3>
+                  <p className="text-muted-foreground mb-8 leading-relaxed">
+                    Discover amazing student athletes and follow them to see their posts, achievements, and updates in your feed.
+                  </p>
                   <Button 
                     onClick={() => window.location.href = '/search'}
-                    className="bg-accent hover:bg-accent/90 text-accent-foreground px-8 py-3 text-lg btn-enhanced"
+                    className="bg-accent hover:bg-accent/90 text-accent-foreground px-8 py-3 text-base font-medium"
                     size="lg"
                   >
                     <Users className="w-5 h-5 mr-2" />

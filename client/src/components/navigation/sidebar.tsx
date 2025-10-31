@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
-import { Home, User, BarChart3, Settings, LogOut, Bookmark, Users, Eye, Bot, LayoutDashboard, TrendingUp, UserPlus, Building2, Search, Shield, Megaphone } from "lucide-react";
+import { Home, User, BarChart3, Settings, LogOut, Bookmark, Users, Eye, Bot, LayoutDashboard, TrendingUp, UserPlus, Building2, Search, Shield, Megaphone, Bell } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -66,6 +66,8 @@ export default function Sidebar() {
       return [
         ...baseNav,
         { name: "Profile", href: "/profile", icon: User, active: location.startsWith("/profile") },
+        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
         { name: "XEN Watch", href: "/xen-watch", icon: Eye, active: location === "/xen-watch" },
         { name: "ScoutAI", href: "/scoutai", icon: Bot, active: location === "/scoutai" },
@@ -77,6 +79,7 @@ export default function Sidebar() {
         { name: "Profile", href: "/profile", icon: User, active: location.startsWith("/profile") },
         { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
         { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "XEN Watch", href: "/xen-watch", icon: Eye, active: location === "/xen-watch" },
         { name: "ScoutAI", href: "/scoutai", icon: Bot, active: location === "/scoutai" },
         { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
@@ -85,6 +88,8 @@ export default function Sidebar() {
       return [
         { name: "Feed", href: "/school-admin/feed", icon: Home, active: location === "/school-admin/feed" },
         { name: "Dashboard", href: "/school-admin", icon: LayoutDashboard, active: location === "/school-admin" },
+        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Announcements", href: "/school-admin/announcements", icon: Megaphone, active: location.startsWith("/school-admin/announcements") },
         { name: "Add Student", href: "/school-admin/add-student", icon: UserPlus, active: location.startsWith("/school-admin/add-student") },
         { name: "Live Reports", href: "/school-admin/live-reports", icon: BarChart3, active: location.startsWith("/school-admin/live-reports") },
@@ -96,6 +101,8 @@ export default function Sidebar() {
       return [
         { name: "Feed", href: "/system-admin/feed", icon: Home, active: location === "/system-admin/feed" },
         { name: "Dashboard", href: "/system-admin", icon: LayoutDashboard, active: location === "/system-admin" },
+        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone, active: location.startsWith("/system-admin/announcements") },
         { name: "Create School", href: "/system-admin/create-school", icon: Building2, active: location.startsWith("/system-admin/create-school") },
         { name: "Create Admin", href: "/system-admin/create-school-admin", icon: UserPlus, active: location.startsWith("/system-admin/create-school-admin") },
@@ -107,6 +114,8 @@ export default function Sidebar() {
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
       const scoutNav = [
         ...baseNav,
+        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye, active: location.startsWith("/xen-watch/scout-queue") },
       ];
       

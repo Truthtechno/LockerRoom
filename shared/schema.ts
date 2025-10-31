@@ -396,6 +396,21 @@ export const xenWatchFeedback = pgTable("xen_watch_feedback", {
   sentAt: timestamp("sent_at").default(sql`now()`).notNull(),
 });
 
+// Notifications table for role-based notification system
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(), // User who receives the notification
+  type: varchar("type").notNull(), // Notification type
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  entityType: varchar("entity_type"), // post, user, submission, announcement, etc.
+  entityId: varchar("entity_id"), // ID of the related entity
+  relatedUserId: varchar("related_user_id"), // User who triggered the notification
+  metadata: text("metadata"), // Additional JSON data
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -559,6 +574,12 @@ export const insertXenWatchFeedbackSchema = createInsertSchema(xenWatchFeedback)
   sentAt: true,
 });
 
+// Notifications Insert Schema
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type Viewer = typeof viewers.$inferSelect;
@@ -597,6 +618,7 @@ export type ScoutProfileDB = typeof scoutProfiles.$inferSelect;
 export type XenWatchSubmissionDB = typeof xenWatchSubmissions.$inferSelect;
 export type XenWatchReviewDB = typeof xenWatchReviews.$inferSelect;
 export type XenWatchFeedbackDB = typeof xenWatchFeedback.$inferSelect;
+export type NotificationDB = typeof notifications.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertViewer = z.infer<typeof insertViewerSchema>;
@@ -635,6 +657,7 @@ export type InsertScoutProfile = z.infer<typeof insertScoutProfileSchema>;
 export type InsertXenWatchSubmission = z.infer<typeof insertXenWatchSubmissionSchema>;
 export type InsertXenWatchReview = z.infer<typeof insertXenWatchReviewSchema>;
 export type InsertXenWatchFeedback = z.infer<typeof insertXenWatchFeedbackSchema>;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 // Extended types for joins  
 export type PostCommentWithUser = PostComment & {

@@ -48,6 +48,8 @@ import {
   type InsertSchoolSetting,
   type PostWithDetails,
   type StudentWithStats,
+  type NotificationDB,
+  type InsertNotification,
   type StudentSearchResult,
   type UserProfile,
   // XEN Watch types
@@ -87,7 +89,9 @@ import {
   scoutProfiles,
   xenWatchSubmissions,
   xenWatchReviews,
-  xenWatchFeedback
+  xenWatchFeedback,
+  // Notifications
+  notifications
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -262,6 +266,13 @@ export interface IStorage {
   getScoutAnalytics(timeFilter: string): Promise<any>;
   getDetailedScoutProfiles(options: { page: number; limit: number; search?: string }): Promise<any>;
   createSampleScoutData(): Promise<any>;
+  
+  // Notification operations
+  createNotification(notification: InsertNotification): Promise<NotificationDB>;
+  getNotifications(userId: string, options?: { limit?: number; offset?: number; unreadOnly?: boolean }): Promise<NotificationDB[]>;
+  markNotificationAsRead(notificationId: string, userId: string): Promise<void>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
 }
 
 export class MemStorage implements IStorage {
@@ -3709,6 +3720,8 @@ export class PostgresStorage implements IStorage {
   async getFollowing(userId: string): Promise<Student[]> {
     if (!isDbConnected) throw new Error("Database not connected");
     
+    // Query from studentFollowers table which is the source of truth
+    // This ensures consistency with isFollowingStudent checks
     const result = await db
       .select({
         id: students.id,
@@ -3729,9 +3742,9 @@ export class PostgresStorage implements IStorage {
         coverPhoto: students.coverPhoto,
         createdAt: students.createdAt,
       })
-      .from(userFollows)
-      .innerJoin(students, eq(userFollows.followingId, students.userId))
-      .where(eq(userFollows.followerId, userId));
+      .from(studentFollowers)
+      .innerJoin(students, eq(studentFollowers.studentId, students.id))
+      .where(eq(studentFollowers.followerUserId, userId));
     
     return result;
   }
@@ -4502,6 +4515,89 @@ export class PostgresStorage implements IStorage {
     }
   }
 
+  // Notification operations
+  async createNotification(notification: InsertNotification): Promise<NotificationDB> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const result = await db.insert(notifications).values({
+      userId: notification.userId,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      entityType: notification.entityType || null,
+      entityId: notification.entityId || null,
+      relatedUserId: notification.relatedUserId || null,
+      metadata: notification.metadata || null,
+      isRead: notification.isRead || false,
+    }).returning();
+    
+    return result[0];
+  }
+
+  async getNotifications(userId: string, options?: { limit?: number; offset?: number; unreadOnly?: boolean }): Promise<NotificationDB[]> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const limit = options?.limit || 50;
+    const offset = options?.offset || 0;
+    const unreadOnly = options?.unreadOnly || false;
+    
+    let whereCondition = eq(notifications.userId, userId);
+    
+    if (unreadOnly) {
+      whereCondition = and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, false)
+      ) as any;
+    }
+    
+    const result = await db
+      .select()
+      .from(notifications)
+      .where(whereCondition)
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit)
+      .offset(offset);
+    
+    return result;
+  }
+
+  async markNotificationAsRead(notificationId: string, userId: string): Promise<void> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(and(
+        eq(notifications.id, notificationId),
+        eq(notifications.userId, userId)
+      ));
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, false)
+      ));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const result = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, false)
+      ));
+    
+    return Number(result[0]?.count || 0);
+  }
 }
 
 // Use PostgreSQL storage for admin features
