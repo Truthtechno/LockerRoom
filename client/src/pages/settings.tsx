@@ -19,6 +19,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { User, Lock, Bell, Eye, EyeOff, LogOut, Settings as SettingsIcon, Info } from "lucide-react";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 import { logout } from "@/lib/auth";
 import { useLocation } from "wouter";
 
@@ -433,6 +434,11 @@ export default function Settings() {
         <MobileNav />
       
       <div className="lg:pl-64 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <div className="mb-8">
@@ -767,158 +773,30 @@ export default function Settings() {
             </Card>
             )}
 
-            {/* Notification Settings */}
+            {/* Logout */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <Bell className="w-5 h-5 mr-2 text-accent" />
-                  Notifications
+                  <LogOut className="w-5 h-5 mr-2 text-accent" />
+                  Logout
                 </CardTitle>
                 <CardDescription>
-                  Choose what notifications you want to receive
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <Label>Post Likes</Label>
-                      <p className="text-sm text-muted-foreground">Get notified when someone likes your posts</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.postLikes}
-                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postLikes: checked })}
-                    />
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <Label>Post Comments</Label>
-                      <p className="text-sm text-muted-foreground">Get notified when someone comments on your posts</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.postComments}
-                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, postComments: checked })}
-                    />
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <Label>New Followers</Label>
-                      <p className="text-sm text-muted-foreground">Get notified when someone follows you</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.newFollowers}
-                      onCheckedChange={(checked) => setNotificationSettings({ ...notificationSettings, newFollowers: checked })}
-                    />
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <Label>Push Notifications</Label>
-                      <p className="text-sm text-muted-foreground">Receive browser push notifications</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.pushNotifications}
-                      onCheckedChange={handlePushNotificationToggle}
-                    />
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <Label>Email Notifications</Label>
-                      <p className="text-sm text-muted-foreground">Receive notifications via email</p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.emailNotifications}
-                      onCheckedChange={handleEmailNotificationToggle}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={saveNotificationSettings}
-                    disabled={saveNotificationSettingsMutation.isPending}
-                    variant="outline"
-                  >
-                    {saveNotificationSettingsMutation.isPending ? "Saving..." : "Save Notifications"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Privacy Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Eye className="w-5 h-5 mr-2 text-accent" />
-                  Privacy
-                </CardTitle>
-                <CardDescription>
-                  Control who can see your information
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <Label>Show Stats</Label>
-                      <p className="text-sm text-muted-foreground">Display your performance statistics publicly</p>
-                    </div>
-                    <Switch
-                      checked={privacySettings.showStats}
-                      onCheckedChange={handleShowStatsToggle}
-                    />
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex-1">
-                      <Label>Allow Direct Messages</Label>
-                      <p className="text-sm text-muted-foreground">Let other users send you direct messages</p>
-                    </div>
-                    <Switch
-                      checked={privacySettings.allowDirectMessages}
-                      onCheckedChange={(checked) => setPrivacySettings({ ...privacySettings, allowDirectMessages: checked })}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={savePrivacySettings}
-                    disabled={savePrivacySettingsMutation.isPending}
-                    variant="outline"
-                  >
-                    {savePrivacySettingsMutation.isPending ? "Saving..." : "Save Privacy"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Danger Zone */}
-            <Card className="border-destructive/20">
-              <CardHeader>
-                <CardTitle className="flex items-center text-destructive">
-                  <LogOut className="w-5 h-5 mr-2" />
-                  Danger Zone
-                </CardTitle>
-                <CardDescription>
-                  Irreversible actions that affect your account
+                  Sign out of your account on this device
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex-1">
-                    <h4 className="font-medium">Sign Out</h4>
-                    <p className="text-sm text-muted-foreground">Sign out of your account on this device</p>
+                    <p className="text-sm text-muted-foreground">
+                      You can always log back in with your credentials after logging out.
+                    </p>
                   </div>
                   <Button
                     onClick={handleLogout}
-                    variant="destructive"
+                    variant="outline"
                     className="w-full sm:w-auto"
                   >
-                    Sign Out
+                    Logout
                   </Button>
                 </div>
               </CardContent>

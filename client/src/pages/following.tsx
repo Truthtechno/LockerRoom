@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
@@ -98,6 +99,11 @@ export default function Following() {
       
       {/* Main Content */}
       <div className="lg:pl-64 flex flex-col flex-1 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
         {/* Header */}
         <div className="bg-card border-b border-border px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-7xl mx-auto">
@@ -165,9 +171,6 @@ export default function Following() {
                               {[student.sport, student.roleNumber && `#${student.roleNumber}`, student.position].filter(Boolean).join(' • ')}
                             </p>
                           )}
-                          <p className="text-xs text-muted-foreground">
-                            {student.followersCount || 0} follower{student.followersCount !== 1 ? 's' : ''}
-                          </p>
                         </div>
                         <Button
                           onClick={() => handleUnfollow(student.id)}

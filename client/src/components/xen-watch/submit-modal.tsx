@@ -83,12 +83,14 @@ export default function XenWatchSubmitModal({ isOpen, onClose }: XenWatchSubmitM
       if (!response.ok) throw new Error('Failed to create submission');
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast({
         title: "Submission Successful",
         description: "Your video has been submitted for review. You'll receive feedback once our scouts have reviewed it.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/xen-watch/submissions/me"] });
+      // Invalidate and immediately refetch to show the new submission
+      await queryClient.invalidateQueries({ queryKey: ["/api/xen-watch/submissions/me"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/xen-watch/submissions/me"] });
       handleClose();
     },
     onError: (error) => {

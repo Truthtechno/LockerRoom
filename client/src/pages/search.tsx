@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Search, Users, UserPlus, UserMinus, MapPin } from "lucide-react";
+import { Search, UserPlus, UserMinus, MapPin } from "lucide-react";
 import type { StudentSearchResult } from "@shared/schema";
 
 export default function SearchPage() {
@@ -100,13 +101,8 @@ export default function SearchPage() {
       {/* Main Content */}
       <div className="lg:pl-64 flex flex-col flex-1 pb-24 lg:pb-0">
         {/* Mobile Header */}
-        <div className="lg:hidden bg-card border-b border-border px-4 py-4">
-          <div className="flex items-center">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">LR</span>
-            </div>
-            <span className="ml-2 text-lg font-bold text-foreground">Search Athletes</span>
-          </div>
+        <div className="lg:hidden">
+          <Header />
         </div>
 
         {/* Search Content */}
@@ -185,10 +181,6 @@ export default function SearchPage() {
                                 />
                                 <div>
                                   <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{student.user.name}</h3>
-                                  <div className="flex items-center text-sm text-muted-foreground">
-                                    <Users className="w-3 h-3 mr-1" />
-                                    {student.followersCount} followers
-                                  </div>
                                 </div>
                               </div>
                             </div>

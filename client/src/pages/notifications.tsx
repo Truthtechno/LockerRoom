@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 import { Button } from "@/components/ui/button";
 import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
 import { useToast } from "@/hooks/use-toast";
@@ -168,9 +169,54 @@ export default function Notifications() {
       if (!response.ok) throw new Error("Failed to mark all as read");
       return response.json();
     },
+    onMutate: async () => {
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["/api/notifications", user?.id] });
+      await queryClient.cancelQueries({ queryKey: ["/api/notifications/unread-count", user?.id] });
+
+      // Snapshot the previous values
+      const previousNotifications = queryClient.getQueryData<Notification[]>(["/api/notifications", user?.id, filter]);
+      const previousUnreadCount = queryClient.getQueryData<{ count: number }>(["/api/notifications/unread-count", user?.id]);
+
+      // Optimistically update the unread count to 0
+      queryClient.setQueryData<{ count: number }>(["/api/notifications/unread-count", user?.id], { count: 0 });
+
+      // Optimistically update notifications to mark all as read
+      // For "all" filter, mark all notifications as read
+      queryClient.setQueryData<Notification[]>(["/api/notifications", user?.id, "all"], (old) => {
+        if (!old) return old;
+        return old.map(notif => ({ ...notif, isRead: true }));
+      });
+
+      // For "unread" filter, set to empty array since all will be read
+      queryClient.setQueryData<Notification[]>(["/api/notifications", user?.id, "unread"], []);
+
+      // Update current filter view
+      if (filter !== "unread") {
+        queryClient.setQueryData<Notification[]>(["/api/notifications", user?.id, filter], (old) => {
+          if (!old) return old;
+          return old.map(notif => ({ ...notif, isRead: true }));
+        });
+      }
+
+      return { previousNotifications, previousUnreadCount };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousNotifications) {
+        queryClient.setQueryData(["/api/notifications", user?.id, filter], context.previousNotifications);
+      }
+      if (context?.previousUnreadCount) {
+        queryClient.setQueryData(["/api/notifications/unread-count", user?.id], context.previousUnreadCount);
+      }
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      // Invalidate and immediately refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count", user?.id] });
+      // Force immediate refetch
+      queryClient.refetchQueries({ queryKey: ["/api/notifications", user?.id] });
+      queryClient.refetchQueries({ queryKey: ["/api/notifications/unread-count", user?.id] });
       toast({
         title: "All notifications marked as read",
         description: "All notifications have been marked as read.",
@@ -245,10 +291,15 @@ export default function Notifications() {
       
       {/* Main Content */}
       <div className="lg:pl-64 flex flex-col flex-1 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
         {/* Header */}
         <div className="bg-card border-b border-border px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center">
                   <Bell className="w-6 h-6 text-accent" />
@@ -268,6 +319,7 @@ export default function Notifications() {
                   disabled={markAllAsReadMutation.isPending}
                   variant="outline"
                   size="sm"
+                  className="self-start sm:self-auto"
                 >
                   {markAllAsReadMutation.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />

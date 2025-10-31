@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, Clock, CheckCircle, Upload, Plus, Star, MessageSquare, X, Search, Filter, ArrowUpDown, User, Calendar, Play, Pause, Users, TrendingUp } from "lucide-react";
+import { Eye, Clock, CheckCircle, Upload, Plus, Star, MessageSquare, X, Search, Filter, ArrowUpDown, User, Calendar, Play, Pause, Users, TrendingUp, RefreshCw } from "lucide-react";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
@@ -33,13 +33,33 @@ export default function XenWatch() {
   const [selectedSubmission, setSelectedSubmission] = useState<StudentSubmission | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
-  const { data: submissionsData, isLoading: submissionsLoading } = useQuery<StudentSubmissionsResponse>({
+  const { data: submissionsData, isLoading: submissionsLoading, refetch: refetchSubmissions } = useQuery<StudentSubmissionsResponse>({
     queryKey: ["/api/xen-watch/submissions/me"],
-    refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
+    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+    staleTime: 0, // Always consider data stale to ensure fresh fetches
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Always refetch on mount
+    refetchOnReconnect: true, // Refetch when connection is restored
   });
 
   const submissions = submissionsData?.submissions || [];
   const studentInfo = submissionsData?.student;
+
+  // Refetch submissions when navigating to this page to ensure fresh data
+  const prevLocationRef = useRef<string | null>(null);
+  useEffect(() => {
+    const isOnXenWatchPage = location === '/xen-watch' || location.startsWith('/xen-watch?');
+    const wasOnDifferentPage = prevLocationRef.current && 
+      prevLocationRef.current !== location && 
+      !prevLocationRef.current.startsWith('/xen-watch');
+    
+    if (isOnXenWatchPage && wasOnDifferentPage) {
+      // Only refetch when navigating TO the XEN Watch page from another page
+      refetchSubmissions();
+    }
+    
+    prevLocationRef.current = location;
+  }, [location, refetchSubmissions]);
 
   // Handle URL parameters to open specific submission
   useEffect(() => {
@@ -224,14 +244,27 @@ export default function XenWatch() {
                   Submit content for professional scout review
                 </p>
               </div>
-              <Button 
-                onClick={() => setLocation("/xen-watch/submit")}
-                className="gold-gradient text-accent-foreground flex items-center space-x-2"
-                data-testid="button-submit-content"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Submit Content</span>
-              </Button>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchSubmissions()}
+                  className="flex items-center space-x-2"
+                  disabled={submissionsLoading}
+                  title="Refresh submissions"
+                >
+                  <RefreshCw className={`w-4 h-4 ${submissionsLoading ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+                <Button 
+                  onClick={() => setLocation("/xen-watch/submit")}
+                  className="gold-gradient text-accent-foreground flex items-center space-x-2"
+                  data-testid="button-submit-content"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Submit Content</span>
+                </Button>
+              </div>
             </div>
           </div>
 

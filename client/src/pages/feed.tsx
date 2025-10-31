@@ -443,7 +443,7 @@ function SearchResultItem({ student, onClearSearch }: { student: any; onClearSea
           <div>
             <h3 className="font-medium text-foreground">{student.user.name}</h3>
             <p className="text-sm text-muted-foreground">
-              {student.position || 'Player'} • #{student.roleNumber} • {student.followersCount} followers
+              {student.position || 'Player'} • #{student.roleNumber}
             </p>
             {student.school && (
               <p className="text-xs text-muted-foreground">{student.school.name}</p>

@@ -12,6 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { timeAgo } from "@/lib/timeAgo";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 import LazyMedia from "@/components/ui/lazy-media";
 import ResponsiveMedia from "@/components/ui/responsive-media";
 import { Heart, MessageCircle, Bookmark, Send, ArrowLeft, Trash2, MoreHorizontal, Megaphone } from "lucide-react";
@@ -27,6 +28,33 @@ export default function PostDetail() {
   const postId = params?.id;
   
   const [newComment, setNewComment] = useState("");
+
+  // Query for post details
+  const { data: post, isLoading: postLoading, error: postError } = useQuery<PostWithDetails>({
+    queryKey: ["/api/posts", postId],
+    queryFn: async () => {
+      if (!postId) throw new Error('Post ID is required');
+      
+      const response = await apiRequest("GET", `/api/posts/${postId}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const error = new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        (error as any).status = response.status;
+        throw error;
+      }
+      
+      return response.json();
+    },
+    enabled: !!postId,
+    staleTime: 30_000, // Cache post data for 30 seconds
+    retry: (failureCount, error: any) => {
+      // Don't retry on 404 (post not found) or 400 (bad request)
+      if (error?.status === 404 || error?.status === 400) return false;
+      // Retry on server errors (500+) or network issues
+      return failureCount < 3;
+    }
+  });
 
   // Handle scroll to comments when coming from notification
   useEffect(() => {
@@ -56,33 +84,6 @@ export default function PostDetail() {
       }, 300);
     }
   }, [post]);
-
-  // Query for post details
-  const { data: post, isLoading: postLoading, error: postError } = useQuery<PostWithDetails>({
-    queryKey: ["/api/posts", postId],
-    queryFn: async () => {
-      if (!postId) throw new Error('Post ID is required');
-      
-      const response = await apiRequest("GET", `/api/posts/${postId}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-        (error as any).status = response.status;
-        throw error;
-      }
-      
-      return response.json();
-    },
-    enabled: !!postId,
-    staleTime: 30_000, // Cache post data for 30 seconds
-    retry: (failureCount, error: any) => {
-      // Don't retry on 404 (post not found) or 400 (bad request)
-      if (error?.status === 404 || error?.status === 400) return false;
-      // Retry on server errors (500+) or network issues
-      return failureCount < 3;
-    }
-  });
 
   // Post interaction mutations
   const likeMutation = useMutation({
@@ -296,6 +297,11 @@ export default function PostDetail() {
       <Sidebar />
       <MobileNav />
       <div className="lg:pl-64 pb-24 lg:pb-8 post-detail-container">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Back Button */}
           <div className="mb-6">
@@ -466,7 +472,7 @@ export default function PostDetail() {
                 
                 {/* Comments List */}
                 <ScrollArea className="max-h-96 mb-4 scrollbar-thin">
-                  <PostComments postId={postId} post={post} />
+                  <PostComments postId={postId!} post={post} />
                 </ScrollArea>
                 
                 {/* Comment Input */}
@@ -524,7 +530,7 @@ export default function PostDetail() {
 }
 
 // Post Comments Component
-function PostComments({ postId }: { postId: string }) {
+function PostComments({ postId, post }: { postId: string; post: PostWithDetails }) {
   const { data: comments, isLoading } = useQuery<PostCommentWithUser[]>({
     queryKey: ["/api/posts", postId, "comments"],
     queryFn: async () => {

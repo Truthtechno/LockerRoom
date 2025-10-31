@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users, Eye, Bot, Menu, X, LayoutDashboard, TrendingUp, UserPlus, Building2, Shield, Megaphone, Bell } from "lucide-react";
+import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users, Eye, Bot, Menu, X, LayoutDashboard, TrendingUp, UserPlus, Building2, Shield, Megaphone, Bell, Layers, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { logout } from "@/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -9,6 +9,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function MobileNav() {
   const [location, setLocation] = useLocation();
@@ -92,6 +99,21 @@ export default function MobileNav() {
     staleTime: 30_000,
   });
 
+  // Fetch unread notifications count for badge display
+  const { data: unreadCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/notifications/unread-count", user?.id],
+    queryFn: async () => {
+      if (!user) return { count: 0 };
+      const response = await apiRequest("GET", "/api/notifications/unread-count");
+      if (!response.ok) return { count: 0 };
+      return response.json();
+    },
+    enabled: !!user,
+    refetchInterval: 30000, // Refetch every 30 seconds to keep count fresh
+    staleTime: 0, // Always consider stale to ensure fresh data
+    refetchOnWindowFocus: true, // Refetch when window gains focus
+  });
+
   // Use currentUserData if available and matches current user, otherwise fall back to user from auth hook
   // This prevents showing stale data from a previous user session
   // For students, prefer studentProfile profilePicUrl as it may be more up-to-date
@@ -102,9 +124,39 @@ export default function MobileNav() {
     logout(); // logout() now handles clearing data and redirecting
   };
 
+  // Helper to check if any student content route is active
+  const isStudentContentActive = (feedHref: string) => {
+    return location === feedHref || location === "/saved" || location === "/following";
+  };
+
+  // Helper to get student content dropdown items based on role
+  const getStudentContentItems = () => {
+    if (user?.role === "system_admin") {
+      return [
+        { name: "Feed", href: "/system-admin/feed", icon: Home },
+        { name: "Saved", href: "/saved", icon: Bookmark },
+        { name: "Following", href: "/following", icon: Users },
+      ];
+    } else if (user?.role === "school_admin") {
+      return [
+        { name: "Feed", href: "/school-admin/feed", icon: Home },
+        { name: "Saved", href: "/saved", icon: Bookmark },
+        { name: "Following", href: "/following", icon: Users },
+      ];
+    } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
+      return [
+        { name: "Feed", href: "/feed", icon: Home },
+        { name: "Saved", href: "/saved", icon: Bookmark },
+        { name: "Following", href: "/following", icon: Users },
+      ];
+    }
+    return [];
+  };
+
   const getDrawerItems = () => {
     if (user?.role === "student") {
       return [
+        { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
         { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Stats", href: "/stats", icon: BarChart3 },
@@ -122,10 +174,12 @@ export default function MobileNav() {
         { name: "Settings", href: "/settings", icon: Settings },
       ];
     } else if (user?.role === "school_admin") {
+      const studentContentItems = getStudentContentItems();
+      const feedHref = "/school-admin/feed";
+      const isActive = isStudentContentActive(feedHref);
       return [
-        { name: "Feed", href: "/school-admin/feed", icon: Home },
+        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Dashboard", href: "/school-admin", icon: LayoutDashboard },
-        { name: "Following", href: "/following", icon: Users },
         { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Announcements", href: "/school-admin/announcements", icon: Megaphone },
         { name: "Add Student", href: "/school-admin/add-student", icon: UserPlus },
@@ -135,9 +189,12 @@ export default function MobileNav() {
         { name: "Settings", href: "/settings", icon: Settings },
       ];
     } else if (user?.role === "system_admin") {
+      const studentContentItems = getStudentContentItems();
+      const feedHref = "/system-admin/feed";
+      const isActive = isStudentContentActive(feedHref);
       return [
-        { name: "Feed", href: "/system-admin/feed", icon: Home },
-        { name: "Following", href: "/following", icon: Users },
+        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
+        { name: "Dashboard", href: "/system-admin", icon: LayoutDashboard },
         { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone },
         { name: "Create School", href: "/system-admin/create-school", icon: Building2 },
@@ -148,8 +205,11 @@ export default function MobileNav() {
         { name: "Settings", href: "/settings", icon: Settings },
       ];
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
+      const studentContentItems = getStudentContentItems();
+      const feedHref = "/feed";
+      const isActive = isStudentContentActive(feedHref);
       const scoutNav = [
-        { name: "Following", href: "/following", icon: Users },
+        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye },
       ];
@@ -359,18 +419,74 @@ export default function MobileNav() {
           {/* Drawer Navigation */}
           <div className="flex-1 overflow-y-auto">
             <nav className="p-4 space-y-2">
-              {drawerItems.map((item) => (
-                <Link key={item.name} href={item.href}>
-                  <div
-                    className="flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={() => setIsDrawerOpen(false)}
-                    data-testid={`drawer-nav-${item.name.toLowerCase()}`}
-                  >
-                    <item.icon className="w-5 h-5 mr-3" />
-                    {item.name}
-                  </div>
-                </Link>
-              ))}
+              {drawerItems.map((item) => {
+                const showBadge = item.name === "Notifications" && unreadCount && unreadCount.count > 0;
+                
+                // Render dropdown for Student Content
+                if ((item as any).isDropdown && (item as any).dropdownItems) {
+                  return (
+                    <div key={item.name}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                              item.active
+                                ? "bg-accent text-accent-foreground"
+                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                            data-testid={`drawer-nav-${item.name.toLowerCase()}`}
+                          >
+                            <item.icon className="w-5 h-5 mr-3" />
+                            <span className="flex-1 text-left">{item.name}</span>
+                            <ChevronDown className="w-4 h-4 ml-2" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                          {(item as any).dropdownItems.map((dropdownItem: any) => {
+                            const isItemActive = location === dropdownItem.href;
+                            return (
+                              <Link key={dropdownItem.name} href={dropdownItem.href}>
+                                <DropdownMenuItem
+                                  className={`cursor-pointer ${
+                                    isItemActive ? "bg-accent text-accent-foreground" : ""
+                                  }`}
+                                  onClick={() => setIsDrawerOpen(false)}
+                                >
+                                  <dropdownItem.icon className="w-4 h-4 mr-2" />
+                                  {dropdownItem.name}
+                                </DropdownMenuItem>
+                              </Link>
+                            );
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  );
+                }
+                
+                // Render regular navigation item
+                return (
+                  <Link key={item.name} href={item.href}>
+                    <div
+                      className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 cursor-pointer ${
+                        item.active
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                      onClick={() => setIsDrawerOpen(false)}
+                      data-testid={`drawer-nav-${item.name.toLowerCase()}`}
+                    >
+                      <item.icon className="w-5 h-5 mr-3" />
+                      <span className="flex-1">{item.name}</span>
+                      {showBadge && (
+                        <Badge className="ml-2 bg-red-500 text-white text-xs min-w-[1.25rem] h-5 flex items-center justify-center px-1.5">
+                          {unreadCount.count > 99 ? "99+" : unreadCount.count}
+                        </Badge>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
             </nav>
           </div>
 

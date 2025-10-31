@@ -5,10 +5,17 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
-import { Home, User, BarChart3, Settings, LogOut, Bookmark, Users, Eye, Bot, LayoutDashboard, TrendingUp, UserPlus, Building2, Search, Shield, Megaphone, Bell } from "lucide-react";
+import { Home, User, BarChart3, Settings, LogOut, Bookmark, Users, Eye, Bot, LayoutDashboard, TrendingUp, UserPlus, Building2, Search, Shield, Megaphone, Bell, Layers, ChevronDown } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useEffect, useRef } from "react";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
@@ -91,6 +98,21 @@ export default function Sidebar() {
     staleTime: 30_000,
   });
 
+  // Fetch unread notifications count for badge display
+  const { data: unreadCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/notifications/unread-count", user?.id],
+    queryFn: async () => {
+      if (!user) return { count: 0 };
+      const response = await apiRequest("GET", "/api/notifications/unread-count");
+      if (!response.ok) return { count: 0 };
+      return response.json();
+    },
+    enabled: !!user,
+    refetchInterval: 30000, // Refetch every 30 seconds to keep count fresh
+    staleTime: 0, // Always consider stale to ensure fresh data
+    refetchOnWindowFocus: true, // Refetch when window gains focus
+  });
+
   // Use currentUserData if available and matches current user, otherwise fall back to user from auth hook
   // This prevents showing stale data from a previous user session
   // For students, prefer studentProfile profilePicUrl as it may be more up-to-date
@@ -99,6 +121,35 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     logout(); // logout() now handles clearing data and redirecting
+  };
+
+  // Helper to check if any student content route is active
+  const isStudentContentActive = (feedHref: string) => {
+    return location === feedHref || location === "/saved" || location === "/following";
+  };
+
+  // Helper to get student content dropdown items based on role
+  const getStudentContentItems = () => {
+    if (user?.role === "system_admin") {
+      return [
+        { name: "Feed", href: "/system-admin/feed", icon: Home },
+        { name: "Saved", href: "/saved", icon: Bookmark },
+        { name: "Following", href: "/following", icon: Users },
+      ];
+    } else if (user?.role === "school_admin") {
+      return [
+        { name: "Feed", href: "/school-admin/feed", icon: Home },
+        { name: "Saved", href: "/saved", icon: Bookmark },
+        { name: "Following", href: "/following", icon: Users },
+      ];
+    } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
+      return [
+        { name: "Feed", href: "/feed", icon: Home },
+        { name: "Saved", href: "/saved", icon: Bookmark },
+        { name: "Following", href: "/following", icon: Users },
+      ];
+    }
+    return [];
   };
 
   const getNavigation = () => {
@@ -110,6 +161,7 @@ export default function Sidebar() {
       return [
         ...baseNav,
         { name: "Profile", href: "/profile", icon: User, active: location.startsWith("/profile") },
+        { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
         { name: "Following", href: "/following", icon: Users, active: location === "/following" },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
@@ -129,10 +181,12 @@ export default function Sidebar() {
         { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "school_admin") {
+      const studentContentItems = getStudentContentItems();
+      const feedHref = "/school-admin/feed";
+      const isActive = isStudentContentActive(feedHref);
       return [
-        { name: "Feed", href: "/school-admin/feed", icon: Home, active: location === "/school-admin/feed" },
+        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Dashboard", href: "/school-admin", icon: LayoutDashboard, active: location === "/school-admin" },
-        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Announcements", href: "/school-admin/announcements", icon: Megaphone, active: location.startsWith("/school-admin/announcements") },
         { name: "Add Student", href: "/school-admin/add-student", icon: UserPlus, active: location.startsWith("/school-admin/add-student") },
@@ -142,10 +196,12 @@ export default function Sidebar() {
         { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "system_admin") {
+      const studentContentItems = getStudentContentItems();
+      const feedHref = "/system-admin/feed";
+      const isActive = isStudentContentActive(feedHref);
       return [
-        { name: "Feed", href: "/system-admin/feed", icon: Home, active: location === "/system-admin/feed" },
+        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Dashboard", href: "/system-admin", icon: LayoutDashboard, active: location === "/system-admin" },
-        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone, active: location.startsWith("/system-admin/announcements") },
         { name: "Create School", href: "/system-admin/create-school", icon: Building2, active: location.startsWith("/system-admin/create-school") },
@@ -156,9 +212,11 @@ export default function Sidebar() {
         { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
+      const studentContentItems = getStudentContentItems();
+      const feedHref = "/feed";
+      const isActive = isStudentContentActive(feedHref);
       const scoutNav = [
-        ...baseNav,
-        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye, active: location.startsWith("/xen-watch/scout-queue") },
       ];
@@ -203,21 +261,70 @@ export default function Sidebar() {
 
           {/* Navigation */}
           <nav className="mt-8 flex-1 px-4 space-y-2">
-            {navigation.map((item) => (
-              <Link key={item.name} href={item.href}>
-                <a
-                  className={`group flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
-                    item.active
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                  data-testid={`nav-${item.name.toLowerCase()}`}
-                >
-                  <item.icon className="w-5 h-5 mr-3" />
-                  {item.name}
-                </a>
-              </Link>
-            ))}
+            {navigation.map((item) => {
+              const showBadge = item.name === "Notifications" && unreadCount && unreadCount.count > 0;
+              
+              // Render dropdown for Student Content
+              if ((item as any).isDropdown && (item as any).dropdownItems) {
+                return (
+                  <DropdownMenu key={item.name}>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                          item.active
+                            ? "bg-accent text-accent-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                        data-testid={`nav-${item.name.toLowerCase()}`}
+                      >
+                        <item.icon className="w-5 h-5 mr-3" />
+                        <span className="flex-1 text-left">{item.name}</span>
+                        <ChevronDown className="w-4 h-4 ml-2" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      {(item as any).dropdownItems.map((dropdownItem: any) => {
+                        const isItemActive = location === dropdownItem.href;
+                        return (
+                          <Link key={dropdownItem.name} href={dropdownItem.href}>
+                            <DropdownMenuItem
+                              className={`cursor-pointer ${
+                                isItemActive ? "bg-accent text-accent-foreground" : ""
+                              }`}
+                            >
+                              <dropdownItem.icon className="w-4 h-4 mr-2" />
+                              {dropdownItem.name}
+                            </DropdownMenuItem>
+                          </Link>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              }
+              
+              // Render regular navigation item
+              return (
+                <Link key={item.name} href={item.href}>
+                  <a
+                    className={`group flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                      item.active
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    data-testid={`nav-${item.name.toLowerCase()}`}
+                  >
+                    <item.icon className="w-5 h-5 mr-3" />
+                    <span className="flex-1">{item.name}</span>
+                    {showBadge && (
+                      <Badge className="ml-2 bg-red-500 text-white text-xs min-w-[1.25rem] h-5 flex items-center justify-center px-1.5">
+                        {unreadCount.count > 99 ? "99+" : unreadCount.count}
+                      </Badge>
+                    )}
+                  </a>
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Theme Toggle and Logout */}

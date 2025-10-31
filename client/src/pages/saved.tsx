@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 import PostCard from "@/components/posts/post-card";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Bookmark } from "lucide-react";
@@ -30,9 +32,14 @@ export default function Saved() {
       
       {/* Main Content */}
       <div className="lg:pl-64 flex flex-col flex-1 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
         {/* Header */}
-        <div className="bg-card border-b border-border px-4 py-6 lg:px-8">
-          <div className="max-w-2xl mx-auto">
+        <div className="bg-card border-b border-border px-4 sm:px-6 lg:px-8 py-6">
+          <div className="max-w-7xl mx-auto">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center">
                 <Bookmark className="w-6 h-6 text-accent" />
@@ -46,7 +53,7 @@ export default function Saved() {
         </div>
 
         {/* Content */}
-        <main className="flex-1">
+        <main className="flex-1 pb-20 lg:pb-0">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -71,9 +78,11 @@ export default function Saved() {
                 <p className="text-sm text-muted-foreground mb-6">
                   {savedPosts.length} saved post{savedPosts.length !== 1 ? 's' : ''}
                 </p>
-                {savedPosts.map((post) => (
-                  <PostCard key={post.id} post={post} />
-                ))}
+                <div className="space-y-6">
+                  {savedPosts.map((post) => (
+                    <PostCard key={post.id} post={post} />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="text-center py-16">

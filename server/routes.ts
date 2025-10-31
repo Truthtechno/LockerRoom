@@ -39,7 +39,8 @@ import {
   postLikes,
   postComments,
   postViews,
-  schools
+  schools,
+  studentFollowers
 } from "@shared/schema";
 import type { PostWithDetails } from "@shared/schema";
 import { eq, desc, sql, and, or } from 'drizzle-orm';
@@ -3392,7 +3393,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const students = await storage.getStudentsBySchool(schoolId);
-      res.json(students);
+      // Join with users table to get email
+      const studentsWithEmail = await Promise.all(students.map(async (student) => {
+        const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, student.userId)).limit(1);
+        return {
+          ...student,
+          email: user?.email || ''
+        };
+      }));
+      res.json(studentsWithEmail);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch school students" });
     }
@@ -4714,10 +4723,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const students = await storage.searchSchoolStudents(schoolId, query);
-      res.json(students);
+      // Join with users table to get email
+      const studentsWithEmail = await Promise.all(students.map(async (student) => {
+        const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, student.userId)).limit(1);
+        return {
+          ...student,
+          email: user?.email || ''
+        };
+      }));
+      res.json(studentsWithEmail);
     } catch (error) {
       console.error('Search school students error:', error);
       res.status(500).json({ message: "Search failed" });
+    }
+  });
+
+  // Student Stats endpoint for admins
+  app.get("/api/students/:studentId/stats", async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      
+      // Verify student exists
+      const student = await storage.getStudent(studentId);
+      if (!student) {
+        return res.status(404).json({ message: "Student not found" });
+      }
+      
+      // Get student posts - query directly from database to avoid filtering issues
+      const studentPosts = await db.select().from(posts).where(eq(posts.studentId, studentId));
+      const postsCount = studentPosts.length;
+      
+      // Calculate engagement metrics
+      let totalLikes = 0;
+      let totalComments = 0;
+      let totalSaves = 0;
+      let totalViews = 0;
+      
+      for (const post of studentPosts) {
+        try {
+          const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
+          const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+          const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
+          const views = await db.select().from(postViews).where(eq(postViews.postId, post.id));
+          
+          totalLikes += likes.length;
+          totalComments += comments.length;
+          totalSaves += saves.length;
+          totalViews += views.length || Math.max(10, likes.length * 5 + comments.length * 3 + saves.length * 2);
+        } catch (postError) {
+          console.error(`Error calculating stats for post ${post.id}:`, postError);
+          // Continue with other posts even if one fails
+        }
+      }
+      
+      // Get followers count
+      let followersCount = 0;
+      try {
+        const followersResult = await db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(studentFollowers)
+          .where(eq(studentFollowers.studentId, studentId));
+        followersCount = Number(followersResult[0]?.count || 0);
+      } catch (error) {
+        console.error('Error getting followers count:', error);
+        // Continue with 0 followers if query fails
+      }
+      
+      // Calculate active post days (unique days with posts)
+      const postDays = new Set<string>();
+      studentPosts.forEach(post => {
+        try {
+          const postDate = new Date(post.createdAt);
+          const dateStr = postDate.toISOString().split('T')[0];
+          postDays.add(dateStr);
+        } catch (error) {
+          // Skip invalid dates
+        }
+      });
+      const activePostDays = postDays.size;
+      
+      // Calculate total engagement (likes + comments + saves)
+      const totalEngagement = totalLikes + totalComments + totalSaves;
+      
+      res.json({
+        posts: postsCount,
+        followers: followersCount,
+        likes: totalLikes,
+        comments: totalComments,
+        saves: totalSaves,
+        views: totalViews,
+        engagement: totalEngagement,
+        activePostDays: activePostDays
+      });
+    } catch (error) {
+      console.error('Get student stats error:', error);
+      res.status(500).json({ message: "Failed to fetch student stats", error: error instanceof Error ? error.message : String(error) });
     }
   });
 

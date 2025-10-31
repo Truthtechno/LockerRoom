@@ -13,6 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Eye, Clock, CheckCircle, Star, Save, Send, Play, User, X, Calendar, TrendingUp, Users, Filter, Search, ArrowUpDown, ChevronRight, ChevronLeft } from "lucide-react";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
+import Header from "@/components/navigation/header";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLocation } from "wouter";
 
@@ -563,6 +564,11 @@ export default function ScoutReviewQueue() {
       <Sidebar />
       <MobileNav />
       <div className="lg:pl-64 pb-24 lg:pb-0">
+        {/* Mobile Header */}
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        
         {/* Enhanced Header */}
         <div className="bg-card border-b shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -968,7 +974,7 @@ export default function ScoutReviewQueue() {
 
       {/* Enhanced Detail Modal */}
       <Dialog open={isReviewModalOpen} onOpenChange={closeReviewModal}>
-        <DialogContent className="max-w-6xl h-[95vh] sm:h-[90vh] flex flex-col bg-card p-0 mx-4 sm:mx-0">
+        <DialogContent className="max-w-6xl h-[95vh] sm:h-[90vh] flex flex-col bg-card p-0 left-4 right-4 sm:left-[50%] sm:right-auto translate-x-0 sm:translate-x-[-50%] top-[50%] translate-y-[-50%] rounded-lg">
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 flex-shrink-0">
             <DialogTitle className="text-xl sm:text-2xl font-bold text-foreground">Submission Details</DialogTitle>
             <DialogDescription className="text-sm sm:text-base text-muted-foreground">
@@ -981,7 +987,7 @@ export default function ScoutReviewQueue() {
             {selectedSubmission && (
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 sm:p-6 border border-blue-200 dark:border-blue-800">
                 <div className="flex flex-col sm:flex-row sm:items-start space-y-4 sm:space-y-0 sm:space-x-4">
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shadow-sm mx-auto sm:mx-0 overflow-hidden">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shadow-sm overflow-hidden">
                     {selectedSubmission.student.profilePicUrl ? (
                       <img
                         src={selectedSubmission.student.profilePicUrl}
@@ -994,7 +1000,7 @@ export default function ScoutReviewQueue() {
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 text-center sm:text-left">
+                  <div className="flex-1 text-left">
                     <h4 className="text-lg sm:text-xl font-bold text-foreground mb-2">{selectedSubmission.student.name}</h4>
                     <p className="text-sm text-muted-foreground mb-4">
                       Submission #{selectedSubmission.id.slice(-8)}
@@ -1096,7 +1102,7 @@ export default function ScoutReviewQueue() {
             {/* Rating Section */}
             <div className="space-y-4">
               <Label className="text-base font-semibold text-foreground">Performance Rating (1-5) *</Label>
-              <div className="flex justify-center space-x-2 sm:space-x-3">
+              <div className="flex justify-start space-x-2 sm:space-x-3">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
@@ -1113,7 +1119,7 @@ export default function ScoutReviewQueue() {
                   </button>
                 ))}
               </div>
-              <p className="text-sm text-muted-foreground text-center px-4">
+              <p className="text-sm text-muted-foreground">
                 Click stars to rate the performance (1 = poor, 5 = excellent)
               </p>
             </div>
@@ -1188,7 +1194,7 @@ export default function ScoutReviewQueue() {
 
           {/* Action Buttons - Fixed at bottom */}
           <div className="flex-shrink-0 px-4 sm:px-6 py-4 bg-card border-t border">
-            <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
+            <div className="flex flex-col sm:flex-row sm:justify-end space-y-3 sm:space-y-0 sm:space-x-4">
               <Button 
                 variant="outline" 
                 onClick={closeReviewModal}

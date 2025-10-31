@@ -377,14 +377,14 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Manage Announcements</h2>
           <p className="text-muted-foreground">
             View, edit, and delete your announcements
           </p>
         </div>
-        <Badge variant="outline" className="text-sm">
+        <Badge variant="outline" className="text-sm self-start sm:self-auto">
           {announcements.length} announcement{announcements.length !== 1 ? 's' : ''}
         </Badge>
       </div>
