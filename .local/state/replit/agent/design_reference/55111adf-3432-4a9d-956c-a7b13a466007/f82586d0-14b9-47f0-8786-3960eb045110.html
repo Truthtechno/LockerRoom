@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LockerRoom - XEN Sports Armoury</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/heroicons@2.0.16/24/outline/index.js" type="module"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                borderRadius: {
+                    lg: "var(--radius)",
+                    md: "calc(var(--radius) - 2px)",
+                    sm: "calc(var(--radius) - 4px)",
+                },
+                colors: {
+                    background: "var(--background)",
+                    foreground: "var(--foreground)",
+                    card: {
+                        DEFAULT: "var(--card)",
+                        foreground: "var(--card-foreground)",
+                    },
+                    primary: {
+                        DEFAULT: "var(--primary)",
+                        foreground: "var(--primary-foreground)",
+                    },
+                    secondary: {
+                        DEFAULT: "var(--secondary)",
+                        foreground: "var(--secondary-foreground)",
+                    },
+                    muted: {
+                        DEFAULT: "var(--muted)",
+                        foreground: "var(--muted-foreground)",
+                    },
+                    accent: {
+                        DEFAULT: "var(--accent)",
+                        foreground: "var(--accent-foreground)",
+                    },
+                    border: "var(--border)",
+                    input: "var(--input)",
+                    ring: "var(--ring)",
+                },
+                fontFamily: {
+                    sans: ["Inter", "sans-serif"],
+                }
+            },
+        }
+    };
+    </script>
+    <style>
+    :root {
+        --background: hsl(0 0% 100%);
+        --foreground: hsl(0 0% 0%);
+        --card: hsl(0 0% 100%);
+        --card-foreground: hsl(0 0% 0%);
+        --primary: hsl(0 0% 0%);
+        --primary-foreground: hsl(0 0% 100%);
+        --secondary: hsl(0 0% 50%);
+        --secondary-foreground: hsl(0 0% 100%);
+        --muted: hsl(0 0% 96%);
+        --muted-foreground: hsl(0 0% 50%);
+        --accent: hsl(43 100% 50%);
+        --accent-foreground: hsl(0 0% 0%);
+        --border: hsl(0 0% 90%);
+        --input: hsl(0 0% 90%);
+        --ring: hsl(43 100% 50%);
+        --radius: 0.5rem;
+    }
+    
+    .dark {
+        --background: hsl(0 0% 7%);
+        --foreground: hsl(0 0% 100%);
+        --card: hsl(0 0% 10%);
+        --card-foreground: hsl(0 0% 100%);
+        --primary: hsl(0 0% 100%);
+        --primary-foreground: hsl(0 0% 0%);
+        --secondary: hsl(0 0% 30%);
+        --secondary-foreground: hsl(0 0% 100%);
+        --muted: hsl(0 0% 15%);
+        --muted-foreground: hsl(0 0% 65%);
+        --accent: hsl(43 100% 50%);
+        --accent-foreground: hsl(0 0% 0%);
+        --border: hsl(0 0% 20%);
+        --input: hsl(0 0% 20%);
+        --ring: hsl(43 100% 50%);
+    }
+
+    .view-switcher .view-btn {
+        transition: all 0.3s ease;
+    }
+    
+    .view-switcher .view-btn.active {
+        background: var(--accent);
+        color: var(--accent-foreground);
+    }
+    
+    .stats-card {
+        background: linear-gradient(135deg, var(--card) 0%, var(--muted) 100%);
+    }
+    
+    .gold-gradient {
+        background: linear-gradient(135deg, hsl(43 100% 50%) 0%, hsl(43 100% 40%) 100%);
+    }
+    
+    .post-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    
+    .hero-pattern {
+        background-image: 
+            radial-gradient(circle at 25px 25px, hsla(43, 100%, 50%, 0.1) 2px, transparent 0),
+            radial-gradient(circle at 75px 75px, hsla(43, 100%, 50%, 0.1) 2px, transparent 0);
+        background-size: 100px 100px;
+    }
+
+    @media (max-width: 768px) {
+        .mobile-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+        }
+    }
+    </style>
+</head>
+<body class="bg-background text-foreground font-sans">
+    <!-- View Switcher -->
+    <div class="fixed top-4 right-4 z-50 view-switcher">
+        <div class="bg-card border border-border rounded-lg p-1 shadow-lg">
+            <button class="view-btn px-3 py-2 text-sm rounded-md" onclick="showView('login')">Login</button>
+            <button class="view-btn px-3 py-2 text-sm rounded-md active" onclick="showView('feed')">Student Feed</button>
+            <button class="view-btn px-3 py-2 text-sm rounded-md" onclick="showView('profile')">Profile</button>
+            <button class="view-btn px-3 py-2 text-sm rounded-md" onclick="showView('school-admin')">School Admin</button>
+            <button class="view-btn px-3 py-2 text-sm rounded-md" onclick="showView('system-admin')">System Admin</button>
+        </div>
+    </div>
+
+    <!-- @COMPONENT: LoginView -->
+    <div id="login-view" class="view hidden min-h-screen bg-gradient-to-br from-background via-muted/50 to-background hero-pattern">
+        <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="w-full max-w-md space-y-8">
+                <!-- Logo Section -->
+                <div class="text-center">
+                    <div class="mx-auto w-20 h-20 bg-primary rounded-xl flex items-center justify-center mb-4">
+                        <span class="text-primary-foreground font-bold text-2xl">LR</span>
+                    </div>
+                    <h1 class="text-4xl font-bold text-foreground">LockerRoom</h1>
+                    <p class="text-muted-foreground mt-2">XEN Sports Armoury</p>
+                </div>
+
+                <!-- Login Form -->
+                <div class="bg-card border border-border rounded-xl p-8 shadow-xl">
+                    <div class="space-y-6">
+                        <div>
+                            <h2 class="text-2xl font-semibold text-center mb-2">Welcome Back</h2>
+                            <p class="text-muted-foreground text-center text-sm">Sign in to your account</p>
+                        </div>
+                        
+                        <form class="space-y-4">
+                            <div>
+                                <label class="text-sm font-medium text-foreground block mb-2">Email</label>
+                                <input type="email" data-mock="true" value="student@lockerroom.com" class="w-full px-4 py-3 border border-border rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-transparent transition-colors" placeholder="Enter your email" />
+                            </div>
+                            
+                            <div>
+                                <label class="text-sm font-medium text-foreground block mb-2">Password</label>
+                                <input type="password" data-mock="true" value="Student123!" class="w-full px-4 py-3 border border-border rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-transparent transition-colors" placeholder="Enter your password" />
+                            </div>
+                            
+                            <button type="button" class="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-lg font-medium transition-colors" onclick="showView('feed')">
+                                Sign In
+                            </button>
+                        </form>
+
+                        <!-- Demo Accounts -->
+                        <div class="border-t border-border pt-6">
+                            <p class="text-sm font-medium text-foreground mb-3">Demo Accounts:</p>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div class="bg-muted p-2 rounded text-center" data-mock="true">
+                                    <div class="font-medium">System Admin</div>
+                                    <div class="text-muted-foreground">admin@lockerroom.com</div>
+                                </div>
+                                <div class="bg-muted p-2 rounded text-center" data-mock="true">
+                                    <div class="font-medium">School Admin</div>
+                                    <div class="text-muted-foreground">school@lockerroom.com</div>
+                                </div>
+                                <div class="bg-accent/20 p-2 rounded text-center" data-mock="true">
+                                    <div class="font-medium">Student</div>
+                                    <div class="text-muted-foreground">student@lockerroom.com</div>
+                                </div>
+                                <div class="bg-muted p-2 rounded text-center" data-mock="true">
+                                    <div class="font-medium">Public Viewer</div>
+                                    <div class="text-muted-foreground">viewer@lockerroom.com</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: LoginView -->
+
+    <!-- @COMPONENT: StudentFeedView -->
+    <div id="feed-view" class="view">
+        <!-- Desktop Sidebar -->
+        <div class="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
+            <div class="flex min-h-0 flex-1 flex-col bg-card border-r border-border">
+                <div class="flex flex-1 flex-col pt-5 pb-4 overflow-y-auto">
+                    <div class="flex items-center flex-shrink-0 px-4">
+                        <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                            <span class="text-primary-foreground font-bold text-lg">LR</span>
+                        </div>
+                        <span class="ml-3 text-xl font-bold text-foreground">LockerRoom</span>
+                    </div>
+                    <nav class="mt-8 flex-1 px-4 space-y-2">
+                        <a href="#" class="bg-accent/20 text-accent-foreground group flex items-center px-4 py-3 text-sm font-medium rounded-lg">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                            </svg>
+                            Feed
+                        </a>
+                        <a href="#" class="text-muted-foreground hover:bg-muted hover:text-foreground group flex items-center px-4 py-3 text-sm font-medium rounded-lg">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            Profile
+                        </a>
+                        <a href="#" class="text-muted-foreground hover:bg-muted hover:text-foreground group flex items-center px-4 py-3 text-sm font-medium rounded-lg">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2V7a2 2 0 012-2h2a2 2 0 002 2v2a2 2 0 002 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2z" />
+                            </svg>
+                            Stats
+                        </a>
+                        <a href="#" class="text-muted-foreground hover:bg-muted hover:text-foreground group flex items-center px-4 py-3 text-sm font-medium rounded-lg">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                            </svg>
+                            Settings
+                        </a>
+                    </nav>
+                </div>
+                <div class="flex-shrink-0 flex bg-muted p-4">
+                    <div class="flex items-center">
+                        <!-- Student profile image showing a young athlete in sports gear -->
+                        <img class="inline-block h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Student profile" />
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-foreground" data-bind="user.name">Alex Johnson</p>
+                            <p class="text-xs font-medium text-muted-foreground" data-bind="user.role">Student • #23</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="lg:pl-64 flex flex-col flex-1">
+            <!-- Mobile Header -->
+            <div class="lg:hidden bg-card border-b border-border px-4 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                            <span class="text-primary-foreground font-bold">LR</span>
+                        </div>
+                        <span class="ml-2 text-lg font-bold text-foreground">LockerRoom</span>
+                    </div>
+                    <button class="p-2 rounded-lg text-muted-foreground hover:bg-muted">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Feed Content -->
+            <main class="flex-1 pb-20 lg:pb-0">
+                <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <!-- Create Post -->
+                    <div class="bg-card border border-border rounded-xl p-6 mb-6 shadow-sm">
+                        <div class="flex items-center space-x-3 mb-4">
+                            <!-- Student creating post -->
+                            <img class="h-12 w-12 rounded-full" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Your profile" />
+                            <div class="flex-1">
+                                <textarea class="w-full border-0 resize-none bg-transparent text-foreground placeholder-muted-foreground focus:ring-0" rows="3" placeholder="Share your game highlights..." data-mock="true"></textarea>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between pt-4 border-t border-border">
+                            <div class="flex items-center space-x-4">
+                                <button class="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span class="text-sm">Photo</span>
+                                </button>
+                                <button class="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                    <span class="text-sm">Video</span>
+                                </button>
+                            </div>
+                            <button class="bg-accent hover:bg-accent/90 text-accent-foreground px-6 py-2 rounded-lg font-medium transition-colors">
+                                Share
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Posts Feed -->
+                    <!-- @MAP: posts.map(post => ( -->
+                    <div class="bg-card border border-border rounded-xl mb-6 shadow-sm post-card transition-all duration-200">
+                        <!-- Post Header -->
+                        <div class="p-6 pb-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <!-- Basketball player making a shot -->
+                                    <img class="h-12 w-12 rounded-full" src="https://images.unsplash.com/photo-1546525848-3ce03ca516f6?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Student athlete" data-mock="true" />
+                                    <div>
+                                        <h3 class="font-semibold text-foreground" data-bind="post.author">Marcus Rodriguez</h3>
+                                        <p class="text-sm text-muted-foreground" data-bind="post.meta">Basketball • #15 • 2 hours ago</p>
+                                    </div>
+                                </div>
+                                <button class="p-2 text-muted-foreground hover:bg-muted rounded-lg">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Post Media -->
+                        <div class="relative">
+                            <!-- Basketball game action shot -->
+                            <img src="https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1200&h=800" alt="Basketball game highlight" class="w-full aspect-video object-cover" data-mock-image="true" />
+                            <div class="absolute top-4 right-4">
+                                <span class="bg-black/80 text-white px-2 py-1 rounded text-sm">2:34</span>
+                            </div>
+                        </div>
+
+                        <!-- Post Content -->
+                        <div class="p-6">
+                            <p class="text-foreground mb-4" data-bind="post.caption" data-mock="true">
+                                Game-winning three pointer in the final seconds! 🏀🔥 Our team dominated tonight with a 78-75 victory against Lincoln High. Thanks to everyone who came out to support us! #GameWinner #Basketball #TeamWork
+                            </p>
+
+                            <!-- Interaction Buttons -->
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-6">
+                                    <button class="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors" data-event="click:handleLike">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                        </svg>
+                                        <span data-bind="post.likes" data-mock="true">247</span>
+                                    </button>
+                                    <button class="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors" data-event="click:handleComment">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
+                                        <span data-bind="post.comments" data-mock="true">23</span>
+                                    </button>
+                                    <button class="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors" data-event="click:handleSave">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                        </svg>
+                                        <span data-bind="post.saves" data-mock="true">15</span>
+                                    </button>
+                                </div>
+                                <div class="text-sm text-muted-foreground" data-bind="post.views" data-mock="true">1.2K views</div>
+                            </div>
+
+                            <!-- Comments Preview -->
+                            <div class="mt-4 space-y-2" data-mock="true">
+                                <div class="flex items-start space-x-2">
+                                    <!-- Soccer player celebrating -->
+                                    <img class="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1552374196-c4e7ffc6e126?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Commenter" />
+                                    <div class="flex-1">
+                                        <span class="font-medium text-foreground">Sarah Chen</span>
+                                        <span class="text-muted-foreground ml-2">Incredible shot! Way to clutch up! 🔥</span>
+                                    </div>
+                                </div>
+                                <button class="text-sm text-muted-foreground hover:text-foreground ml-10">View all 23 comments</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_MAP -->
+
+                    <!-- Additional Posts -->
+                    <div class="bg-card border border-border rounded-xl mb-6 shadow-sm post-card transition-all duration-200">
+                        <div class="p-6 pb-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <!-- Female soccer player in action -->
+                                    <img class="h-12 w-12 rounded-full" src="https://pixabay.com/get/g85db6b6ce116bd765d97900c1e77f3e375d6f8bdb0f72bd72a0e39723769d1497c97f4ad4a360b20593a054f44f1aeab0b782d9e42830bd5f82954f090904957_1280.jpg" alt="Student athlete" data-mock="true" />
+                                    <div>
+                                        <h3 class="font-semibold text-foreground" data-mock="true">Emma Thompson</h3>
+                                        <p class="text-sm text-muted-foreground" data-mock="true">Soccer • #7 • 4 hours ago</p>
+                                    </div>
+                                </div>
+                                <button class="p-2 text-muted-foreground hover:bg-muted rounded-lg">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="relative">
+                            <!-- Soccer match action with players competing -->
+                            <img src="https://images.unsplash.com/photo-1551698618-1dfe5d97d256?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1200&h=800" alt="Soccer match highlight" class="w-full aspect-video object-cover" data-mock-image="true" />
+                        </div>
+
+                        <div class="p-6">
+                            <p class="text-foreground mb-4" data-mock="true">
+                                First goal of the season! ⚽️ Amazing assist from Jenna made this possible. Our team chemistry is getting stronger every game. Ready for districts! #Soccer #Goals #TeamSpirit
+                            </p>
+
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-6">
+                                    <button class="flex items-center space-x-2 text-accent transition-colors">
+                                        <svg class="w-6 h-6" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                        </svg>
+                                        <span data-mock="true">189</span>
+                                    </button>
+                                    <button class="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
+                                        <span data-mock="true">31</span>
+                                    </button>
+                                    <button class="flex items-center space-x-2 text-muted-foreground hover:text-accent transition-colors">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                        </svg>
+                                        <span data-mock="true">8</span>
+                                    </button>
+                                </div>
+                                <div class="text-sm text-muted-foreground" data-mock="true">924 views</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Mobile Bottom Navigation -->
+        <div class="mobile-nav lg:hidden bg-card border-t border-border">
+            <div class="grid grid-cols-5 py-2">
+                <button class="flex flex-col items-center py-2 px-1 text-accent">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                    </svg>
+                    <span class="text-xs mt-1">Feed</span>
+                </button>
+                <button class="flex flex-col items-center py-2 px-1 text-muted-foreground">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <span class="text-xs mt-1">Search</span>
+                </button>
+                <button class="flex flex-col items-center py-2 px-1 text-muted-foreground">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span class="text-xs mt-1">Create</span>
+                </button>
+                <button class="flex flex-col items-center py-2 px-1 text-muted-foreground">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2V7a2 2 0 012-2h2a2 2 0 002 2v2a2 2 0 002 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2z" />
+                    </svg>
+                    <span class="text-xs mt-1">Stats</span>
+                </button>
+                <button class="flex flex-col items-center py-2 px-1 text-muted-foreground">
+                    <div class="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                        <img class="w-5 h-5 rounded-full" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="" />
+                    </div>
+                    <span class="text-xs mt-1">Profile</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: StudentFeedView -->
+
+    <!-- @COMPONENT: StudentProfileView -->
+    <div id="profile-view" class="view hidden min-h-screen bg-background">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Profile Header -->
+            <div class="bg-card border border-border rounded-xl overflow-hidden shadow-sm mb-8">
+                <!-- Cover Photo -->
+                <!-- Stadium atmosphere with crowd and lights -->
+                <div class="h-48 bg-gradient-to-r from-primary via-secondary to-primary relative" style="background-image: url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1920&h=400'); background-size: cover; background-position: center;">
+                    <div class="absolute inset-0 bg-black/30"></div>
+                </div>
+
+                <!-- Profile Info -->
+                <div class="relative px-6 pb-6">
+                    <div class="flex flex-col sm:flex-row sm:items-end sm:space-x-6 -mt-16">
+                        <!-- Profile Picture -->
+                        <!-- Athletic young person in sports uniform -->
+                        <img class="w-32 h-32 rounded-full border-4 border-card shadow-lg mx-auto sm:mx-0" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Alex Johnson profile" />
+                        
+                        <div class="flex-1 text-center sm:text-left mt-4 sm:mt-0">
+                            <h1 class="text-3xl font-bold text-foreground" data-bind="student.name" data-mock="true">Alex Johnson</h1>
+                            <p class="text-lg text-muted-foreground" data-bind="student.info" data-mock="true">Basketball • #23 • Junior</p>
+                            <p class="text-muted-foreground mt-2" data-bind="student.school" data-mock="true">Washington High School • Class of 2025</p>
+                            
+                            <div class="mt-4 flex flex-wrap justify-center sm:justify-start gap-4">
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-foreground" data-bind="stats.posts" data-mock="true">47</div>
+                                    <div class="text-sm text-muted-foreground">Posts</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-foreground" data-bind="stats.totalLikes" data-mock="true">2.1K</div>
+                                    <div class="text-sm text-muted-foreground">Likes</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-foreground" data-bind="stats.totalViews" data-mock="true">18.5K</div>
+                                    <div class="text-sm text-muted-foreground">Views</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-foreground" data-bind="stats.saves" data-mock="true">341</div>
+                                    <div class="text-sm text-muted-foreground">Saves</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col sm:items-end space-y-3 mt-4 sm:mt-0">
+                            <button class="bg-accent hover:bg-accent/90 text-accent-foreground px-6 py-2 rounded-lg font-medium transition-colors">
+                                Edit Profile
+                            </button>
+                            <button class="bg-muted hover:bg-muted/90 text-muted-foreground px-6 py-2 rounded-lg font-medium transition-colors">
+                                Share Profile
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Bio -->
+                    <div class="mt-6">
+                        <p class="text-foreground leading-relaxed" data-bind="student.bio" data-mock="true">
+                            🏀 Point Guard | Team Captain | State Championship 2024 bound<br/>
+                            📍 Washington High Eagles<br/>
+                            🎯 "Hard work beats talent when talent doesn't work hard"<br/>
+                            📧 Contact: alexj@whs.edu
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Dashboard -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stats-card border border-border rounded-xl p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-muted-foreground">Total Likes</p>
+                            <p class="text-2xl font-bold text-foreground" data-bind="stats.totalLikes" data-mock="true">2,147</p>
+                            <p class="text-sm text-accent" data-mock="true">+12% this month</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-card border border-border rounded-xl p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-muted-foreground">Total Views</p>
+                            <p class="text-2xl font-bold text-foreground" data-bind="stats.totalViews" data-mock="true">18,542</p>
+                            <p class="text-sm text-accent" data-mock="true">+8% this month</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-card border border-border rounded-xl p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-12 h-12 bg-secondary/20 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-muted-foreground">Comments</p>
+                            <p class="text-2xl font-bold text-foreground" data-bind="stats.comments" data-mock="true">394</p>
+                            <p class="text-sm text-accent" data-mock="true">+15% this month</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-card border border-border rounded-xl p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-muted-foreground">Saves</p>
+                            <p class="text-2xl font-bold text-foreground" data-bind="stats.saves" data-mock="true">341</p>
+                            <p class="text-sm text-accent" data-mock="true">+5% this month</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Posts Grid -->
+            <div class="bg-card border border-border rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-xl font-semibold text-foreground">Posts</h2>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
+                    <!-- @MAP: userPosts.map(post => ( -->
+                    <div class="aspect-square relative group cursor-pointer" data-mock="true">
+                        <!-- Basketball action shot during game -->
+                        <img src="https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=800" alt="Post" class="w-full h-full object-cover" />
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200">
+                            <div class="opacity-0 group-hover:opacity-100 absolute inset-0 flex items-center justify-center space-x-6 text-white transition-opacity duration-200">
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">247</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">23</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="aspect-square relative group cursor-pointer" data-mock="true">
+                        <!-- Team celebration after victory -->
+                        <img src="https://pixabay.com/get/g3e1149c7f3ff7364056f903fb108775dc85d17a7e06ed8c89d0a0091405bbef60dcf30dffc1f4066d2f46473862b055a1b05805d58369a0ac21c5cf2979dd8f9_1280.jpg" alt="Post" class="w-full h-full object-cover" />
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200">
+                            <div class="opacity-0 group-hover:opacity-100 absolute inset-0 flex items-center justify-center space-x-6 text-white transition-opacity duration-200">
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">189</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">31</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="aspect-square relative group cursor-pointer" data-mock="true">
+                        <!-- Training session in gym -->
+                        <img src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=800" alt="Post" class="w-full h-full object-cover" />
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200">
+                            <div class="opacity-0 group-hover:opacity-100 absolute inset-0 flex items-center justify-center space-x-6 text-white transition-opacity duration-200">
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">156</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">18</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="aspect-square relative group cursor-pointer" data-mock="true">
+                        <!-- Sports equipment and basketball -->
+                        <img src="https://pixabay.com/get/g778abf404acaeaa474a5c8c0ce1f266e8b9c00200a6b4a097a43cddef0e884a8ccb234ff6682968e26a9c651ed00d9e990ecfa0cc6620c1c47bcb6e69026d02b_1280.jpg" alt="Post" class="w-full h-full object-cover" />
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200">
+                            <div class="opacity-0 group-hover:opacity-100 absolute inset-0 flex items-center justify-center space-x-6 text-white transition-opacity duration-200">
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">203</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">12</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="aspect-square relative group cursor-pointer" data-mock="true">
+                        <!-- Basketball court from above view -->
+                        <img src="https://images.unsplash.com/photo-1574623452334-1e0ac2b3ccb4?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=800" alt="Post" class="w-full h-full object-cover" />
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200">
+                            <div class="opacity-0 group-hover:opacity-100 absolute inset-0 flex items-center justify-center space-x-6 text-white transition-opacity duration-200">
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">134</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">7</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="aspect-square relative group cursor-pointer" data-mock="true">
+                        <!-- Award ceremony or achievement moment -->
+                        <img src="https://pixabay.com/get/gf6e0695fad243c003f6ea873f0e3e3a5b9a7cee02edc007428a11464d22d4f2f048069ea5161fbb62a83813cf985296748e12ada47498d977dde8c61b4bd7a33_1280.jpg" alt="Post" class="w-full h-full object-cover" />
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200">
+                            <div class="opacity-0 group-hover:opacity-100 absolute inset-0 flex items-center justify-center space-x-6 text-white transition-opacity duration-200">
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">421</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span data-mock="true">45</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_MAP -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: StudentProfileView -->
+
+    <!-- @COMPONENT: SchoolAdminView -->
+    <div id="school-admin-view" class="view hidden min-h-screen bg-background">
+        <!-- School Admin Dashboard -->
+        <div class="min-h-screen">
+            <!-- Header -->
+            <div class="bg-card border-b border-border">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex items-center justify-between h-16">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                                <span class="text-primary-foreground font-bold text-lg">LR</span>
+                            </div>
+                            <div class="ml-4">
+                                <h1 class="text-xl font-semibold text-foreground">School Dashboard</h1>
+                                <p class="text-sm text-muted-foreground" data-bind="school.name" data-mock="true">Washington High School</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center space-x-4">
+                            <button class="bg-accent hover:bg-accent/90 text-accent-foreground px-4 py-2 rounded-lg font-medium transition-colors">
+                                + Add Student
+                            </button>
+                            <div class="flex items-center space-x-3">
+                                <!-- School administrator profile -->
+                                <img class="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Admin profile" />
+                                <span class="text-sm font-medium text-foreground" data-bind="admin.name" data-mock="true">Dr. Sarah Mitchell</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Overview Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-muted-foreground">Total Students</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="school.totalStudents" data-mock="true">186</p>
+                                <p class="text-sm text-accent" data-mock="true">+12 this semester</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-muted-foreground">Total Posts</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="school.totalPosts" data-mock="true">1,247</p>
+                                <p class="text-sm text-accent" data-mock="true">+45 this week</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-secondary/20 rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-muted-foreground">Total Engagement</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="school.totalEngagement" data-mock="true">23.4K</p>
+                                <p class="text-sm text-accent" data-mock="true">+18% this month</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2V7a2 2 0 012-2h2a2 2 0 002 2v2a2 2 0 002 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-muted-foreground">Active Sports</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="school.activeSports" data-mock="true">12</p>
+                                <p class="text-sm text-muted-foreground" data-mock="true">Fall season</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Recent Activity -->
+                    <div class="lg:col-span-2">
+                        <div class="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                            <div class="px-6 py-4 border-b border-border">
+                                <h2 class="text-lg font-semibold text-foreground">Recent Student Activity</h2>
+                            </div>
+                            <div class="divide-y divide-border">
+                                <!-- @MAP: recentActivity.map(activity => ( -->
+                                <div class="p-6 hover:bg-muted/50 transition-colors" data-mock="true">
+                                    <div class="flex items-center space-x-4">
+                                        <!-- Student athlete in action -->
+                                        <img class="h-12 w-12 rounded-full" src="https://images.unsplash.com/photo-1546525848-3ce03ca516f6?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Student" />
+                                        <div class="flex-1">
+                                            <p class="text-sm text-foreground">
+                                                <span class="font-medium">Marcus Rodriguez</span> posted a new highlight video
+                                            </p>
+                                            <p class="text-sm text-muted-foreground">Basketball • 2 hours ago</p>
+                                        </div>
+                                        <div class="text-sm text-muted-foreground">247 likes</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="p-6 hover:bg-muted/50 transition-colors" data-mock="true">
+                                    <div class="flex items-center space-x-4">
+                                        <!-- Female soccer player -->
+                                        <img class="h-12 w-12 rounded-full" src="https://pixabay.com/get/g9fe37707b1aa3441ebbf8d7597c77e9467d26ba39dd158619c543de6b5927d7fc168eb14ab85effe1e5e7a717d726b425b11a77ee579a35dd5a849d40e9d326d_1280.jpg" alt="Student" />
+                                        <div class="flex-1">
+                                            <p class="text-sm text-foreground">
+                                                <span class="font-medium">Emma Thompson</span> shared her first goal of the season
+                                            </p>
+                                            <p class="text-sm text-muted-foreground">Soccer • 4 hours ago</p>
+                                        </div>
+                                        <div class="text-sm text-muted-foreground">189 likes</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="p-6 hover:bg-muted/50 transition-colors" data-mock="true">
+                                    <div class="flex items-center space-x-4">
+                                        <!-- Track and field athlete -->
+                                        <img class="h-12 w-12 rounded-full" src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Student" />
+                                        <div class="flex-1">
+                                            <p class="text-sm text-foreground">
+                                                <span class="font-medium">David Kim</span> posted training session highlights
+                                            </p>
+                                            <p class="text-sm text-muted-foreground">Track & Field • 6 hours ago</p>
+                                        </div>
+                                        <div class="text-sm text-muted-foreground">156 likes</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="p-6 hover:bg-muted/50 transition-colors" data-mock="true">
+                                    <div class="flex items-center space-x-4">
+                                        <!-- Swimming athlete -->
+                                        <img class="h-12 w-12 rounded-full" src="https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Student" />
+                                        <div class="flex-1">
+                                            <p class="text-sm text-foreground">
+                                                <span class="font-medium">Jessica Park</span> achieved a new personal record
+                                            </p>
+                                            <p class="text-sm text-muted-foreground">Swimming • 8 hours ago</p>
+                                        </div>
+                                        <div class="text-sm text-muted-foreground">203 likes</div>
+                                    </div>
+                                </div>
+                                <!-- @END_MAP -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- School Management -->
+                    <div class="space-y-6">
+                        <!-- Top Performing Students -->
+                        <div class="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                            <div class="px-6 py-4 border-b border-border">
+                                <h2 class="text-lg font-semibold text-foreground">Top Performers</h2>
+                                <p class="text-sm text-muted-foreground">Most engaged students this month</p>
+                            </div>
+                            <div class="p-6 space-y-4">
+                                <!-- @MAP: topStudents.map((student, index) => ( -->
+                                <div class="flex items-center space-x-3" data-mock="true">
+                                    <div class="w-8 h-8 bg-accent rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-bold text-accent-foreground">1</span>
+                                    </div>
+                                    <!-- Top performing student athlete -->
+                                    <img class="h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Student" />
+                                    <div class="flex-1">
+                                        <p class="font-medium text-foreground">Alex Johnson</p>
+                                        <p class="text-sm text-muted-foreground">2.1K likes • Basketball</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center space-x-3" data-mock="true">
+                                    <div class="w-8 h-8 bg-secondary/80 rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-bold text-secondary-foreground">2</span>
+                                    </div>
+                                    <img class="h-10 w-10 rounded-full" src="https://images.unsplash.com/photo-1546525848-3ce03ca516f6?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="Student" />
+                                    <div class="flex-1">
+                                        <p class="font-medium text-foreground">Marcus Rodriguez</p>
+                                        <p class="text-sm text-muted-foreground">1.8K likes • Basketball</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center space-x-3" data-mock="true">
+                                    <div class="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-bold text-muted-foreground">3</span>
+                                    </div>
+                                    <img class="h-10 w-10 rounded-full" src="https://pixabay.com/get/ge39a345527968ad03a02b169d6b0a9b0d2b87f5f6d8a3f21b0cd99c636f7c0aed5748a0aed8e65c89a81cc434349825ea6635ece220de16a07c84e23aeea2e1f_1280.jpg" alt="Student" />
+                                    <div class="flex-1">
+                                        <p class="font-medium text-foreground">Emma Thompson</p>
+                                        <p class="text-sm text-muted-foreground">1.5K likes • Soccer</p>
+                                    </div>
+                                </div>
+                                <!-- @END_MAP -->
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                            <h2 class="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
+                            <div class="space-y-3">
+                                <button class="w-full bg-accent hover:bg-accent/90 text-accent-foreground p-3 rounded-lg font-medium transition-colors text-left flex items-center">
+                                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                    </svg>
+                                    Add New Student
+                                </button>
+                                <button class="w-full bg-muted hover:bg-muted/90 text-muted-foreground p-3 rounded-lg font-medium transition-colors text-left flex items-center">
+                                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V9a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2z" />
+                                    </svg>
+                                    View Reports
+                                </button>
+                                <button class="w-full bg-muted hover:bg-muted/90 text-muted-foreground p-3 rounded-lg font-medium transition-colors text-left flex items-center">
+                                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                                    </svg>
+                                    Manage Settings
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: SchoolAdminView -->
+
+    <!-- @COMPONENT: SystemAdminView -->
+    <div id="system-admin-view" class="view hidden min-h-screen bg-background">
+        <!-- System Admin Dashboard -->
+        <div class="min-h-screen">
+            <!-- Header -->
+            <div class="bg-card border-b border-border">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex items-center justify-between h-16">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 gold-gradient rounded-lg flex items-center justify-center">
+                                <span class="text-accent-foreground font-bold text-lg">XEN</span>
+                            </div>
+                            <div class="ml-4">
+                                <h1 class="text-xl font-semibold text-foreground">System Administration</h1>
+                                <p class="text-sm text-muted-foreground">XEN Sports Armoury Platform</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-2 bg-muted px-3 py-2 rounded-lg">
+                                <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span class="text-sm text-foreground">System Online</span>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <!-- System administrator profile -->
+                                <img class="h-8 w-8 rounded-full" src="https://images.unsplash.com/photo-1560250097-0b93528c311a?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="System admin" />
+                                <span class="text-sm font-medium text-foreground" data-bind="systemAdmin.name" data-mock="true">James Wilson</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Dashboard -->
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Global Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-muted-foreground">Total Schools</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="system.totalSchools" data-mock="true">342</p>
+                                <p class="text-sm text-accent" data-mock="true">+28 this month</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-muted-foreground">Active Students</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="system.activeStudents" data-mock="true">15.2K</p>
+                                <p class="text-sm text-accent" data-mock="true">+1.2K this month</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-secondary/20 rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-muted-foreground">Content Uploads</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="system.contentUploads" data-mock="true">89.4K</p>
+                                <p class="text-sm text-accent" data-mock="true">+5.2K this week</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-muted-foreground">Monthly Revenue</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="system.monthlyRevenue" data-mock="true">$47.2K</p>
+                                <p class="text-sm text-accent" data-mock="true">+23% this month</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Content Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Platform Analytics -->
+                    <div class="lg:col-span-2 space-y-8">
+                        <!-- Recent School Registrations -->
+                        <div class="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                            <div class="px-6 py-4 border-b border-border">
+                                <h2 class="text-lg font-semibold text-foreground">Recent School Registrations</h2>
+                                <p class="text-sm text-muted-foreground">New schools joining the platform</p>
+                            </div>
+                            <div class="divide-y divide-border">
+                                <!-- @MAP: recentSchools.map(school => ( -->
+                                <div class="p-6 hover:bg-muted/50 transition-colors" data-mock="true">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-4">
+                                            <!-- School building exterior -->
+                                            <img class="h-12 w-12 rounded-lg object-cover" src="https://images.unsplash.com/photo-1562774053-701939374585?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="School" />
+                                            <div>
+                                                <h3 class="font-medium text-foreground">Lincoln High School</h3>
+                                                <p class="text-sm text-muted-foreground">Springfield, IL • Premium Plan • 450 students</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                Active
+                                            </span>
+                                            <p class="text-sm text-muted-foreground mt-1">Registered 2 days ago</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="p-6 hover:bg-muted/50 transition-colors" data-mock="true">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-4">
+                                            <img class="h-12 w-12 rounded-lg object-cover" src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=400&h=400" alt="School" />
+                                            <div>
+                                                <h3 class="font-medium text-foreground">Roosevelt Academy</h3>
+                                                <p class="text-sm text-muted-foreground">Portland, OR • Standard Plan • 320 students</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                Pending
+                                            </span>
+                                            <p class="text-sm text-muted-foreground mt-1">Registered 4 days ago</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="p-6 hover:bg-muted/50 transition-colors" data-mock="true">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-4">
+                                            <img class="h-12 w-12 rounded-lg object-cover" src="https://pixabay.com/get/ge39a345527968ad03a02b169d6b0a9b0d2b87f5f6d8a3f21b0cd99c636f7c0aed5748a0aed8e65c89a81cc434349825ea6635ece220de16a07c84e23aeea2e1f_1280.jpg" alt="School" />
+                                            <div>
+                                                <h3 class="font-medium text-foreground">Central Tech High</h3>
+                                                <p class="text-sm text-muted-foreground">Austin, TX • Premium Plan • 680 students</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                Active
+                                            </span>
+                                            <p class="text-sm text-muted-foreground mt-1">Registered 1 week ago</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- @END_MAP -->
+                            </div>
+                        </div>
+
+                        <!-- Platform Health Metrics -->
+                        <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                            <div class="mb-6">
+                                <h2 class="text-lg font-semibold text-foreground">Platform Health</h2>
+                                <p class="text-sm text-muted-foreground">System performance and usage metrics</p>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="text-center">
+                                    <div class="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-2">
+                                        <div class="text-2xl font-bold text-green-600" data-mock="true">99.8%</div>
+                                    </div>
+                                    <p class="text-sm font-medium text-foreground">Uptime</p>
+                                    <p class="text-xs text-muted-foreground">Last 30 days</p>
+                                </div>
+                                
+                                <div class="text-center">
+                                    <div class="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-2">
+                                        <div class="text-2xl font-bold text-blue-600" data-mock="true">1.2s</div>
+                                    </div>
+                                    <p class="text-sm font-medium text-foreground">Avg Response</p>
+                                    <p class="text-xs text-muted-foreground">Page load time</p>
+                                </div>
+                                
+                                <div class="text-center">
+                                    <div class="w-20 h-20 mx-auto bg-purple-100 rounded-full flex items-center justify-center mb-2">
+                                        <div class="text-2xl font-bold text-purple-600" data-mock="true">2.4M</div>
+                                    </div>
+                                    <p class="text-sm font-medium text-foreground">API Requests</p>
+                                    <p class="text-xs text-muted-foreground">This month</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Management -->
+                    <div class="space-y-6">
+                        <!-- System Actions -->
+                        <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                            <h2 class="text-lg font-semibold text-foreground mb-4">System Management</h2>
+                            <div class="space-y-3">
+                                <button class="w-full bg-accent hover:bg-accent/90 text-accent-foreground p-3 rounded-lg font-medium transition-colors text-left flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                        </svg>
+                                        Review School Applications
+                                    </div>
+                                    <span class="bg-accent-foreground/20 text-accent-foreground px-2 py-1 rounded text-sm">3</span>
+                                </button>
+                                
+                                <button class="w-full bg-muted hover:bg-muted/90 text-muted-foreground p-3 rounded-lg font-medium transition-colors text-left flex items-center">
+                                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V9a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Platform Analytics
+                                </button>
+                                
+                                <button class="w-full bg-muted hover:bg-muted/90 text-muted-foreground p-3 rounded-lg font-medium transition-colors text-left flex items-center">
+                                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                                    </svg>
+                                    System Configuration
+                                </button>
+                                
+                                <button class="w-full bg-muted hover:bg-muted/90 text-muted-foreground p-3 rounded-lg font-medium transition-colors text-left flex items-center">
+                                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                                    </svg>
+                                    Manage Administrators
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Subscription Overview -->
+                        <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                            <h2 class="text-lg font-semibold text-foreground mb-4">Subscription Plans</h2>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-medium text-foreground">Premium Schools</p>
+                                        <p class="text-sm text-muted-foreground">Advanced features</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-lg font-bold text-foreground" data-mock="true">189</p>
+                                        <p class="text-sm text-accent">$150/month each</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="font-medium text-foreground">Standard Schools</p>
+                                        <p class="text-sm text-muted-foreground">Basic features</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-lg font-bold text-foreground" data-mock="true">153</p>
+                                        <p class="text-sm text-accent">$75/month each</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-border">
+                                    <div class="flex items-center justify-between">
+                                        <p class="font-medium text-foreground">Total MRR</p>
+                                        <p class="text-xl font-bold text-accent" data-mock="true">$39,825</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- System Alerts -->
+                        <div class="bg-card border border-border rounded-xl p-6 shadow-sm">
+                            <h2 class="text-lg font-semibold text-foreground mb-4">System Alerts</h2>
+                            <div class="space-y-3">
+                                <div class="flex items-start space-x-3 p-3 bg-green-50 border border-green-200 rounded-lg" data-mock="true">
+                                    <div class="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                                    <div>
+                                        <p class="text-sm font-medium text-green-800">System Update Completed</p>
+                                        <p class="text-xs text-green-600">Version 2.1.4 deployed successfully</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-start space-x-3 p-3 bg-blue-50 border border-blue-200 rounded-lg" data-mock="true">
+                                    <div class="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                                    <div>
+                                        <p class="text-sm font-medium text-blue-800">Database Backup Complete</p>
+                                        <p class="text-xs text-blue-600">Scheduled backup finished at 2:00 AM</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-start space-x-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg" data-mock="true">
+                                    <div class="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
+                                    <div>
+                                        <p class="text-sm font-medium text-yellow-800">Storage Usage: 78%</p>
+                                        <p class="text-xs text-yellow-600">Consider upgrading storage capacity</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: SystemAdminView -->
+
+    <script>
+        // View switching functionality
+        function showView(viewName) {
+            // Hide all views
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.add('hidden');
+            });
+            
+            // Show selected view
+            document.getElementById(viewName + '-view').classList.remove('hidden');
+            
+            // Update active button
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        // TODO: Implement business logic, API calls, or state management
+        // TODO: Add form validation and submission handlers
+        // TODO: Implement real-time updates and notifications
+        // TODO: Add authentication and authorization logic
+        // TODO: Integrate with backend APIs for data fetching
+        // TODO: Add error handling and loading states
+        
+        // Initialize demo functionality
+        (function() {
+            // Mock interaction handlers
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('[data-event*="like"]')) {
+                    // TODO: Handle like functionality
+                    console.log('Like button clicked');
+                }
+                if (e.target.closest('[data-event*="comment"]')) {
+                    // TODO: Handle comment functionality
+                    console.log('Comment button clicked');
+                }
+                if (e.target.closest('[data-event*="save"]')) {
+                    // TODO: Handle save functionality
+                    console.log('Save button clicked');
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
