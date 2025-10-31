@@ -1,0 +1,69 @@
+
+  Update the LockerRoom project with the following improvements to the Viewer Portal and School Admin Portal:
+
+### Viewer Portal Fixes
+
+First, as seen in the image, I noticed that there is no sign up portal for viewers (or more or less visitors) that would like to create accounts and check out the content of their students and follow some of them. Kindly create a “Create an Account” option, which will be how accounts for viewers. Will be created. 
+
+### Viewer Portal Fixes
+
+1. **Feed Tab**
+   - Ensure student posts (photos, videos, captions) display correctly.
+   - Implement functional commenting:
+     * Viewers can add comments to posts.
+     * Comments should be saved to Supabase (post_comments table) and appear instantly.
+   - Add "like" functionality if not already enabled.
+
+2. **Search & Follow**
+   - Add a search bar at the top of the feed to allow viewers to search for students by name.
+   - Implement a "Follow" system:
+     * Viewers can follow students.
+     * Store follow relationships in Supabase (student_followers table).
+   - Update both the **Viewer Portal** and **Student Portal** to show follow/unfollow options.
+
+3. **Saved/Bookmarked Posts**
+   - Add a dedicated tab called "Saved".
+   - Allow viewers to save/bookmark posts from the feed.
+   - Store saved post references in Supabase and display them in the Saved tab.
+
+4. **Following Page**
+   - Add a "Following" page where viewers can see the list of students they follow.
+   - Include quick navigation to student profiles.
+
+5. **Settings Page**
+   - Replace the placeholder with a fully working settings page.
+   - Features:
+     * Edit name
+     * Change email / login info
+     * Upload or change profile picture (Cloudinary integration)
+   - Ensure changes update Supabase in real time.
+
+6. **Remove/Adjust Stats Tab**
+   - The Stats tab is unnecessary for viewers → remove it entirely or hide it in the Viewer Portal.
+
+7. **Professional Design**
+   - Ensure all new features follow LockerRoom’s theme (black, gold, white, grey).
+   - Maintain responsive, mobile-first design.
+
+---
+
+### School Admin Portal Fix
+
+1. **/manage-settings → School Information Tab**
+   - Restrict editing of School Information (subscription plan, student limits, etc.).
+   - School admins can only **view** this information.
+   - Only System Admins should have permissions to edit these fields.
+   - Add clear UI indicators (e.g., disabled form fields, “View Only” label).
+
+---
+
+### Documentation
+
+- Create a new file in `docs/` named `viewer_portal_testing.md`.
+- Document:
+  * All implemented Viewer Portal features (comments, search, follow, saved posts, following list, settings).
+  * Permissions change in School Admin Portal.
+  * Screenshots or placeholders where relevant.
+  * Any limitations or pending upgrades.
+
+Ensure all features are fully integrated with Supabase for persistence and Cloudinary for media. Validate user authentication, permissions, and error handling. All updates must remain responsive and production-ready.

@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1757625179275,
+      "tag": "0000_low_gideon",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1757648837839,
+      "tag": "0001_old_payback",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1757654662844,
+      "tag": "0002_strong_colleen_wing",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1757655000000,
+      "tag": "0003_backfill_users_school_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1757655100000,
+      "tag": "0004_user_follows",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1757655200000,
+      "tag": "0005_fix_data_types_and_indexes",
+      "breakpoints": true
+    }
+  ]
+}

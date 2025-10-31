@@ -1,0 +1,170 @@
+You are the lead engineer on the LockerRoom web app (Express/TypeScript + React + Supabase + Cloudinary).
+Bring the system to full working order by implementing ALL tasks below in order, then run end-to-end tests and produce a QA report.
+
+# 0) Preconditions (do not skip)
+- Verify these secrets exist in the environment and are used by server-only code:
+  - SUPABASE_URL
+  - SUPABASE_ANON_KEY
+  - SUPABASE_SERVICE_ROLE_KEY  (used ONLY on the server)
+  - CLOUDINARY_CLOUD_NAME
+  - CLOUDINARY_API_KEY
+  - CLOUDINARY_API_SECRET
+- Confirm we are using the **central `users` table** with columns: id (uuid), email, password_hash, role ('student'|'viewer'|'school_admin'|'system_admin'), linked_id (uuid), created_at.
+- Confirm role tables exist: students, viewers, school_admins, system_admins; each has `profile_photo TEXT` and `password_hash TEXT` columns.
+- Confirm content tables exist and keep THESE exact names: posts, post_comments, post_likes, saved_posts, student_followers.
+
+If any of the above is missing, create the necessary migrations (SQL) and apply them.
+
+# 1) Auth & Registration — centralize on `users` table
+Refactor the auth layer to exclusively use `users` + role tables:
+
+## 1.1 POST /api/auth/register
+- Input: { email, password, role: 'student'|'viewer', profile?: {name, dob, ...} }
+- Flow:
+  1) Ensure `email` not taken in `users`.
+  2) bcrypt hash password.
+  3) Insert into `users` (email, password_hash, role). Capture users.id as userId.
+  4) Insert role row:
+     - if role=student → insert into `students` (id default uuid, profile fields…), and set `users.linked_id` = students.id
+     - if role=viewer  → insert into `viewers`  (id default uuid, profile fields…), and set `users.linked_id` = viewers.id
+  5) Issue JWT containing { userId, role, linkedId }.
+- Return: 201 { userId, role, linkedId }
+
+## 1.2 POST /api/auth/login
+- Input: { email, password }
+- Flow:
+  1) Find `users` by email, compare bcrypt(password, users.password_hash).
+  2) Return JWT with { userId, role, linkedId }.
+- Return: 200 { token, role, linkedId }
+
+## 1.3 POST /api/users/:userId/change-password (auth required)
+- Input: { currentPassword, newPassword }
+- Flow:
+  1) Verify userId from JWT matches :userId.
+  2) Compare bcrypt(currentPassword, users.password_hash).
+  3) If OK, update users.password_hash with bcrypt(newPassword).
+- Return: 200 with success toast on frontend.
+
+## 1.4 GET /api/users/:userId/profile (auth required)
+- Resolve by role:
+  - if role=student  → select from `students` where id=linkedId
+  - if role=viewer   → select from `viewers`  where id=linkedId
+  - if school_admin  → select from `school_admins`
+  - if system_admin  → select from `system_admins`
+- Return merged profile { role, linkedId, profile fields, profile_photo }.
+
+# 2) Viewer & Student Settings
+## 2.1 PATCH /api/viewers/:id/profile  and  PATCH /api/students/:id/profile
+- Auth required; id must equal JWT.linkedId.
+- Update name, bio, dob, etc. plus `profile_photo` if provided.
+
+## 2.2 POST /api/users/:userId/profile-photo
+- Accepts single file; upload to Cloudinary.
+- Save returned secure_url to role table’s `profile_photo` for JWT.linkedId.
+
+Fix the frontend:
+- Viewer Settings: “Change Photo” triggers upload → calls /api/users/:userId/profile-photo on success, then refreshes avatar.
+- Viewer/Student Settings: “Save Profile” calls PATCH endpoint; show success/error toasts.
+
+# 3) School Admin — Add Student (fix “Authentication required”)
+Implement secure creation using service role and proper policies:
+
+## 3.1 POST /api/school-admin/add-student  (auth: school_admin)
+- Flow:
+  1) Verify JWT.role === 'school_admin'. Resolve the caller’s school_admin row, get `school_id`.
+  2) Generate OTP = 8-char random string; bcrypt it.
+  3) Create `users` row: { email, role:'student', password_hash:bcrypt(OTP) }.
+  4) Create `students` row with `school_id` = caller’s `school_id`, and any provided profile fields.
+  5) Update users.linked_id = students.id
+  6) Return { studentId: students.id, otp } (otp shown ONCE).
+
+- Use the Supabase **service role** key on the server for these inserts so RLS does not block. Never expose service key to the client.
+
+Frontend:
+- On success, show banner with the one-time password for the newly added student.
+
+# 4) Posts & Comments — fix uploads and “View All Comments”
+## 4.1 POST /api/posts/create  (auth: student)
+- Accept multipart form-data: { file, caption, content_type }
+- Upload to Cloudinary (auto-detect; folder: "lockerroom/posts").
+- Insert into `posts`: { id, student_id=JWT.linkedId, school_id (optional), caption, content_type, content_url=secure_url }
+- Return created post JSON.
+
+Frontend Student Feed:
+- Photo/Video buttons must open file picker, post to /api/posts/create, then refresh list.
+- Add loader + error toasts.
+
+## 4.2 Comments
+- GET /api/posts/:postId/comments?limit=all → returns all comments ordered by created_at.
+- POST /api/posts/:postId/comments  (auth: student or viewer):
+  Insert into `post_comments` { id, post_id, user_id=JWT.linkedId, comment }.
+
+Frontend:
+- “View All Comments” opens modal or route /post/:postId and renders full thread.
+- Make avatars and names **clickable** → route to /profile/:role/:id (or a unified /profile/:id endpoint that resolves role on server).
+
+# 5) Following & Search — make profiles clickable
+- Ensure search results and following lists render `{ role, id, name, avatar }` and link to profiles:
+  - `/profile/:role/:id` (student|viewer)
+  - Implement GET /api/profile/:role/:id that returns the role’s profile row.
+
+# 6) RLS sanity (server code must use proper keys)
+- Normal user actions should use Supabase anon key + JWT; privileged admin actions use service role key server-side only.
+- Confirm the existing RLS policy on `students` for INSERT matches:
+  EXISTS (SELECT 1 FROM school_admins sa WHERE sa.id = auth.uid() AND sa.school_id = students.school_id).
+- If any policy blocks legitimate calls from the server using service key, switch that particular server call to the service client.
+
+# 7) Demo Reseed Script
+Add `scripts/reseed-demo.ts` that:
+- Truncates (in dependency order) with CASCADE: post_comments, post_likes, saved_posts, student_followers, posts, students, viewers, school_admins, system_admins, users, schools.
+- Recreates demo:
+  - 1 system admin, 1 school admin (with school), 3 students (same school), 2 viewers.
+  - 10 posts (mix of photo/video) with Cloudinary placeholders.
+  - Likes, comments, follows linking viewers ↔ students.
+- Hashes demo passwords with bcrypt.
+- Sets users.linked_id for every user.
+- Prints the credentials to console and writes them to `docs/demo_credentials.md`.
+
+Add npm script:
+  "reseed": "tsx scripts/reseed-demo.ts"
+
+# 8) Automated Tests — end-to-end and API
+Create a `tests/e2e` Playwright suite and a `tests/api` supertest/jest suite that use the seeded data.
+
+Minimum coverage:
+- Auth: register viewer, login viewer, change password.
+- School admin: login, add student, student OTP works.
+- Student: login, upload post (photo/video), comment, like.
+- Viewer: search student, follow/unfollow, comment, save post, view following list.
+- Profiles: clicking avatars/search results navigates to profile page and loads data.
+- Settings: change profile fields + photo for viewer and student.
+
+Generate an HTML report to `docs/test_reports/e2e-report.html` and a markdown summary `docs/test_reports/summary.md` listing **PASS/FAIL per portal**.
+
+# 9) Developer Ergonomics
+- Add robust error logging on server: log request, status, and error stack to `logs/server.log`.
+- On any 4xx/5xx from API, return consistent { error: { code, message } }.
+- Add .http examples in `docs/http/` (VS Code REST Client compatible) for each endpoint.
+
+# 10) Deliverables
+- Updated API code (server) and React pages (client) implementing all above behaviors.
+- SQL migrations if any schema tweaks were needed (commit under server/db/migrations).
+- `scripts/reseed-demo.ts` + npm run reseed.
+- Test suites + reports under `docs/test_reports/`.
+- A final "LockerRoom QA Report.md" summarizing:
+  - Scenarios executed per role,
+  - What passed,
+  - What failed (with reproduction steps and stack traces),
+  - Screenshots for any UI failures.
+
+# 11) Runbook (run these now)
+- Install any new deps (bcrypt, multer/formidable, cloudinary SDK, supertest, playwright).
+- Run: npm run reseed
+- Start dev: npm run dev
+- Run E2E: npm run test:e2e (or provide the script) and generate the reports.
+- Output a concise checklist of PASS/FAIL per portal and link the report files.
+
+When done, post:
+- A short summary with the PASS/FAIL matrix,
+- Pointers to the test reports,
+- Any remaining blockers with exact file:line for quick fixes.

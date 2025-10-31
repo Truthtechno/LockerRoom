@@ -1,0 +1,53 @@
+Update the LockerRoom project so that the **Student Portal** is fully responsive and functional:
+
+1. **Feed Section Fixes**
+   - Ensure the "Photo", "Video", and "Share" buttons are functional.
+   - Photo/Video → allow uploading media to Cloudinary, saving reference in Supabase, and displaying it in the student feed.
+   - Share → implement a working share modal with copy link + share to social.
+   - All uploaded media should be auto-compressed for web-friendliness.
+
+2. **Profile Tab**
+   - Fix the bug where it shows "No profile found".
+   - Ensure student profile data (name, class, DOB, guardian contact, profile picture) is fetched correctly from Supabase.
+   - If a profile does not exist, auto-generate one for the logged-in student with default placeholder info.
+
+3. **Stats Tab**
+   - Fix the "404 Page Not Found".
+   - Implement stats dashboard showing:
+     * Total posts
+     * Likes received
+     * Comments received
+     * Views
+     * Followers
+   - Data should be pulled in real-time from Supabase and displayed in responsive charts.
+
+4. **Settings Tab**
+   - Fix the "404 Page Not Found".
+   - Implement student account settings:
+     * Update profile info
+     * Change password
+     * Manage privacy (public/private account)
+     * Upload/change profile picture
+
+5. **Demo Data Injection**
+   - Insert demo data into the system:
+     * 2 System Admins (super_admin, moderator)
+     * 2 School Admins (linked to sample schools)
+     * 2 Schools with branding
+     * 10 Sample Students per school with profiles
+     * Each student should have at least 3 demo posts (photos/videos), likes, and comments for testing.
+   - Ensure this demo data is only injected into the **development environment**, not production.
+
+6. **Responsiveness & UX**
+   - Verify the Student Portal UI is mobile-first, responsive, and matches XEN Sports Armoury colors (black, gold, white, grey).
+   - Add proper error messages for failed uploads, invalid forms, and network issues.
+
+7. **Documentation**
+   - Create a new markdown file in the `docs/` folder named `student_portal_testing.md`.
+   - This file should summarize:
+     * Steps taken to test feed, profile, stats, and settings tabs
+     * Screenshots (placeholders are fine)
+     * Confirmation of demo data injection
+     * Any known issues or limitations
+
+Ensure that the fixes integrate with Supabase (for data) and Cloudinary (for uploads). All updates should maintain type safety, proper error handling, and responsive design.

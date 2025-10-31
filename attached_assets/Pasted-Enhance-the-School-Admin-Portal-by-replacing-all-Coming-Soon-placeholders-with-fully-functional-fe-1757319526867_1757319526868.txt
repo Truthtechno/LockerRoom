@@ -1,0 +1,65 @@
+Enhance the School Admin Portal by replacing all “Coming Soon” placeholders with fully functional features. Implement the following:
+
+⸻
+
+1. Add Student
+	•	Create a form for school admins to register new students.
+	•	Fields: Name, Email, Phone, Gender, DOB, Grade/Class, Guardian Contact, Profile Picture.
+	•	Store student data in Supabase (table: students).
+	•	Profile picture uploads handled via Cloudinary.
+	•	Validate duplicate emails or phone numbers.
+	•	Send confirmation email (optional if email service is integrated).
+
+⸻
+
+2. View Live Reports & Analytics of Students
+	•	Real-time dashboard showing:
+	•	Total students enrolled
+	•	Attendance (if tracked)
+	•	Performance ratings (average scores, class comparisons)
+	•	Engagement data (e.g., number of activities participated in)
+	•	Use charts/graphs (Recharts or Chart.js).
+	•	Data should update live from Supabase.
+
+⸻
+
+3. Manage Settings
+	•	Panel for school admins to:
+	•	Update school profile (name, logo, address, contact).
+	•	Configure grade/class structure.
+	•	Assign or remove teachers linked to the school.
+	•	Save changes to Supabase in schools and settings tables.
+
+⸻
+
+4. Student Search & Ratings
+	•	Add a search bar where school admins can search students by:
+	•	Name
+	•	Student ID
+	•	Grade/Class
+	•	Show student details in a profile view:
+	•	Name, class, contact info, performance stats, uploaded photo.
+	•	Display student ratings (pulled from Supabase, table: student_ratings).
+	•	Allow admins to update or add ratings for students.
+
+⸻
+
+Technical Requirements
+	•	Supabase
+	•	Create/Update tables:
+	•	students (id, school_id, name, email, phone, dob, gender, class, guardian_contact, profile_pic_url, created_at).
+	•	student_ratings (id, student_id, rating, comments, created_at).
+	•	Queries should be optimized for real-time data.
+	•	Cloudinary
+	•	Handle student profile image uploads.
+	•	Store Cloudinary URL in students.profile_pic_url.
+	•	UI/UX
+	•	Must be responsive.
+	•	Styled with XEN theme colors: black, gold, white, grey.
+	•	Student search and profile view should look professional and clean.
+	•	Documentation Update
+	•	Update integration-test-results.md in /src/docs/ to include:
+	•	Student creation test results
+	•	Cloudinary upload for student photo test
+	•	Analytics rendering confirmation
+	•	Search functionality test results

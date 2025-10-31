@@ -1,0 +1,140 @@
+You are the lead engineer on the LockerRoom system (Express/TypeScript + React + Supabase + Cloudinary).
+Refactor and extend the system so ALL major portals (System Admin, School Admin, Student, Viewer) function as described below.
+
+---
+
+# 0) Precondition Check
+- Ensure the central `users` table exists with: id (uuid), email, password_hash, role ('student'|'viewer'|'school_admin'|'system_admin'), linked_id (uuid), created_at.
+- Ensure role tables exist: students, viewers, school_admins, system_admins; each has `profile_photo TEXT` and `password_hash TEXT`.
+- Ensure `schools` table exists with `profile_photo TEXT` for logo/picture.
+- Ensure content tables exist: posts, post_comments, post_likes, saved_posts, student_followers, student_ratings.
+- Ensure all server code uses environment secrets:
+  - SUPABASE_URL
+  - SUPABASE_ANON_KEY
+  - SUPABASE_SERVICE_ROLE_KEY (server-side only)
+  - CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET
+
+---
+
+# 1) Auth & Registration
+## /api/auth/register
+- Validate unique email in `users`.
+- bcrypt hash password.
+- Insert into `users` { email, role, password_hash }.
+- Insert into the role-specific table (students or viewers) with profile fields; update `users.linked_id`.
+- Return JWT { userId, role, linkedId }.
+
+## /api/auth/login
+- Validate email/password.
+- Return JWT with { userId, role, linkedId }.
+
+## /api/users/:userId/change-password
+- Validate current password, bcrypt hash new password, update in `users`.
+
+---
+
+# 2) School Admin Portal
+## /api/school-admin/add-student
+- Auth: role=school_admin.
+- Use Supabase **service role key** to bypass RLS.
+- Accept fields { fullName, email, phone, dob, gender, grade, guardianName, guardianContact, sport, position, jerseyNumber, bio }.
+- Generate OTP (8 chars), bcrypt hash, save in `users.password_hash`.
+- Insert into `users` with role='student'; insert into `students` linked to school_admin.school_id.
+- Return { studentId, otp }.
+
+## /api/school-admin/analytics
+- Total students = COUNT(students) for school.
+- Average rating = AVG(rating) from student_ratings.
+- Posts = COUNT(posts).
+- Engagement = COUNT(likes + comments + saves).
+- Grade distribution = GROUP BY students.grade.
+- Gender distribution = GROUP BY students.gender.
+- Attendance = stub in student_attendance (if table missing, create).
+- Return JSON for dashboard.
+
+## /api/school-admin/update-photo
+- Upload to Cloudinary; update schools.profile_photo.
+
+---
+
+# 3) Student Portal
+## Profiles
+- /api/users/:id/profile resolves student using users.linked_id.
+- PATCH /api/students/:id/profile updates fields + profile_photo.
+
+## Stats & Analytics
+- /api/students/:id/analytics returns posts, likes, comments, rating average, performance trends.
+
+## Posts
+- /api/posts/create (auth: student):
+  - Accept multipart upload.
+  - Upload to Cloudinary → secure_url.
+  - Insert into posts with { student_id=JWT.linkedId, caption, content_type, content_url }.
+
+---
+
+# 4) Viewer Portal
+## Feed
+- /api/viewers/feed: return posts from all students with join on likes/comments/saves for viewer.
+
+## Following
+- /api/viewers/following: return students viewer follows from student_followers.
+- Profiles clickable: implement GET /api/profile/:role/:id.
+
+## Saved
+- /api/viewers/saved: return posts from saved_posts.
+
+## Settings
+- PATCH /api/viewers/:id/profile updates viewer fields.
+- /api/users/:id/change-password updates password.
+- Privacy + notification endpoints wired to viewer settings table/columns.
+
+---
+
+# 5) Social Features
+- Likes = post_likes (post_id, user_id).
+- Comments = post_comments (id, post_id, user_id, comment, created_at).
+- Saved posts = saved_posts.
+- Follows = student_followers (viewer_id → student_id).
+- All endpoints must return consistent JSON, error codes, and user-friendly error messages.
+
+---
+
+# 6) Demo Reseed Script
+Add `scripts/reseed-demo.ts`:
+- Truncate all core tables.
+- Seed 1 system admin, 1 school admin (with school), 3 students, 2 viewers.
+- Create posts with Cloudinary placeholders.
+- Seed likes, comments, follows, ratings.
+- bcrypt demo passwords.
+- Update users.linked_id for every role.
+- Write demo credentials to docs/demo_credentials.md.
+
+Add npm script `"reseed": "tsx scripts/reseed-demo.ts"`
+
+---
+
+# 7) Automated QA
+- Add tests for:
+  - Signup + login (viewer/student).
+  - School admin adding student with OTP.
+  - Student uploading post.
+  - Viewer following student, saving post, commenting.
+  - School analytics returning real counts.
+- Produce `docs/test_reports/summary.md` with PASS/FAIL matrix per portal.
+
+---
+
+# 8) Deliverables
+- Updated API code.
+- Updated React pages for School Admin, Student, Viewer portals with clickable profiles, working feeds, and analytics.
+- SQL migrations if schema updates needed.
+- Demo reseed script + credentials file.
+- QA report listing any broken features.
+
+---
+
+When complete, output:
+1. A summary of fixes applied.
+2. A new QA test summary.
+3. Any remaining errors with file:line pointers.

@@ -1,0 +1,64 @@
+I need you to prepare the LockerRoom platform for production with the following steps in order:
+
+1. **Fix Viewer Following Page Bug**
+   - Open `client/src/pages/following.tsx`.
+   - Locate the line where `alt={student.user.name}` is used.
+   - Replace it with safe optional chaining: `alt={student?.user?.name}`.
+   - Also update any other places in that file where `student.user` is accessed to use optional chaining so it doesn’t break when the data is missing.
+   - Save the file.
+
+2. **Add File Upload User Feedback**
+   - In all file upload components, add user-friendly feedback:
+     - Show a progress bar or spinner during upload.
+     - Display a clear toast error if a file is too large (e.g., “File too large. Max size: 10MB”).
+
+3. **Improve Security with Helmet**
+   - In `server.ts`, install and configure helmet:
+     ```bash
+     npm install helmet
+     ```
+   - Import and apply:
+     ```ts
+     import helmet from "helmet";
+     app.use(helmet());
+     ```
+   - Add CSP and HSTS headers for production readiness.
+
+4. **Run Database Prep**
+   - Push latest migrations:
+     ```bash
+     npm run db:push
+     ```
+   - Inject demo/test data:
+     ```bash
+     tsx scripts/inject-demo-data.ts
+     ```
+
+5. **Full QA Validation**
+   - Log in and test each portal as a real user:
+     - System Admin
+     - School Admin
+     - Student
+     - Viewer
+     - A new user signing up
+   - For each role, perform real actions:
+     - Viewing and creating posts
+     - Following/unfollowing
+     - Commenting and saving posts
+     - Editing profile info and changing profile photos
+     - For school admin: adding a new student
+     - For viewer: verifying following list now works
+   - Document in a report:
+     - What features work correctly
+     - What features are glitching or broken
+     - Include screenshots or logs for errors if possible
+
+6. **Production Build Prep**
+   - Generate production build:
+     ```bash
+     npm run build
+     npm start
+     ```
+   - Confirm load times, responsiveness, and that all portals work in production mode.
+
+At the end, give me a **comprehensive QA report by role**, not just “everything works” but specifically listing successes and glitches. Focus especially on social interactions (follow/unfollow, comments, saves, search, profile edits) since these are the most error-prone.

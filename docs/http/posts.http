@@ -1,0 +1,55 @@
+### Posts API Examples
+
+@baseUrl = http://localhost:5000/api
+@contentType = application/json
+@studentToken = your-student-jwt-token-here
+@viewerToken = your-viewer-jwt-token-here
+@postId = your-post-id-here
+
+### Get all posts
+GET {{baseUrl}}/posts
+
+### Create post (multipart form-data for file upload)
+# Use Postman or similar tool for file uploads
+POST {{baseUrl}}/posts/create
+Authorization: Bearer {{studentToken}}
+Content-Type: multipart/form-data
+
+# Form data:
+# mediaFile: [select file]
+# caption: "Great training session today! 💪⚽"
+
+### Like a post
+POST {{baseUrl}}/posts/{{postId}}/like
+Authorization: Bearer {{viewerToken}}
+
+### Unlike a post  
+DELETE {{baseUrl}}/posts/{{postId}}/like
+Authorization: Bearer {{viewerToken}}
+
+### Comment on a post
+POST {{baseUrl}}/posts/{{postId}}/comments
+Content-Type: {{contentType}}
+Authorization: Bearer {{viewerToken}}
+
+{
+  "content": "Amazing skills! Keep up the great work! 🔥"
+}
+
+### Get comments for a post
+GET {{baseUrl}}/posts/{{postId}}/comments
+
+### Get all comments for a post
+GET {{baseUrl}}/posts/{{postId}}/comments?limit=all
+
+### Save a post
+POST {{baseUrl}}/posts/{{postId}}/save
+Authorization: Bearer {{viewerToken}}
+
+### Unsave a post
+DELETE {{baseUrl}}/posts/{{postId}}/save
+Authorization: Bearer {{viewerToken}}
+
+### Get user's saved posts
+GET {{baseUrl}}/users/user-id-here/saved-posts
+Authorization: Bearer {{viewerToken}}

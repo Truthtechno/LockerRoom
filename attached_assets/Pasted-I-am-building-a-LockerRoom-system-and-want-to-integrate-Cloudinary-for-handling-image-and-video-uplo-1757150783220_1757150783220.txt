@@ -1,0 +1,107 @@
+I am building a LockerRoom system and want to integrate Cloudinary for handling image and video uploads, optimized for mobile and desktop, compressed without losing quality. I want the Replit AI to generate fully working code snippets and instructions for both backend Node.js uploads and frontend unsigned direct uploads, and also guide me on setting up environment variables (secrets) in Replit.
+
+Cloudinary Account Details:
+	•	Cloud Name: dh9cfkyhc
+	•	API Key: 766112684971713
+	•	API Secret: HC7J402_4uv1f-AHBnthiPaUt9I
+
+Upload Preset Settings:
+	•	Name: lockerroom_upload
+	•	Signing Mode: unsigned
+	•	Asset Folder: lockerroom
+	•	Incoming Transformation: c_scale,w_800,q_auto:good,f_auto,vc_auto
+
+Requirements:
+	1.	Backend Node.js integration:
+	•	Use the official Cloudinary SDK (cloudinary npm package).
+	•	Support uploading any media type (resource_type: 'auto').
+	•	Apply the full transformation: scale width to 800px, auto quality, automatic format/codec for images/videos.
+	•	Store uploaded media in lockerroom folder.
+	•	Use environment variables for CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.
+	•	Include a complete code snippet showing how to upload a file from a local path or buffer and log the secure_url.
+	2.	Frontend integration:
+	•	Provide a browser-based, unsigned upload snippet using <input type="file">.
+	•	Uploads should use the lockerroom_upload preset.
+	•	Store and log secure_url for each uploaded file.
+	•	Ensure the snippet works for both images and videos.
+	3.	Replit-specific instructions:
+	•	Show how to add secrets/environment variables in Replit so they are used in backend code.
+	•	Ensure the secrets are not hardcoded.
+
+Expected Deliverables:
+	•	Node.js backend code snippet with proper transformation and environment variables.
+	•	Browser JS snippet for unsigned uploads using the preset.
+	•	Clear comments in code explaining each part.
+	•	Instructions for setting up secrets in Replit.
+
+⸻
+
+Expected Backend Example Code (Node.js)
+
+// Load environment variables
+require('dotenv').config();
+const cloudinary = require('cloudinary').v2;
+
+// Configure Cloudinary with environment variables
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Example: Upload a file (image/video) from local path or buffer
+async function uploadFile(filePathOrBuffer) {
+  try {
+    const result = await cloudinary.uploader.upload(filePathOrBuffer, {
+      resource_type: 'auto', // supports image & video
+      folder: 'lockerroom',
+      transformation: [
+        { width: 800, crop: 'scale' },
+        { quality: 'auto:good' },
+        { fetch_format: 'auto' },
+        { video_codec: 'auto' },
+      ],
+    });
+
+    console.log('Upload successful! File URL:', result.secure_url);
+    return result.secure_url;
+  } catch (err) {
+    console.error('Upload failed:', err);
+    throw err;
+  }
+}
+
+// Example usage
+// uploadFile('path/to/local/file.jpg');
+
+Expected Frontend Browser JS Example
+
+<input type="file" id="fileInput" />
+<button id="uploadBtn">Upload</button>
+
+<script>
+const CLOUD_NAME = 'dh9cfkyhc'; // your Cloudinary cloud name
+const UPLOAD_PRESET = 'lockerroom_upload'; // your unsigned preset
+
+document.getElementById('uploadBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('fileInput');
+  const file = fileInput.files[0];
+  if (!file) return alert("Please select a file!");
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', UPLOAD_PRESET);
+
+  try {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    const json = await res.json();
+    console.log('Upload successful! File URL:', json.secure_url);
+    // Save json.secure_url to LockerRoom database here
+  } catch (err) {
+    console.error('Upload failed:', err);
+  }
+});
+</script>

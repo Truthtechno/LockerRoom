@@ -1,0 +1,147 @@
+Create seed.js file in project file and paste the code below. Then Run node seed.js in Replit console.
+….
+
+// seed.js - run in Replit (node) with env vars set
+// Install: npm i @supabase/supabase-js bcryptjs uuid
+
+const { createClient } = require('@supabase/supabase-js');
+const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid');
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in env.");
+  process.exit(1);
+}
+
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+async function createAuthUser(email, password, fullName, role, extra = {}) {
+  // Create user via Admin API
+  const { data: user, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true
+  });
+  if (createErr) {
+    console.error('Error creating user', email, createErr);
+    return null;
+  }
+  // Insert profile row into app table (profiles or students/viewers)
+  if (role === 'student') {
+    await supabaseAdmin.from('students').insert([{
+      id: user.id, -- use same uuid so auth <-> profile link is simple if your students.id is uuid
+      school_id: extra.school_id || null,
+      name: fullName,
+      email,
+      phone: extra.phone || null,
+      class: extra.class || null
+    }]);
+  } else if (role === 'viewer') {
+    await supabaseAdmin.from('viewers').insert([{
+      id: user.id,
+      full_name: fullName,
+      email
+    }]);
+  } else if (role === 'school_admin') {
+    await supabaseAdmin.from('school_admins').insert([{
+      id: user.id,
+      school_id: extra.school_id || null,
+      name: fullName,
+      email
+    }]);
+  } else if (role === 'system_admin') {
+    await supabaseAdmin.from('system_admins').insert([{
+      id: user.id,
+      email,
+      password_hash: 'SERVICE_CREATED' // password is in auth
+    }]);
+  }
+  console.log('Created user', email, 'id=' + user.id);
+  return user;
+}
+
+async function run() {
+  try {
+    // Create demo schools
+    const s1 = (await supabaseAdmin.from('schools').insert([{ name: 'Sunrise Soccer Academy', email:'sun@ssa.com' }]).select().single()).data;
+    const s2 = (await supabaseAdmin.from('schools').insert([{ name: 'Eagle Football School', email:'info@eagle.com' }]).select().single()).data;
+    // Create system and school admins
+    await createAuthUser('admin@lockerroom.com', 'Admin123!', 'XEN Admin', 'system_admin');
+    await createAuthUser('school@sunrise.com', 'School123!', 'Sunrise Admin', 'school_admin', { school_id: s1.id});
+    // Create sample students
+    for (let i=1;i<=5;i++){
+      await createAuthUser(`stu${i}@sunrise.com`, 'Student123!', `Student ${i}`, 'student', { school_id: s1.id, class: 'U12' });
+    }
+    for (let i=1;i<=5;i++){
+      await createAuthUser(`stu${i}@eagle.com`, 'Student123!', `Eagle Student ${i}`, 'student', { school_id: s2.id, class: 'U14' });
+    }
+    // Create viewers
+    await createAuthUser('viewer1@parent.com', 'Viewer123!', 'Parent One', 'viewer');
+    await createAuthUser('viewer2@parent.com', 'Viewer123!', 'Parent Two', 'viewer');
+
+    console.log('Seeding done.');
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+run();
+
+…
+
+Important: adapt the code if your schema stores student profiles in profiles instead of students. The script uses the Admin API so it must run on your server (Replit) with SUPABASE_SERVICE_ROLE_KEY.  …  Afterwards, do this;
+
+Project: LockerRoom (XEN Locker Room) — Implement Student & Viewer portal fixes + Demo injection + Docs.
+
+Goal: Fix all "Coming Soon" / unresponsive buttons in Student and Viewer portals, implement follow/search/bookmark/comment functionality, make School Admin settings read-only (subscription, student limit), inject demo data into DEV, and create testing docs.
+
+Requirements:
+1) Student Portal:
+ - Make Photo, Video, Share buttons fully functional.
+ - Photo/Video: upload flow -> Cloudinary (q_auto, f_auto) -> save posts row in posts table with student_id, school_id, content_type, content_url, caption.
+ - Share: open modal with copy link + share to social via navigator.share when available.
+ - Ensure Profile tab fetches student record from students (or profiles) table; if not exists create a placeholder profile automatically for logged-in user.
+ - Stats tab: fix 404 and show per-student stats (total posts, likes_received, comments_received) via queries; render responsive charts.
+ - Settings tab: allow update of profile, profile photo (Cloudinary), change password (call Supabase auth), privacy toggle.
+
+2) Viewer Portal:
+ - Feed: render posts (photo/video). Ensure comment box works and saves to post_comments.
+ - Add search bar to search students by name/class; show results and profile previews.
+ - Implement Follow: viewers can follow students; store in student_followers (viewer_id, student_id).
+ - Saved tab: show saved_posts for viewer; allow saving/unsaving.
+ - Following tab: list students the viewer follows with quick links to profile.
+ - Settings: viewer can edit name, email (reauth flow), profile pic (Cloudinary).
+ - Remove/hide Stats tab for viewer.
+
+3) School Admin:
+ - Under /manage-settings -> School Information: make subscription_plan and max_students view-only for school admins.
+ - Only System Admin role may edit those fields.
+
+4) Demo Data Injection (dev only):
+ - Create 2 schools, 2 system admins, 2 school admins, 10 students (5 per school), 2 viewers.
+ - Each student should have 3 posts (images/videos). Each post should have a few likes & comments.
+ - Insert demo rows into posts, post_likes, post_comments, saved_posts, student_followers, analytics_logs.
+ - Do not inject into production environment (guard with an env var like NODE_ENV !== 'production').
+
+5) Tests & Docs:
+ - Create /src/docs/integration-test-results.md summarizing:
+   - Supabase connection test (queries run)
+   - Cloudinary upload tests (URLs returned)
+   - Demo data counts
+   - Screenshots placeholders for feed/profile/settings
+ - Add /src/docs/student_portal_testing.md with steps to reproduce and test cases.
+
+6) UI & Styling:
+ - Apply XEN theme colors: Black #000000, Gold #ffa600, White #FFFFFF, Grey #808080.
+ - Ensure responsive mobile-first design.
+- Ensure Black background when text is gold or white
+
+Implementation notes:
+ - Use Supabase client for auth on client side and Service Role on server-only operations.
+ - Validate inputs client-side and server-side; handle errors gracefully.
+ - Use optimistic UI for likes/comments and keep server as source of truth.
+
+Make code changes, add missing API endpoints, and ensure the project builds. If any DB tables/columns are missing, create them or add guard checks so the code doesn't break. After implementation, run seed script and return a short report of actions taken and file locations for docs and demo scripts.

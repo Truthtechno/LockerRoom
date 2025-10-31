@@ -1,0 +1,37 @@
+Build on the current System Admin portal and fully implement the following sections that currently show “Coming Soon”:
+	1.	Review School Application
+	•	Review School Applications → page to list and manage school sign-up requests stored in Supabase (approve/reject functionality).
+	•	Add New School Portal → create a form that registers a new school into the system with a one-time password (OTP) generated and emailed to the school admin for first login.
+	2.	Platform Analytics
+	•	Real-time dashboards pulling Supabase data (active users, posts, follows, likes, signups, schools onboarded).
+	•	Use charts/graphs (e.g. Recharts or Chart.js) to visualize growth, engagement, and activity trends.
+	3.	System Configuration
+	•	UI for setting platform-wide options (e.g. theme colors, feature toggles).
+	•	Save settings to Supabase so changes apply globally.
+	4.	Manage Administrators
+	•	Ability to add/remove admins and assign roles (super admin, school admin, moderator).
+	•	Store admin details securely in Supabase Auth.
+
+⸻
+
+Technical Requirements
+	•	Supabase
+	•	Use Supabase for database and authentication.
+	•	Test all queries (create, read, update, delete) for schools, users, admins, and analytics logs.
+	•	Cloudinary
+	•	Ensure Cloudinary is integrated for media uploads (school logos, profile pictures, post images).
+	•	Test uploads and retrievals.
+	•	Testing & Documentation
+	•	Create a new markdown document inside the /src/docs/ folder called integration-test-results.md.
+	•	The document should automatically summarize:
+	•	Supabase connection test results
+	•	Cloudinary upload/retrieve test results
+	•	Confirmation that real-time analytics update correctly
+	•	This serves as a system verification log for future reference.
+	•	UI/UX
+	•	Must be responsive (mobile, tablet, desktop).
+	•	Use XEN theme colors: black, gold, white, grey.
+	•	Consistent modern dashboard look.
+	•	Data
+	•	All analytics and management dashboards should pull real-time data from Supabase.
+	•	Example: approving a school should instantly update the analytics dashboard.
