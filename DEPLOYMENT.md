@@ -321,8 +321,8 @@ For complete control, deploy on a VPS (DigitalOcean Droplet, AWS EC2, etc.).
 3. **Deploy Application**:
    ```bash
    # Clone repository
-   git clone https://github.com/your-org/lockerroom.git
-   cd lockerroom
+   git clone https://github.com/Truthtechno/LockerRoom.git
+   cd LockerRoom
    
    # Install dependencies
    npm install --production

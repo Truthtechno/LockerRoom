@@ -118,8 +118,8 @@
 
 1. **📥 Clone the Repository**
    ```bash
-   git clone https://github.com/your-org/lockerroom
-   cd lockerroom
+   git clone https://github.com/Truthtechno/LockerRoom
+   cd LockerRoom
    ```
 
 2. **📦 Install Dependencies**
@@ -346,7 +346,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### 📞 Get Help
 - **📧 Email**: [support@xensportsarmoury.com](mailto:support@xensportsarmoury.com)
 - **📚 Documentation**: See [docs](./docs) folder
-- **🐛 Bug Reports**: [GitHub Issues](https://github.com/your-org/lockerroom/issues)
+- **🐛 Bug Reports**: [GitHub Issues](https://github.com/Truthtechno/LockerRoom/issues)
 
 ### 🤝 Business Inquiries
 - **Partnerships**: [partnerships@xensportsarmoury.com](mailto:partnerships@xensportsarmoury.com)
@@ -375,7 +375,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **LockerRoom - Empowering the Next Generation of Sports Stars**
 
-[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/your-org/lockerroom)
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Truthtechno/LockerRoom)
 [![Documentation](https://img.shields.io/badge/Documentation-4A90E2?style=for-the-badge)](./docs)
 
 **XEN Sports Armoury - LockerRoom Platform**

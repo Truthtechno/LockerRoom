@@ -45,8 +45,8 @@ This guide provides comprehensive information for developers working on the Lock
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-org/lockerroom.git
-cd lockerroom
+git clone https://github.com/Truthtechno/LockerRoom.git
+cd LockerRoom
 ```
 
 ### 2. Install Dependencies
