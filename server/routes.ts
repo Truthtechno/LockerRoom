@@ -11,6 +11,7 @@ import { requireAuth, requireSelfByParam, requireScoutAdmin, requireScoutOrAdmin
 import uploadRoutes from "./routes/upload";
 import xenWatchRoutes from "./routes/xen-watch";
 import { registerScoutAdminRoutes } from "./routes/scout-admin";
+import { notifyFollowersOfNewPost, notifyScoutAdminsOfNewScout } from "./utils/notification-helpers";
 import { 
   insertUserSchema, 
   insertPostSchema, 
@@ -189,6 +190,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'ready'
       });
 
+      // Create notifications for users who follow this student
+      if (post && post.studentId) {
+        notifyFollowersOfNewPost(post.id, post.studentId).catch(err => {
+          console.error('❌ Failed to notify followers (non-critical):', err);
+        });
+      }
+
       // Return the full post with details for optimistic updates
       const postWithDetails = await storage.getPostWithUserContext(post.id, userId);
       res.json(postWithDetails);
@@ -220,6 +228,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updatePost(post.id, {
             status: 'ready'
           });
+          
+          // Post is now ready, notify followers
+          if (post.studentId) {
+            notifyFollowersOfNewPost(post.id, post.studentId).catch(err => {
+              console.error('❌ Failed to notify followers after webhook (non-critical):', err);
+            });
+          }
           
           console.log(`✅ Post ${post.id} marked as ready`);
           
@@ -2908,36 +2923,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Post created successfully:', post.id);
       
       // Create notifications for users who follow this student
-      try {
-        if (post && post.studentId) {
-          const student = await storage.getStudent(post.studentId);
-          if (student) {
-            // Get all users who follow this student
-            const followers = await storage.getStudentFollowers(post.studentId);
-            
-            // Create notifications for each follower
-            for (const follower of followers) {
-              try {
-                // follower should have an id field from UserProfile
-                const followerUserId = (follower as any).id || follower.id;
-                await storage.createNotification({
-                  userId: followerUserId,
-                  type: 'following_posted',
-                  title: 'New Post',
-                  message: `${student.name} posted something new`,
-                  entityType: 'post',
-                  entityId: post.id,
-                  relatedUserId: student.userId,
-                });
-              } catch (e) {
-                console.error(`Error creating notification for follower ${follower.id}:`, e);
-              }
-            }
-          }
-        }
-      } catch (notifError) {
-        console.error('Error creating post notifications:', notifError);
-        // Don't fail the post creation if notification creation fails
+      if (post && post.studentId) {
+        // Use helper function to notify followers (non-blocking)
+        notifyFollowersOfNewPost(post.id, post.studentId).catch(err => {
+          console.error('❌ Failed to notify followers (non-critical):', err);
+        });
       }
       
       // Return the full post with details

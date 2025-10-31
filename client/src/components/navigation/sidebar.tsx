@@ -6,12 +6,15 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
 import { Home, User, BarChart3, Settings, LogOut, Bookmark, Users, Eye, Bot, LayoutDashboard, TrendingUp, UserPlus, Building2, Search, Shield, Megaphone, Bell } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useEffect, useRef } from "react";
 
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
   const { user, updateUser } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | undefined>(user?.id);
 
   // Fetch current user data for all roles to ensure consistent profile display
   // This ensures profilePicUrl is always fresh and available
@@ -35,6 +38,46 @@ export default function Sidebar() {
     // When user.id changes, this query will automatically refetch due to query key change
   });
 
+  // Watch for user changes and invalidate queries when user.id changes
+  // This ensures the nav bar updates immediately when logging in with a different user
+  useEffect(() => {
+    const currentUserId = user?.id;
+    const previousUserId = previousUserIdRef.current;
+
+    // If user ID has changed (e.g., after login/logout), invalidate all user queries
+    if (currentUserId !== previousUserId && currentUserId) {
+      // Invalidate user queries to force fresh fetch
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/students/me"] });
+      // Update the ref to track the new user ID
+      previousUserIdRef.current = currentUserId;
+    } else if (!currentUserId && previousUserId) {
+      // User logged out - clear queries
+      queryClient.removeQueries({ queryKey: ["/api/users/me"] });
+      queryClient.removeQueries({ queryKey: ["/api/students/me"] });
+      previousUserIdRef.current = undefined;
+    } else if (currentUserId && !previousUserId) {
+      // User logged in - ensure queries are fresh
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/students/me"] });
+      previousUserIdRef.current = currentUserId;
+    }
+
+    // Listen for auth-change events to immediately refresh data
+    const handleAuthChange = () => {
+      // Always invalidate queries regardless of current user state
+      // This ensures fresh data after login/logout
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/students/me"] });
+    };
+
+    window.addEventListener('auth-change', handleAuthChange);
+
+    return () => {
+      window.removeEventListener('auth-change', handleAuthChange);
+    };
+  }, [user?.id, queryClient]);
+
   // Fetch student profile for students to get additional student-specific data
   // IMPORTANT: Include user.id in query key to prevent stale data when switching between students
   const { data: studentProfile } = useQuery({
@@ -48,9 +91,10 @@ export default function Sidebar() {
     staleTime: 30_000,
   });
 
-  // Use currentUserData if available, otherwise fall back to user from auth hook
+  // Use currentUserData if available and matches current user, otherwise fall back to user from auth hook
+  // This prevents showing stale data from a previous user session
   // For students, prefer studentProfile profilePicUrl as it may be more up-to-date
-  const displayUser = currentUserData || user;
+  const displayUser = (currentUserData && currentUserData.id === user?.id) ? currentUserData : user;
   const displayProfilePic = studentProfile?.profilePicUrl || displayUser?.profilePicUrl;
 
   const handleLogout = () => {

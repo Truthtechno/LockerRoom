@@ -210,6 +210,14 @@ export function registerAdminRoutes(app: Express) {
 
         console.log(`🎯 Administrator created: ${newAdmin.name} (Role: ${newAdmin.role})`);
 
+        // Notify scout admins if a new scout was created
+        if ((role === 'scout_admin' || role === 'xen_scout') && scoutProfile) {
+          const { notifyScoutAdminsOfNewScout } = await import('../utils/notification-helpers');
+          notifyScoutAdminsOfNewScout(newUser.id, newUser.name).catch(err => {
+            console.error('❌ Failed to notify scout admins (non-critical):', err);
+          });
+        }
+
         res.json({
           success: true,
           admin: {

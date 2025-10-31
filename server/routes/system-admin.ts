@@ -1,10 +1,11 @@
 import { Express } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { db } from '../db';
-import { users, schools, schoolAdmins, systemAdmins, students, subscriptions, schoolSettings, schoolApplications, posts } from '../../shared/schema';
+import { users, schools, schoolAdmins, systemAdmins, students, subscriptions, schoolSettings, schoolApplications, posts, studentFollowers } from '../../shared/schema';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import { AuthStorage } from '../auth-storage';
+import { storage } from '../storage';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 
@@ -283,6 +284,44 @@ export function registerSystemAdminRoutes(app: Express) {
           emailVerified: true,
           isOneTimePassword: true, // Flag to force password reset on first login
         }).returning();
+
+        // Auto-follow all existing students in the school
+        try {
+          const schoolStudents = await db.select()
+            .from(students)
+            .where(eq(students.schoolId, schoolId));
+          
+          let followCount = 0;
+          for (const student of schoolStudents) {
+            try {
+              // Check if already following to avoid duplicates
+              const existingFollow = await db.select()
+                .from(studentFollowers)
+                .where(
+                  sql`${studentFollowers.followerUserId} = ${user.id} AND ${studentFollowers.studentId} = ${student.id}`
+                )
+                .limit(1);
+              
+              if (existingFollow.length === 0) {
+                await storage.followStudent({
+                  followerUserId: user.id,
+                  studentId: student.id,
+                });
+                followCount++;
+              }
+            } catch (followError) {
+              console.error(`Error auto-following student ${student.id}:`, followError);
+              // Continue with other students even if one fails
+            }
+          }
+          
+          if (followCount > 0) {
+            console.log(`✅ Auto-followed ${followCount} students in school ${school.name}`);
+          }
+        } catch (autoFollowError) {
+          console.error('⚠️ Error during auto-follow process (non-critical):', autoFollowError);
+          // Don't fail school admin creation if auto-follow fails
+        }
 
         console.log(`👨‍💼 School admin created: ${name} (${email}) for school: ${school.name} with OTP: ${otp}`);
 

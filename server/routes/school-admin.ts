@@ -1,10 +1,11 @@
 import { Express } from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import { users, students, schoolAdmins, schools, posts } from '@shared/schema';
+import { users, students, schoolAdmins, schools, posts, studentFollowers } from '@shared/schema';
 import { eq, sql } from 'drizzle-orm';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { db } from '../db';
+import { storage } from '../storage';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 
@@ -304,6 +305,30 @@ export function registerSchoolAdminRoutes(app: Express) {
           // Don't fail the student creation if logging fails
         }
   
+        // Auto-follow this student by the school admin who created them
+        try {
+          const schoolAdminUserId = (req as any).auth.id;
+          
+          // Check if already following to avoid duplicates
+          const existingFollow = await db.select()
+            .from(studentFollowers)
+            .where(
+              sql`${studentFollowers.followerUserId} = ${schoolAdminUserId} AND ${studentFollowers.studentId} = ${studentRow.id}`
+            )
+            .limit(1);
+          
+          if (existingFollow.length === 0) {
+            await storage.followStudent({
+              followerUserId: schoolAdminUserId,
+              studentId: studentRow.id,
+            });
+            console.log(`✅ School admin auto-followed new student: ${name}`);
+          }
+        } catch (autoFollowError) {
+          console.error('⚠️ Error during auto-follow process (non-critical):', autoFollowError);
+          // Don't fail student creation if auto-follow fails
+        }
+
         // Log OTP generation (no email/SMS sent for now)
         console.log(`🎓 Student created: ${name} (${email}) with OTP: ${otp}`);
         console.log(`📝 OTP will be displayed in admin UI for secure sharing`);

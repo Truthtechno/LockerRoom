@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import type { StudentSubmission, StudentSubmissionsResponse } from "@shared/sche
 
 export default function XenWatch() {
   const { user } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
 
   // Filter and sort state
@@ -40,6 +40,43 @@ export default function XenWatch() {
 
   const submissions = submissionsData?.submissions || [];
   const studentInfo = submissionsData?.student;
+
+  // Handle URL parameters to open specific submission
+  useEffect(() => {
+    if (!submissions.length || !location) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const submissionId = urlParams.get('submissionId');
+    const showFeedback = urlParams.get('showFeedback') === 'true';
+
+    if (submissionId) {
+      const submission = submissions.find(s => s.id === submissionId);
+      if (submission) {
+        setSelectedSubmission(submission);
+        setIsFeedbackModalOpen(true);
+        
+        // If showFeedback is true, scroll to feedback section after modal opens
+        if (showFeedback) {
+          // Small delay to ensure modal is rendered before scrolling
+          setTimeout(() => {
+            const feedbackSection = document.querySelector('[data-feedback-section]');
+            if (feedbackSection) {
+              feedbackSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              // Highlight the feedback section briefly
+              feedbackSection.classList.add('ring-2', 'ring-green-500', 'ring-offset-2', 'transition-all', 'duration-1000');
+              setTimeout(() => {
+                feedbackSection.classList.remove('ring-2', 'ring-green-500', 'ring-offset-2');
+              }, 2000);
+            }
+          }, 300);
+        }
+        
+        // Clean up URL parameters after opening
+        const newUrl = location.split('?')[0];
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [submissions, location]);
 
   // Calculate summary statistics
   const stats = useMemo(() => {
@@ -670,7 +707,7 @@ export default function XenWatch() {
 
                 {/* Final Feedback */}
                 {selectedSubmission.finalFeedback && (
-                  <div className="space-y-4">
+                  <div className="space-y-4" data-feedback-section>
                     <h3 className="text-lg font-semibold text-foreground">Final Assessment</h3>
                     <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4 sm:p-6">
                       <div className="flex items-center space-x-2 mb-4">

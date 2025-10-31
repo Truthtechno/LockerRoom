@@ -3,6 +3,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { db } from '../db';
 import { posts } from '@shared/schema';
 import { requireAuth, requireRole } from '../middleware/auth';
+import { notifyFollowersOfNewPost } from '../utils/notification-helpers';
 
 const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
@@ -60,6 +61,13 @@ export function registerPostRoutes(app: any) {
         thumbnailUrl: thumbnailUrl,
         status: 'ready'
       }).returning();
+
+      // Create notifications for users who follow this student
+      if (post && post.studentId) {
+        notifyFollowersOfNewPost(post.id, post.studentId).catch(err => {
+          console.error('❌ Failed to notify followers (non-critical):', err);
+        });
+      }
 
       res.json(post);
     } catch (error: any) {

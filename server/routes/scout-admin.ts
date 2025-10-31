@@ -7,6 +7,7 @@ import bcrypt from 'bcrypt';
 import { AuthStorage } from '../auth-storage';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
+import { notifyScoutAdminsOfNewScout, notifyScoutsOfSubmissionFinalized, notifyStudentOfSubmissionFeedback } from '../utils/notification-helpers';
 
 const authStorage = new AuthStorage();
 
@@ -181,6 +182,11 @@ export function registerScoutAdminRoutes(app: Express) {
         }
 
         console.log(`🎯 Scout created: ${newUser.name} (XEN ID: ${newUser.xenId})`);
+
+        // Notify scout admins about the new scout
+        notifyScoutAdminsOfNewScout(newUser.id, newUser.name).catch(err => {
+          console.error('❌ Failed to notify scout admins (non-critical):', err);
+        });
 
         res.json({
           success: true,
@@ -437,13 +443,26 @@ export function registerScoutAdminRoutes(app: Express) {
         }).returning();
 
         // Update submission status to finalized
-        await db
+        const [updatedSubmission] = await db
           .update(submissions)
           .set({ 
             status: 'finalized',
             updatedAt: sql`NOW()`
           })
-          .where(eq(submissions.id, submissionId));
+          .where(eq(submissions.id, submissionId))
+          .returning();
+
+        // Notify all scouts that the submission has been finalized
+        notifyScoutsOfSubmissionFinalized(submissionId).catch(err => {
+          console.error('❌ Failed to notify scouts of finalization (non-critical):', err);
+        });
+
+        // Notify the student that their feedback is ready
+        if (updatedSubmission?.studentId) {
+          notifyStudentOfSubmissionFeedback(submissionId, updatedSubmission.studentId).catch(err => {
+            console.error('❌ Failed to notify student of feedback (non-critical):', err);
+          });
+        }
 
         res.json({ 
           success: true,

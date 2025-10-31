@@ -47,6 +47,7 @@ interface Notification {
     id: string;
     name: string;
     profilePicUrl?: string | null;
+    role?: string | null;
   };
 }
 
@@ -59,6 +60,11 @@ const getNotificationIcon = (type: string) => {
     scout_feedback: Award,
     submission_pending: FileText,
     submission_finalized: CheckCheck,
+    submission_created: FileText, // Scout: new student submission
+    review_submitted: MessageCircle, // Scout: review submitted
+    scout_created: Users, // Scout admin: scout profile created
+    submission_received: FileText, // Student: submission received
+    submission_feedback_ready: CheckCheck, // Student: feedback ready
     rating_result: Star,
     student_signup: UserPlus,
     system_alert: AlertCircle,
@@ -81,6 +87,11 @@ const getNotificationColor = (type: string) => {
     scout_feedback: "text-purple-500",
     submission_pending: "text-orange-500",
     submission_finalized: "text-green-500",
+    submission_created: "text-orange-500", // Scout: new student submission
+    review_submitted: "text-blue-500", // Scout: review submitted
+    scout_created: "text-cyan-500", // Scout admin: scout profile created
+    submission_received: "text-blue-500", // Student: submission received
+    submission_feedback_ready: "text-green-500", // Student: feedback ready
     rating_result: "text-amber-500",
     student_signup: "text-blue-500",
     system_alert: "text-red-500",
@@ -174,15 +185,53 @@ export default function Notifications() {
   };
 
   const handleNotificationClick = (notification: Notification) => {
+    // Don't navigate for scout_created notifications (no destination)
+    if (notification.type === "scout_created") {
+      handleMarkAsRead(notification);
+      return;
+    }
+
     handleMarkAsRead(notification);
     
     // Navigate based on notification type
     if (notification.entityType === "post" && notification.entityId) {
-      window.location.href = `/post/${notification.entityId}`;
-    } else if (notification.entityType === "user" && notification.relatedUserId) {
+      // For post-related notifications, navigate to the post
+      if (notification.type === "post_comment") {
+        // For comment notifications, navigate to post and scroll to comments section
+        window.location.href = `/post/${notification.entityId}?scrollToComments=true`;
+      } else if (notification.type === "following_posted") {
+        // For new post notifications from followed students, navigate to the post
+        window.location.href = `/post/${notification.entityId}`;
+      } else {
+        // For other post-related notifications (like, etc.), navigate to the post
+        window.location.href = `/post/${notification.entityId}`;
+      }
+    } else if (notification.type === "new_follower" && notification.relatedUserId) {
+      // For new_follower notifications, only navigate if the follower is a student
+      // (unclickable for viewers, scouts, scout admins, school admins, system admins)
+      if (notification.relatedUser?.role === 'student') {
+        window.location.href = `/profile/${notification.relatedUserId}`;
+      }
+      // If not a student, do nothing (non-clickable)
+    } else if (notification.entityType === "user" && notification.relatedUserId && notification.type !== "new_follower") {
+      // For other user-related notifications (not new_follower), navigate to profile
       window.location.href = `/profile/${notification.relatedUserId}`;
     } else if (notification.entityType === "submission" && notification.entityId) {
-      window.location.href = `/xen-watch`;
+      // For submission notifications, navigate based on notification type
+      if (notification.type === "review_submitted") {
+        // For review notifications, navigate to scout queue with the review
+        const reviewScoutId = notification.relatedUserId ? `&reviewScoutId=${notification.relatedUserId}` : '';
+        window.location.href = `/xen-watch/scout-queue?submissionId=${notification.entityId}&showReview=true${reviewScoutId}`;
+      } else if (notification.type === "submission_received") {
+        // For submission received notifications, navigate to XEN Watch page with submission ID to open the modal
+        window.location.href = `/xen-watch?submissionId=${notification.entityId}`;
+      } else if (notification.type === "submission_feedback_ready") {
+        // For feedback ready notifications, navigate to XEN Watch page with submission ID and show feedback flag
+        window.location.href = `/xen-watch?submissionId=${notification.entityId}&showFeedback=true`;
+      } else {
+        // For submission_created and submission_finalized (scout notifications), navigate to scout queue
+        window.location.href = `/xen-watch/scout-queue?submissionId=${notification.entityId}`;
+      }
     } else if (notification.type === "announcement" && notification.entityId) {
       window.location.href = `/feed`;
     }
@@ -292,11 +341,24 @@ export default function Notifications() {
                   const Icon = getNotificationIcon(notification.type);
                   const iconColor = getNotificationColor(notification.type);
                   
+                  // Determine if notification is clickable
+                  let isClickable = true;
+                  if (notification.type === "scout_created") {
+                    isClickable = false; // No destination
+                  } else if (notification.type === "new_follower") {
+                    // Only clickable if the follower is a student
+                    isClickable = notification.relatedUser?.role === 'student';
+                  }
+
                   return (
                     <div
                       key={notification.id}
-                      onClick={() => handleNotificationClick(notification)}
-                      className={`bg-card border border-border rounded-xl p-5 cursor-pointer transition-all hover:shadow-lg hover:border-accent/50 ${
+                      onClick={() => isClickable && handleNotificationClick(notification)}
+                      className={`bg-card border border-border rounded-xl p-5 transition-all ${
+                        isClickable 
+                          ? "cursor-pointer hover:shadow-lg hover:border-accent/50" 
+                          : "cursor-default opacity-80"
+                      } ${
                         !notification.isRead ? "bg-accent/5 border-accent/30 ring-2 ring-accent/20" : ""
                       }`}
                     >

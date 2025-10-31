@@ -3,6 +3,7 @@ import multer from "multer";
 import cloudinary from "../cloudinary";
 import { storage } from "../storage";
 import { requireAuth } from "../middleware/auth";
+import { notifyFollowersOfNewPost } from "../utils/notification-helpers";
 
 const router = express.Router();
 const upload = multer({ 
@@ -210,6 +211,15 @@ async function uploadFileInBackground(file: Express.Multer.File, folder: string,
       thumbnailUrl,
       status: 'ready'
     });
+
+    // Get the post to get studentId
+    const post = await storage.getPost(postId);
+    if (post && post.studentId) {
+      // Post is now ready, notify followers
+      notifyFollowersOfNewPost(postId, post.studentId).catch(err => {
+        console.error(`❌ Failed to notify followers for post ${postId} (non-critical):`, err);
+      });
+    }
 
     console.log(`✅ Background upload completed for post ${postId}`);
   } catch (error: any) {

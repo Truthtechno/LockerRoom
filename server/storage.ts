@@ -4534,7 +4534,7 @@ export class PostgresStorage implements IStorage {
     return result[0];
   }
 
-  async getNotifications(userId: string, options?: { limit?: number; offset?: number; unreadOnly?: boolean }): Promise<NotificationDB[]> {
+  async getNotifications(userId: string, options?: { limit?: number; offset?: number; unreadOnly?: boolean }): Promise<any[]> {
     if (!isDbConnected) throw new Error("Database not connected");
     
     const limit = options?.limit || 50;
@@ -4550,15 +4550,55 @@ export class PostgresStorage implements IStorage {
       ) as any;
     }
     
+    // Get notifications with related user info (for follower notifications)
     const result = await db
-      .select()
+      .select({
+        id: notifications.id,
+        userId: notifications.userId,
+        type: notifications.type,
+        title: notifications.title,
+        message: notifications.message,
+        entityType: notifications.entityType,
+        entityId: notifications.entityId,
+        relatedUserId: notifications.relatedUserId,
+        metadata: notifications.metadata,
+        isRead: notifications.isRead,
+        createdAt: notifications.createdAt,
+        relatedUser: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          profilePicUrl: users.profilePicUrl,
+        }
+      })
       .from(notifications)
+      .leftJoin(users, eq(notifications.relatedUserId, users.id))
       .where(whereCondition)
       .orderBy(desc(notifications.createdAt))
       .limit(limit)
       .offset(offset);
     
-    return result;
+    // Transform to match expected format
+    return result.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      type: row.type,
+      title: row.title,
+      message: row.message,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      relatedUserId: row.relatedUserId,
+      metadata: row.metadata,
+      isRead: row.isRead,
+      createdAt: row.createdAt,
+      relatedUser: row.relatedUser?.id ? {
+        id: row.relatedUser.id,
+        name: row.relatedUser.name,
+        profilePicUrl: row.relatedUser.profilePicUrl,
+        role: row.relatedUser.role,
+      } : null,
+    }));
   }
 
   async markNotificationAsRead(notificationId: string, userId: string): Promise<void> {

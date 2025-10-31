@@ -28,6 +28,35 @@ export default function PostDetail() {
   
   const [newComment, setNewComment] = useState("");
 
+  // Handle scroll to comments when coming from notification
+  useEffect(() => {
+    if (!post) return;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const scrollToComments = urlParams.get('scrollToComments') === 'true';
+    
+    if (scrollToComments) {
+      // Small delay to ensure the post content is rendered
+      setTimeout(() => {
+        const commentsSection = document.querySelector('[data-comments-section]');
+        if (commentsSection) {
+          commentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // Focus the comment input if available
+          setTimeout(() => {
+            const commentInput = document.querySelector('[data-comment-input]') as HTMLInputElement | HTMLTextAreaElement;
+            if (commentInput) {
+              commentInput.focus();
+            }
+          }, 500);
+          
+          // Clean up URL parameter
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, '', newUrl);
+        }
+      }, 300);
+    }
+  }, [post]);
+
   // Query for post details
   const { data: post, isLoading: postLoading, error: postError } = useQuery<PostWithDetails>({
     queryKey: ["/api/posts", postId],
@@ -432,7 +461,7 @@ export default function PostDetail() {
               </div>
 
               {/* Comments Section */}
-              <div className="border-t border-border pt-4">
+              <div className="border-t border-border pt-4" data-comments-section>
                 <h4 className="font-medium text-foreground mb-4">Comments ({post.commentsCount})</h4>
                 
                 {/* Comments List */}
@@ -459,6 +488,7 @@ export default function PostDetail() {
                       ) : (
                         <>
                           <Input
+                            data-comment-input
                             value={newComment}
                             onChange={(e) => setNewComment(e.target.value)}
                             onKeyPress={handleKeyPress}

@@ -18,6 +18,7 @@ import {
   type SubmissionFinalFeedbackDB
 } from "@shared/schema";
 import { requireAuth, requireRoles } from "../middleware/auth";
+import { notifyScoutsOfNewSubmission, notifyScoutsOfReviewUpdate, notifyScoutsOfSubmissionFinalized, notifyStudentOfSubmission, notifyStudentOfSubmissionFeedback } from "../utils/notification-helpers";
 
 const router = express.Router();
 // POST /api/xen-watch/submissions - Create new submission (student only)
@@ -68,6 +69,16 @@ router.post("/submissions", requireAuth, requireRoles(['student']), async (req, 
 
         await db.insert(submissionReviews).values(reviewPlaceholders);
       }
+
+      // Notify all scouts and scout admins about the new submission
+      notifyScoutsOfNewSubmission(submission.id, submission.studentId).catch(err => {
+        console.error('❌ Failed to notify scouts (non-critical):', err);
+      });
+
+      // Notify the student that their submission was received
+      notifyStudentOfSubmission(submission.id, submission.studentId).catch(err => {
+        console.error('❌ Failed to notify student (non-critical):', err);
+      });
 
       res.json({ submission });
     } catch (error) {
@@ -530,6 +541,13 @@ router.post("/submissions", requireAuth, requireRoles(['student']), async (req, 
         })
         .returning();
 
+      // Notify other scouts when a review is submitted
+      if (review.isSubmitted) {
+        notifyScoutsOfReviewUpdate(submissionId, auth.id, true).catch(err => {
+          console.error('❌ Failed to notify scouts of review (non-critical):', err);
+        });
+      }
+
       res.json({ review });
     } catch (error) {
       console.error("Error creating/updating review:", error);
@@ -655,6 +673,18 @@ router.post("/submissions", requireAuth, requireRoles(['student']), async (req, 
         finalRating: validatedData.finalRating,
         totalReviews: submittedReviews.length
       });
+
+      // Notify all scouts that the submission has been finalized
+      notifyScoutsOfSubmissionFinalized(submissionId).catch(err => {
+        console.error('❌ Failed to notify scouts of finalization (non-critical):', err);
+      });
+
+      // Notify the student that their feedback is ready
+      if (updatedSubmission?.studentId) {
+        notifyStudentOfSubmissionFeedback(submissionId, updatedSubmission.studentId).catch(err => {
+          console.error('❌ Failed to notify student of feedback (non-critical):', err);
+        });
+      }
 
       res.json({ 
         finalFeedback,

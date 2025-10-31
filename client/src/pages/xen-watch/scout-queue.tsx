@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { Eye, Clock, CheckCircle, Star, Save, Send, Play, User, X, Calendar, Tre
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useLocation } from "wouter";
 
 interface SubmissionWithReview {
   id: string;
@@ -85,6 +86,7 @@ export default function ScoutReviewQueue() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [location] = useLocation();
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionWithReview | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [rating, setRating] = useState<number | null>(null);
@@ -123,6 +125,61 @@ export default function ScoutReviewQueue() {
   });
 
   const submissions = submissionsData?.submissions || [];
+
+  // Open review modal function (defined early for use in useEffect)
+  const openReviewModalWithSubmission = useCallback((submission: SubmissionWithReview) => {
+    setSelectedSubmission(submission);
+    
+    // Check if we should focus on a specific review (from notification)
+    const urlParams = new URLSearchParams(window.location.search);
+    const showReview = urlParams.get('showReview') === 'true';
+    const reviewScoutId = urlParams.get('reviewScoutId');
+    
+    if (user?.role === 'scout_admin') {
+      // For scout admins, if we're showing a specific review, find that one
+      if (showReview && reviewScoutId && submission.allReviews) {
+        const specificReview = submission.allReviews.find(r => r.scoutId === reviewScoutId);
+        if (specificReview) {
+          setRating(specificReview.rating || null);
+          setNotes(specificReview.notes || '');
+        } else {
+          // Fallback to user's own review
+          const userReview = submission.allReviews.find(r => r.scoutId === user.id);
+          setRating(userReview?.rating || null);
+          setNotes(userReview?.notes || '');
+        }
+      } else {
+        // Find their own review in the reviews array
+        const userReview = submission.allReviews?.find(r => r.scoutId === user.id);
+        setRating(userReview?.rating || null);
+        setNotes(userReview?.notes || '');
+      }
+    } else {
+      // For regular scouts, use the single review
+      setRating(submission.review?.rating || null);
+      setNotes(submission.review?.notes || '');
+    }
+    
+    setIsReviewModalOpen(true);
+  }, [user?.role, user?.id]);
+
+  // Handle URL parameters to open specific submission
+  useEffect(() => {
+    if (!submissions.length || !location) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const submissionId = urlParams.get('submissionId');
+
+    if (submissionId) {
+      const submission = submissions.find(s => s.id === submissionId);
+      if (submission) {
+        openReviewModalWithSubmission(submission);
+        // Clean up URL parameters after opening
+        const newUrl = location.split('?')[0];
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [submissions, location, openReviewModalWithSubmission]);
 
   // Finalize submission mutation
   const finalizeMutation = useMutation({
@@ -318,20 +375,7 @@ export default function ScoutReviewQueue() {
   };
 
   const openReviewModal = (submission: SubmissionWithReview) => {
-    setSelectedSubmission(submission);
-    
-    if (user?.role === 'scout_admin') {
-      // For scout admins, find their own review in the reviews array
-      const userReview = submission.reviews?.find(r => r.scoutId === user.id);
-      setRating(userReview?.rating || null);
-      setNotes(userReview?.notes || '');
-    } else {
-      // For regular scouts, use the single review
-      setRating(submission.review?.rating || null);
-      setNotes(submission.review?.notes || '');
-    }
-    
-    setIsReviewModalOpen(true);
+    openReviewModalWithSubmission(submission);
   };
 
   const closeReviewModal = () => {
