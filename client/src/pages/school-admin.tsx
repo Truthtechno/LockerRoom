@@ -415,6 +415,16 @@ export default function SchoolAdmin() {
               </p>
             </div>
             <div className="flex items-center space-x-2">
+              <Button 
+                onClick={handleRefreshData}
+                variant="outline"
+                size="sm"
+                className="p-2"
+                data-testid="button-refresh-data"
+                title="Refresh Data"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
               <Select value={period} onValueChange={setPeriod}>
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Select period" />
@@ -425,15 +435,6 @@ export default function SchoolAdmin() {
                   <SelectItem value="all">All time</SelectItem>
                 </SelectContent>
               </Select>
-              <Button 
-                onClick={handleRefreshData}
-                variant="outline"
-                size="sm"
-                data-testid="button-refresh-data"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh Data
-              </Button>
               <Button 
                 onClick={handleAddStudent}
                 className="bg-accent hover:bg-accent/90 text-accent-foreground"
