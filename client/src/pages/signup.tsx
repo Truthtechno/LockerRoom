@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { Eye, EyeOff, Users, Trophy, Camera } from "lucide-react";
+import { useBranding } from "@/hooks/use-branding";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -32,6 +33,7 @@ export default function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { updateUser } = useAuth();
   const { toast } = useToast();
+  const { platformName, logoUrl, branding } = useBranding();
 
   const form = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
@@ -59,7 +61,7 @@ export default function Signup() {
     onSuccess: (data) => {
       updateUser(data.user);
       toast({
-        title: "Welcome to LockerRoom!",
+        title: `Welcome to ${platformName}!`,
         description: data.message || "Account created successfully!",
       });
       setLocation("/feed");
@@ -83,12 +85,28 @@ export default function Signup() {
       <div className="w-full max-w-md space-y-8">
         {/* Logo and Header */}
         <div className="text-center">
-          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl font-bold text-primary-foreground">LR</span>
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Join LockerRoom</h1>
+          {logoUrl ? (
+            <img
+              src={`${logoUrl}${logoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
+              alt={`${platformName} logo`}
+              className="mx-auto h-16 w-auto max-w-[160px] object-contain mb-4"
+              onError={(e) => {
+                // Fallback to default if image fails to load
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const fallback = target.nextElementSibling as HTMLElement;
+                if (fallback) fallback.style.display = 'flex';
+              }}
+            />
+          ) : null}
+          {!logoUrl && (
+            <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl font-bold text-primary-foreground">LR</span>
+            </div>
+          )}
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Join {platformName}</h1>
           <p className="text-muted-foreground mt-2">
-            Follow your favorite student athletes and stay updated with their journey
+            {branding?.companyName || "Follow your favorite student athletes and stay updated with their journey"}
           </p>
         </div>
 

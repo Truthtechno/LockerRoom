@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { useAuth } from "@/hooks/use-auth";
+import { DynamicHead } from "@/components/ui/dynamic-head";
 
 // Pages
 import Login from "@/pages/login";
@@ -325,6 +326,7 @@ function App() {
     <ThemeProvider defaultTheme="light" storageKey="lockerroom-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <DynamicHead />
           <Toaster />
           <Router />
         </TooltipProvider>

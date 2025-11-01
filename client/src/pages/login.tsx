@@ -10,11 +10,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { PasswordResetModal } from "@/components/PasswordResetModal";
 import { Eye, EyeOff } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
+import { useBranding } from "@/hooks/use-branding";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const { updateUser } = useAuth();
   const { toast } = useToast();
+  const { platformName, logoUrl, branding } = useBranding();
   const [isLoading, setIsLoading] = useState(false);
   const [isPasswordResetModalOpen, setIsPasswordResetModalOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -110,11 +112,30 @@ export default function Login() {
         <div className="w-full max-w-md space-y-8">
           {/* Logo Section */}
           <div className="text-center">
-            <div className="mx-auto w-20 h-20 bg-primary rounded-xl flex items-center justify-center mb-4">
-              <span className="text-primary-foreground font-bold text-2xl">LR</span>
-            </div>
-            <h1 className="text-4xl font-bold text-foreground">LockerRoom</h1>
-            <p className="text-muted-foreground mt-2">XEN Sports Armoury</p>
+            {logoUrl ? (
+              <img
+                src={`${logoUrl}${logoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
+                alt={`${platformName} logo`}
+                className="mx-auto h-20 w-auto max-w-[200px] object-contain mb-4"
+                onError={(e) => {
+                  // Fallback to default if image fails to load
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            {!logoUrl && (
+              <div className="mx-auto w-20 h-20 bg-primary rounded-xl flex items-center justify-center mb-4">
+                <span className="text-primary-foreground font-bold text-2xl">LR</span>
+              </div>
+            )}
+            <h1 className="text-4xl font-bold text-foreground">{platformName}</h1>
+            {branding?.companyName && (
+              <p className="text-muted-foreground mt-2">{branding.companyName}</p>
+            )}
+             <p className="text-muted-foreground mt-2">XEN Sports Armoury</p>
           </div>
 
           {/* Login Form */}

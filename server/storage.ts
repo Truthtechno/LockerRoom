@@ -4090,7 +4090,9 @@ export class PostgresStorage implements IStorage {
   // System configuration operations
   async getSystemBranding(): Promise<SystemBranding | undefined> {
     if (!isDbConnected) return undefined;
-    const result = await db.select().from(systemBranding).limit(1);
+    // Order by updated_at DESC to get the most recent branding config
+    // This handles cases where there might be multiple rows
+    const result = await db.select().from(systemBranding).orderBy(desc(systemBranding.updatedAt)).limit(1);
     return result[0];
   }
 
@@ -4098,17 +4100,105 @@ export class PostgresStorage implements IStorage {
     if (!isDbConnected) throw new Error("Database not connected");
     
     const existing = await this.getSystemBranding();
+    console.log('🔍 Existing branding from DB:', JSON.stringify(existing, null, 2));
+    console.log('📝 Updating with:', JSON.stringify(branding, null, 2));
+    
+    // Ensure updatedBy is present
+    const updatedBy = branding.updatedBy || 'system';
+    
     if (existing) {
+      // Build update object - preserve existing values if not provided
+      const updateFields: any = {
+        updatedAt: new Date(),
+        updatedBy: updatedBy,
+      };
+      
+      // Map all provided fields - Drizzle will handle camelCase to snake_case mapping
+      const fieldMap: Record<string, keyof typeof systemBranding> = {
+        name: 'name',
+        logoUrl: 'logoUrl',
+        faviconUrl: 'faviconUrl',
+        companyName: 'companyName',
+        companyAddress: 'companyAddress',
+        companyCity: 'companyCity',
+        companyState: 'companyState',
+        companyZip: 'companyZip',
+        companyCountry: 'companyCountry',
+        contactEmail: 'contactEmail',
+        contactPhone: 'contactPhone',
+        websiteUrl: 'websiteUrl',
+        socialFacebook: 'socialFacebook',
+        socialTwitter: 'socialTwitter',
+        socialInstagram: 'socialInstagram',
+        socialLinkedin: 'socialLinkedin',
+      };
+      
+      // CRITICAL: Process ALL fields that exist in branding object
+      // This ensures we can clear fields by sending undefined/null
+      Object.entries(fieldMap).forEach(([key, drizzleKey]) => {
+        // Check if the key exists in the branding object (even if value is undefined)
+        if (key in branding) {
+          let value = branding[key as keyof typeof branding];
+          console.log(`📝 Processing field ${key}:`, { value, type: typeof value });
+          
+          // Convert empty strings, undefined, or null to null (means clear the field in DB)
+          if (value === "" || value === undefined || value === null || (typeof value === 'string' && value.trim() === "")) {
+            value = null as any;
+            console.log(`  → Converting ${key} to null (clearing field)`);
+          }
+          
+          // Always include the field (even if null) so we can clear it
+          updateFields[drizzleKey] = value;
+          console.log(`  → Setting ${drizzleKey} to:`, value);
+        } else {
+          console.log(`📝 Field ${key} not in branding object, preserving existing value`);
+        }
+      });
+      
+      console.log('📝 Final update fields:', JSON.stringify(updateFields, null, 2));
+      
       const [updated] = await db.update(systemBranding)
-        .set({ ...branding, updatedAt: new Date() })
+        .set(updateFields)
         .where(eq(systemBranding.id, existing.id))
         .returning();
+      
+      console.log('✅ Branding updated in DB:', JSON.stringify(updated, null, 2));
+      
+      // Verify the update worked by re-querying
+      const verify = await this.getSystemBranding();
+      console.log('🔍 Verification query result:', JSON.stringify(verify, null, 2));
+      
       return updated;
     } else {
-      const [created] = await db.insert(systemBranding).values({
-        ...branding,
-        updatedBy: 'system',
-      } as InsertSystemBranding).returning();
+      // Create new record with all provided values
+      const insertData: InsertSystemBranding = {
+        name: branding.name || 'LockerRoom',
+        logoUrl: branding.logoUrl || null,
+        faviconUrl: branding.faviconUrl || null,
+        companyName: branding.companyName || null,
+        companyAddress: branding.companyAddress || null,
+        companyCity: branding.companyCity || null,
+        companyState: branding.companyState || null,
+        companyZip: branding.companyZip || null,
+        companyCountry: branding.companyCountry || null,
+        contactEmail: branding.contactEmail || null,
+        contactPhone: branding.contactPhone || null,
+        websiteUrl: branding.websiteUrl || null,
+        socialFacebook: branding.socialFacebook || null,
+        socialTwitter: branding.socialTwitter || null,
+        socialInstagram: branding.socialInstagram || null,
+        socialLinkedin: branding.socialLinkedin || null,
+        updatedBy: updatedBy,
+      };
+      
+      console.log('📝 Creating new branding record:', JSON.stringify(insertData, null, 2));
+      
+      const [created] = await db.insert(systemBranding)
+        .values(insertData)
+        .returning();
+      
+      console.log('✅ Created new branding in DB:', JSON.stringify(created, null, 2));
+      
       return created;
     }
   }

@@ -25,26 +25,91 @@ export function testCloudinaryEnv(): void {
   }
 }
 
+// Upload branding assets (logo, favicon) to local storage
+export async function uploadBrandingAsset(file: File, type: 'logo' | 'favicon') {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("type", type);
+
+  // Get auth token
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+  };
+
+  console.log(`📤 Uploading branding ${type} locally:`, { fileName: file.name, fileSize: file.size, fileType: file.type });
+
+  try {
+    const res = await fetch(`/api/admin/system-config/branding/upload`, {
+      method: "POST",
+      headers,
+      body: fd,
+      credentials: "include",
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("❌ Branding upload failed:", { status: res.status, statusText: res.statusText, data });
+      throw new Error(data?.error || data?.message || `Upload failed with status ${res.status}`);
+    }
+
+    console.log("✅ Branding upload successful:", { url: data.url, secure_url: data.secure_url });
+
+    return {
+      url: data.url,
+      secure_url: data.secure_url || data.url,
+      public_id: data.public_id,
+      thumbnail_url: undefined,
+    };
+  } catch (error) {
+    console.error("❌ Branding upload exception:", error);
+    throw error;
+  }
+}
+
 export async function uploadToCloudinary(file: File, folder: string) {
   const fd = new FormData();
   fd.append("file", file);
 
-  const res = await fetch(`/api/upload/image?folder=${encodeURIComponent(folder)}`, {
-    method: "POST",
-    body: fd,
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error || "Upload failed");
+  // Get auth token if available
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  return {
-    url: data.url,
-    secure_url: data.secure_url || data.url,
-    public_id: data.public_id,
-    thumbnail_url: data.thumbnail_url,
-  };
+  console.log(`📤 Uploading to Cloudinary:`, { fileName: file.name, folder, fileSize: file.size, fileType: file.type, hasAuth: !!token });
+
+  try {
+    const res = await fetch(`/api/upload/image?folder=${encodeURIComponent(folder)}`, {
+      method: "POST",
+      headers,
+      body: fd,
+      credentials: "include",
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("❌ Cloudinary upload failed:", { status: res.status, statusText: res.statusText, data });
+      throw new Error(data?.error || data?.message || `Upload failed with status ${res.status}`);
+    }
+
+    console.log("✅ Cloudinary upload successful:", { url: data.url || data.secure_url, secure_url: data.secure_url, public_id: data.public_id });
+
+    return {
+      url: data.url || data.secure_url,
+      secure_url: data.secure_url || data.url,
+      public_id: data.public_id,
+      thumbnail_url: data.thumbnail_url,
+    };
+  } catch (error) {
+    console.error("❌ Cloudinary upload exception:", error);
+    throw error;
+  }
 }
 
 export async function createPostWithMedia(file: File, caption: string, studentId: string, onProgress?: (progress: number) => void) {

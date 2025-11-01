@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useBranding } from "@/hooks/use-branding";
 import { logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -20,6 +21,7 @@ import {
 export default function Sidebar() {
   const [location, setLocation] = useLocation();
   const { user, updateUser } = useAuth();
+  const { platformName, logoUrl } = useBranding();
   const queryClient = useQueryClient();
   const previousUserIdRef = useRef<string | undefined>(user?.id);
 
@@ -252,10 +254,28 @@ export default function Sidebar() {
         <div className="flex flex-1 flex-col pt-5 pb-4 overflow-y-auto">
           {/* Logo */}
           <div className="flex items-center flex-shrink-0 px-4">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">LR</span>
-            </div>
-            <span className="ml-3 text-xl font-bold text-foreground">LockerRoom</span>
+            {logoUrl ? (
+              <img
+                src={`${logoUrl}${logoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
+                alt={`${platformName} logo`}
+                className="h-10 w-auto max-w-[120px] object-contain"
+                onError={(e) => {
+                  // Fallback to default if image fails to load or is removed
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            {!logoUrl && (
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                <span className="text-primary-foreground font-bold text-lg">LR</span>
+              </div>
+            )}
+            <span className="ml-3 text-xl font-bold text-foreground">
+              {platformName}
+            </span>
           </div>
 
           {/* Navigation */}

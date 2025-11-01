@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users, Eye, Bot, Menu, X, LayoutDashboard, TrendingUp, UserPlus, Building2, Shield, Megaphone, Bell, Layers, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useBranding } from "@/hooks/use-branding";
 import { logout } from "@/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
@@ -20,6 +21,7 @@ import {
 export default function MobileNav() {
   const [location, setLocation] = useLocation();
   const { user, updateUser } = useAuth();
+  const { platformName, logoUrl } = useBranding();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const queryClient = useQueryClient();
   const previousUserIdRef = useRef<string | undefined>(user?.id);
@@ -382,10 +384,26 @@ export default function MobileNav() {
           {/* Drawer Header */}
           <div className="flex items-center justify-between p-6 border-b border-border">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">LR</span>
-              </div>
-              <span className="text-xl font-bold text-foreground">LockerRoom</span>
+              {logoUrl ? (
+                <img
+                  src={`${logoUrl}${logoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
+                  alt={`${platformName} logo`}
+                  className="h-10 w-auto max-w-[120px] object-contain"
+                  onError={(e) => {
+                    // Fallback to default if image fails to load or is removed
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const fallback = target.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              {!logoUrl && (
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                  <span className="text-primary-foreground font-bold text-lg">LR</span>
+                </div>
+              )}
+              <span className="text-xl font-bold text-foreground">{platformName}</span>
             </div>
             <Button
               variant="ghost"

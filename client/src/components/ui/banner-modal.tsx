@@ -313,9 +313,7 @@ export function BannerModal({ banner, open, onOpenChange }: BannerModalProps) {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground">
-                XEN Watch Page: Banners will appear on the XEN Watch page for students to see promotions, system updates, or downtime alerts.
-              </p>
+              
             </div>
 
             {/* School Selection - Only show when School Admin is selected */}

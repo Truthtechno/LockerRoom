@@ -4068,12 +4068,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const profileRoutes = await import('./routes/profile');
   app.use(profileRoutes.default);
 
-  // Serve uploads directory for development
-  if (process.env.NODE_ENV !== 'production') {
-    const path = await import('path');
-    const express = await import('express');
-    app.use('/uploads', express.default.static(path.join(process.cwd(), 'uploads')));
-  }
+  // Serve uploads directory (including branding assets) - always available
+  const path = await import('path');
+  const express = await import('express');
+  app.use('/uploads', express.default.static(path.join(process.cwd(), 'uploads')));
 
   // General user follow/unfollow routes
   app.post("/api/users/:id/follow", requireAuth, async (req, res) => {
@@ -4781,27 +4779,335 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // System Configuration Routes - Branding, Appearance, Payment
-  app.get("/api/admin/system-config/branding", requireAuth, requireRole(['system_admin']), async (req, res) => {
+  // Public endpoint - branding info should be visible to all users
+  app.get("/api/admin/system-config/branding", async (req, res) => {
     try {
       const branding = await storage.getSystemBranding();
-      res.json(branding || {});
+      console.log('📖 GET /api/admin/system-config/branding - Fetched from DB:', JSON.stringify(branding, null, 2));
+      
+      // CRITICAL: Verify logo and favicon files actually exist before returning URLs
+      // If file was deleted but DB still has URL, clear it
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      let verifiedLogoUrl = branding?.logoUrl || undefined;
+      let verifiedFaviconUrl = branding?.faviconUrl || undefined;
+      
+      // Verify logo file exists - if file is missing but DB has URL, update DB
+      if (verifiedLogoUrl) {
+        try {
+          let logoPath: string;
+          if (verifiedLogoUrl.startsWith('/uploads/')) {
+            logoPath = path.join(process.cwd(), verifiedLogoUrl.substring(1));
+          } else if (verifiedLogoUrl.startsWith('uploads/')) {
+            logoPath = path.join(process.cwd(), verifiedLogoUrl);
+          } else if (path.isAbsolute(verifiedLogoUrl)) {
+            logoPath = verifiedLogoUrl;
+          } else {
+            logoPath = path.join(process.cwd(), verifiedLogoUrl);
+          }
+          
+          const fileExists = await fs.access(logoPath).then(() => true).catch(() => false);
+          if (!fileExists) {
+            console.log('⚠️ Logo file does not exist, clearing logoUrl from DB:', verifiedLogoUrl);
+            // CRITICAL: Update database to clear the logoUrl since file doesn't exist
+            await storage.updateSystemBranding({
+              logoUrl: null,
+              updatedBy: 'system',
+            });
+            verifiedLogoUrl = undefined;
+          }
+        } catch (error) {
+          console.warn('⚠️ Error checking logo file:', error);
+          verifiedLogoUrl = undefined;
+        }
+      }
+      
+      // Verify favicon file exists - if file is missing but DB has URL, update DB
+      if (verifiedFaviconUrl) {
+        try {
+          let faviconPath: string;
+          if (verifiedFaviconUrl.startsWith('/uploads/')) {
+            faviconPath = path.join(process.cwd(), verifiedFaviconUrl.substring(1));
+          } else if (verifiedFaviconUrl.startsWith('uploads/')) {
+            faviconPath = path.join(process.cwd(), verifiedFaviconUrl);
+          } else if (path.isAbsolute(verifiedFaviconUrl)) {
+            faviconPath = verifiedFaviconUrl;
+          } else {
+            faviconPath = path.join(process.cwd(), verifiedFaviconUrl);
+          }
+          
+          const fileExists = await fs.access(faviconPath).then(() => true).catch(() => false);
+          if (!fileExists) {
+            console.log('⚠️ Favicon file does not exist, clearing faviconUrl from DB:', verifiedFaviconUrl);
+            // CRITICAL: Update database to clear the faviconUrl since file doesn't exist
+            await storage.updateSystemBranding({
+              faviconUrl: null,
+              updatedBy: 'system',
+            });
+            verifiedFaviconUrl = undefined;
+          }
+        } catch (error) {
+          console.warn('⚠️ Error checking favicon file:', error);
+          verifiedFaviconUrl = undefined;
+        }
+      }
+      
+      // Normalize null values to undefined for JSON response
+      const normalizedBranding = branding ? {
+        ...branding,
+        logoUrl: verifiedLogoUrl || undefined,
+        faviconUrl: verifiedFaviconUrl || undefined,
+      } : {};
+      
+      console.log('📖 GET /api/admin/system-config/branding - Returning verified and normalized:', JSON.stringify(normalizedBranding, null, 2));
+      
+      // Return the normalized branding object or empty object if none exists
+      res.json(normalizedBranding);
     } catch (error) {
-      console.error('Get system branding error:', error);
-      res.status(500).json({ message: "Failed to fetch system branding" });
+      console.error('❌ Get system branding error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch system branding",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
   app.put("/api/admin/system-config/branding", requireAuth, requireRole(['system_admin']), async (req, res) => {
     try {
       const userId = (req as any).auth?.id || 'system';
-      const branding = await storage.updateSystemBranding({
+      console.log('📝 PUT /api/admin/system-config/branding - Received request:', {
+        userId,
+        body: JSON.stringify(req.body, null, 2),
+        bodyKeys: Object.keys(req.body || {})
+      });
+      
+      // Get existing branding to check what files need to be deleted
+      const existingBranding = await storage.getSystemBranding();
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      // CRITICAL: Delete logo file if logoUrl is being cleared
+      // Check if logoUrl is explicitly in the request body and is null/undefined/empty
+      console.log('🔍 Checking if logo should be deleted:');
+      console.log('   logoUrl in req.body:', 'logoUrl' in req.body);
+      console.log('   req.body.logoUrl value:', req.body.logoUrl);
+      console.log('   req.body.logoUrl type:', typeof req.body.logoUrl);
+      console.log('   existingBranding?.logoUrl:', existingBranding?.logoUrl);
+      console.log('   Full req.body keys:', Object.keys(req.body));
+      
+      // CRITICAL: logoUrl can be null (explicitly cleared) or undefined (not in body)
+      // null means "clear this field", undefined means "don't change this field"
+      const isLogoBeingCleared = 'logoUrl' in req.body && (
+        req.body.logoUrl === null ||  // Explicitly cleared (sent as null)
+        req.body.logoUrl === undefined || 
+        req.body.logoUrl === '' ||
+        (typeof req.body.logoUrl === 'string' && req.body.logoUrl.trim() === '')
+      );
+      
+      console.log('   isLogoBeingCleared:', isLogoBeingCleared);
+      
+      if (existingBranding?.logoUrl && isLogoBeingCleared) {
+        // Extract filename from URL path
+        const logoUrl = existingBranding.logoUrl;
+        
+        // Handle both absolute paths and relative paths
+        // logoUrl might be like: /uploads/branding/logo.png or /uploads/branding/logo.jpg
+        let logoPath: string;
+        
+        if (logoUrl.startsWith('/uploads/')) {
+          // Relative path from project root
+          logoPath = path.join(process.cwd(), logoUrl.substring(1)); // Remove leading slash
+        } else if (logoUrl.startsWith('uploads/')) {
+          // No leading slash
+          logoPath = path.join(process.cwd(), logoUrl);
+        } else if (path.isAbsolute(logoUrl)) {
+          // Absolute path
+          logoPath = logoUrl;
+        } else {
+          // Assume it's relative to project root
+          logoPath = path.join(process.cwd(), logoUrl);
+        }
+        
+        console.log('🗑️ Attempting to delete logo file:');
+        console.log('   Original logoUrl:', logoUrl);
+        console.log('   Resolved path:', logoPath);
+        console.log('   Current working directory:', process.cwd());
+        
+        // Check if file exists before trying to delete
+        try {
+          const fileExists = await fs.access(logoPath).then(() => true).catch(() => false);
+          console.log('   File exists check result:', fileExists);
+          
+          if (fileExists) {
+            await fs.unlink(logoPath);
+            console.log('✅ Successfully deleted logo file:', logoPath);
+          } else {
+            console.log('⚠️ Logo file does not exist at path:', logoPath);
+            // Try alternative paths in case of path mismatch
+            const alternativePaths = [
+              path.join(process.cwd(), 'uploads', 'branding', 'logo.png'),
+              path.join(process.cwd(), 'uploads', 'branding', 'logo.jpg'),
+              path.join(process.cwd(), 'uploads', 'branding', 'logo.svg'),
+            ];
+            
+            for (const altPath of alternativePaths) {
+              const altExists = await fs.access(altPath).then(() => true).catch(() => false);
+              if (altExists) {
+                console.log('   Found logo at alternative path, deleting:', altPath);
+                await fs.unlink(altPath);
+                console.log('✅ Deleted logo from alternative path:', altPath);
+                break;
+              }
+            }
+          }
+        } catch (error: any) {
+          // File might not exist, log but don't fail
+          if (error.code === 'ENOENT') {
+            console.log('⚠️ Logo file does not exist (already deleted?):', logoPath);
+          } else {
+            console.error('❌ Could not delete logo file:', logoPath, error.message);
+            console.error('   Error code:', error.code);
+          }
+        }
+      } else {
+        console.log('⚠️ Logo deletion skipped:');
+        console.log('   - existingBranding?.logoUrl:', existingBranding?.logoUrl);
+        console.log('   - isLogoBeingCleared:', isLogoBeingCleared);
+      }
+      
+      // CRITICAL: Delete favicon file if faviconUrl is being cleared
+      const isFaviconBeingCleared = 'faviconUrl' in req.body && (
+        req.body.faviconUrl === undefined || 
+        req.body.faviconUrl === null || 
+        req.body.faviconUrl === '' ||
+        (typeof req.body.faviconUrl === 'string' && req.body.faviconUrl.trim() === '')
+      );
+      
+      if (existingBranding?.faviconUrl && isFaviconBeingCleared) {
+        const faviconUrl = existingBranding.faviconUrl;
+        const faviconPath = faviconUrl.startsWith('/') 
+          ? path.join(process.cwd(), faviconUrl.substring(1))
+          : path.join(process.cwd(), faviconUrl);
+        
+        console.log('🗑️ Attempting to delete favicon file:', faviconPath);
+        console.log('🗑️ Original faviconUrl:', faviconUrl);
+        
+        try {
+          await fs.unlink(faviconPath);
+          console.log('✅ Successfully deleted favicon file:', faviconPath);
+        } catch (error: any) {
+          if (error.code === 'ENOENT') {
+            console.log('⚠️ Favicon file does not exist (already deleted?):', faviconPath);
+          } else {
+            console.error('❌ Could not delete favicon file:', faviconPath, error.message);
+          }
+        }
+      }
+      
+      // Ensure we have all required fields and validate the data
+      const updateData = {
         ...req.body,
         updatedBy: userId,
-      });
-      res.json(branding);
+      };
+      
+      console.log('📝 Calling storage.updateSystemBranding with:', JSON.stringify(updateData, null, 2));
+      
+      const branding = await storage.updateSystemBranding(updateData);
+      
+      console.log('✅ PUT /api/admin/system-config/branding - Successfully updated:', JSON.stringify(branding, null, 2));
+      
+      // CRITICAL: Normalize null values to undefined for JSON response
+      // This ensures frontend receives undefined (not null) which is easier to check
+      const normalizedBranding = {
+        ...branding,
+        logoUrl: branding.logoUrl || undefined,
+        faviconUrl: branding.faviconUrl || undefined,
+      };
+      
+      console.log('✅ PUT /api/admin/system-config/branding - Returning normalized branding:', JSON.stringify(normalizedBranding, null, 2));
+      
+      // Return the normalized branding
+      res.json(normalizedBranding);
     } catch (error) {
-      console.error('Update system branding error:', error);
-      res.status(500).json({ message: "Failed to update system branding" });
+      console.error('❌ PUT /api/admin/system-config/branding - Error:', error);
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      res.status(500).json({ 
+        message: "Failed to update system branding",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Local branding asset upload endpoint (logo, favicon)
+  app.post("/api/admin/system-config/branding/upload", requireAuth, requireRole(['system_admin']), upload.single("file"), async (req, res) => {
+    try {
+      console.log('📤 POST /api/admin/system-config/branding/upload - Upload request received');
+      console.log('📤 Request body:', req.body);
+      console.log('📤 File info:', req.file ? {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      } : 'No file');
+
+      if (!req.file) {
+        console.error('❌ No file provided in request');
+        return res.status(400).json({ error: "No file provided" });
+      }
+
+      const { type } = req.body; // 'logo' or 'favicon'
+      if (!type || !['logo', 'favicon'].includes(type)) {
+        console.error('❌ Invalid type:', type);
+        return res.status(400).json({ error: "Invalid type. Must be 'logo' or 'favicon'" });
+      }
+
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      // Create branding directory if it doesn't exist
+      const brandingDir = path.join(process.cwd(), 'uploads', 'branding');
+      await fs.mkdir(brandingDir, { recursive: true });
+      console.log('📁 Branding directory ensured:', brandingDir);
+
+      // Determine file extension from original file or mime type
+      const originalExt = path.extname(req.file.originalname) || 
+        (req.file.mimetype.includes('png') ? '.png' : 
+         req.file.mimetype.includes('svg') ? '.svg' : 
+         req.file.mimetype.includes('ico') ? '.ico' : 
+         req.file.mimetype.includes('jpeg') || req.file.mimetype.includes('jpg') ? '.jpg' : '.png');
+
+      // Use consistent filenames: logo.png, favicon.ico
+      const filename = type === 'favicon' 
+        ? `favicon${originalExt === '.ico' ? '.ico' : '.png'}` 
+        : `logo${originalExt}`;
+      const filePath = path.join(brandingDir, filename);
+
+      console.log('💾 Saving file:', { filename, filePath, size: req.file.size });
+
+      // Save file locally
+      await fs.writeFile(filePath, req.file.buffer);
+      
+      // Verify file was written
+      const stats = await fs.stat(filePath);
+      console.log('✅ File saved successfully:', { filePath, size: stats.size });
+      
+      // Return local URL path
+      const url = `/uploads/branding/${filename}`;
+      
+      console.log(`✅ Branding ${type} upload complete:`, { url, filePath, size: req.file.size });
+
+      res.json({
+        url,
+        secure_url: url, // For compatibility with existing code
+        public_id: filename,
+        type,
+      });
+    } catch (error) {
+      console.error('❌ Branding upload error:', error);
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to upload branding asset"
+      });
     }
   });
 

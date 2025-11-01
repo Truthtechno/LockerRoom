@@ -38,6 +38,7 @@ async function generateVideoThumbnail(publicId: string): Promise<string> {
 }
 
 // POST /api/upload/image?folder=coverPhoto
+// Note: Authentication optional - allows public uploads but checks auth if provided
 router.post("/image", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {

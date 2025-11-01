@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { LogOut, Search } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { useBranding } from '@/hooks/use-branding';
 import { logout } from '@/lib/auth';
 
 interface HeaderProps {
@@ -18,6 +19,7 @@ export default function Header({
   className = ""
 }: HeaderProps) {
   const { user } = useAuth();
+  const { platformName, logoUrl } = useBranding();
 
   const handleLogout = () => {
     logout(); // logout() now handles clearing data and redirecting
@@ -28,10 +30,28 @@ export default function Header({
       <div className="flex items-center justify-between">
         <Link href="/feed">
           <div className="flex items-center cursor-pointer">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">LR</span>
-            </div>
-            <span className="ml-2 text-lg font-bold text-foreground">LockerRoom</span>
+            {logoUrl ? (
+              <img
+                src={`${logoUrl}${logoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
+                alt={`${platformName} logo`}
+                className="h-8 w-auto max-w-[100px] object-contain"
+                onError={(e) => {
+                  // Fallback to default if image fails to load or is removed
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            {!logoUrl && (
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <span className="text-primary-foreground font-bold">LR</span>
+              </div>
+            )}
+            <span className="ml-2 text-lg font-bold text-foreground">
+              {platformName}
+            </span>
           </div>
         </Link>
         
