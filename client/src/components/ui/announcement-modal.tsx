@@ -5,10 +5,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Loader2, Megaphone, Upload, X, Image, Video, FileImage, FileVideo } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { apiRequest } from "@/lib/queryClient";
 
 interface AnnouncementModalProps {
   children: React.ReactNode;
@@ -25,7 +27,8 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
     content: '',
     imageUrl: '',
     videoUrl: '',
-    scope: userRole === 'system_admin' ? 'all' : 'school'
+    scope: userRole === 'system_admin' ? 'all' : 'school',
+    selectedSchoolIds: [] as string[]
   });
   const [uploadedFiles, setUploadedFiles] = useState<{
     image?: { url: string; publicId: string; name: string };
@@ -36,6 +39,20 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+
+  // Fetch schools list for system admin
+  const { data: schoolsData } = useQuery({
+    queryKey: ["/api/system-admin/schools"],
+    queryFn: async () => {
+      if (userRole !== 'system_admin') return null;
+      const response = await apiRequest("GET", "/api/system-admin/schools");
+      const data = await response.json();
+      return data;
+    },
+    enabled: userRole === 'system_admin' && open,
+  });
+
+  const schools = schoolsData?.schools || [];
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -145,37 +162,69 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
       return;
     }
 
+    // Validate school selection if scope is 'school'
+    if (userRole === 'system_admin' && formData.scope === 'school' && formData.selectedSchoolIds.length === 0) {
+      toast({
+        title: "Missing School Selection",
+        description: "Please select at least one school for the announcement.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const endpoint = userRole === 'system_admin' 
         ? '/api/system/announcements' 
         : `/api/schools/${schoolId}/announcements`;
       
+      // Map 'all' to 'global' for backend compatibility
+      const scopeValue = formData.scope === 'all' ? 'global' : formData.scope;
+      
+      const payload: any = {
+        title: formData.title.trim(),
+        content: formData.content.trim(),
+        imageUrl: uploadedFiles.image ? uploadedFiles.image.url : formData.imageUrl || '',
+        videoUrl: uploadedFiles.video ? uploadedFiles.video.url : formData.videoUrl || '',
+        scope: scopeValue,
+      };
+
+      // For system admin with specific school scope, send selected school IDs
+      if (userRole === 'system_admin' && formData.scope === 'school') {
+        if (formData.selectedSchoolIds.length === 0) {
+          toast({
+            title: "Missing School Selection",
+            description: "Please select at least one school for the announcement.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+        payload.targetSchoolIds = formData.selectedSchoolIds;
+      } else if (userRole === 'school_admin') {
+        payload.schoolId = schoolId;
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({
-          title: formData.title,
-          content: formData.content,
-          imageUrl: uploadedFiles.image ? uploadedFiles.image.url : formData.imageUrl || '',
-          videoUrl: uploadedFiles.video ? uploadedFiles.video.url : formData.videoUrl || '',
-          scope: formData.scope,
-          schoolId: userRole === 'school_admin' ? schoolId : undefined
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
         const ct = response.headers.get('content-type') || '';
+        let errorMessage = 'Failed to create announcement';
         if (ct.includes('application/json')) {
           const error = await response.json();
-          throw new Error(error.error?.message || 'Failed to create announcement');
+          errorMessage = error.error?.message || error.message || errorMessage;
         } else {
           const text = await response.text();
-          throw new Error(`Failed to create announcement: ${response.status} ${text.slice(0, 200)}`);
+          errorMessage = text.slice(0, 200) || errorMessage;
         }
+        throw new Error(errorMessage);
       }
 
       const ct = response.headers.get('content-type') || '';
@@ -211,7 +260,8 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
         content: '',
         imageUrl: '',
         videoUrl: '',
-        scope: userRole === 'system_admin' ? 'all' : 'school'
+        scope: userRole === 'system_admin' ? 'all' : 'school',
+        selectedSchoolIds: []
       });
       setUploadedFiles({});
       setOpen(false);
@@ -229,6 +279,27 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear school selection if scope changes away from 'school'
+    if (field === 'scope' && value !== 'school') {
+      setFormData(prev => ({ ...prev, selectedSchoolIds: [] }));
+    }
+  };
+
+  const handleSchoolToggle = (schoolId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedSchoolIds: prev.selectedSchoolIds.includes(schoolId)
+        ? prev.selectedSchoolIds.filter(id => id !== schoolId)
+        : [...prev.selectedSchoolIds, schoolId]
+    }));
+  };
+
+  const handleSelectAllSchools = () => {
+    if (formData.selectedSchoolIds.length === schools.length) {
+      setFormData(prev => ({ ...prev, selectedSchoolIds: [] }));
+    } else {
+      setFormData(prev => ({ ...prev, selectedSchoolIds: schools.map((s: any) => s.id) }));
+    }
   };
 
   return (
@@ -236,7 +307,7 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="w-[95vw] sm:w-full sm:max-w-[600px] max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center">
             <Megaphone className="w-5 h-5 mr-2 text-accent" />
@@ -244,7 +315,7 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
           </DialogTitle>
           <DialogDescription>
             {userRole === 'system_admin' 
-              ? 'Create an announcement that can be sent to all schools, a specific school, or XEN staff only.'
+              ? 'Create an announcement that can be sent to all schools or specific schools.'
               : 'Create an announcement for students in your school.'
             }
           </DialogDescription>
@@ -260,7 +331,12 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
               onChange={(e) => handleInputChange('title', e.target.value)}
               placeholder="Enter announcement title..."
               required
+              className="w-full"
+              maxLength={200}
             />
+            <p className="text-xs text-muted-foreground">
+              {formData.title.length}/200 characters
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -272,23 +348,83 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
               placeholder="Enter announcement content..."
               rows={4}
               required
+              className="w-full resize-y min-h-[100px]"
+              maxLength={2000}
             />
+            <p className="text-xs text-muted-foreground">
+              {formData.content.length}/2000 characters
+            </p>
           </div>
 
           {userRole === 'system_admin' && (
-            <div className="space-y-2">
-              <Label htmlFor="scope">Announcement Scope</Label>
-              <Select value={formData.scope} onValueChange={(value) => handleInputChange('scope', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select scope" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Schools</SelectItem>
-                  <SelectItem value="school">Specific School</SelectItem>
-                  <SelectItem value="staff">XEN Staff Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="scope">Announcement Scope *</Label>
+                <Select value={formData.scope} onValueChange={(value) => handleInputChange('scope', value)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select scope" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Schools</SelectItem>
+                    <SelectItem value="school">Specific Schools</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {formData.scope === 'school' && (
+                <div className="space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <Label className="text-sm font-medium">Select Schools *</Label>
+                    {schools.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleSelectAllSchools}
+                        className="h-auto py-1 text-xs self-start sm:self-auto"
+                      >
+                        {formData.selectedSchoolIds.length === schools.length ? 'Deselect All' : 'Select All'}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="border rounded-lg p-3 sm:p-4 max-h-48 sm:max-h-64 overflow-y-auto space-y-2 bg-background">
+                    {schools.length === 0 ? (
+                      <div className="text-sm text-muted-foreground text-center py-4">
+                        <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
+                        <p>Loading schools...</p>
+                      </div>
+                    ) : (
+                      schools.map((school: any) => (
+                        <div key={school.id} className="flex items-center space-x-2 py-1">
+                          <Checkbox
+                            id={`school-${school.id}`}
+                            checked={formData.selectedSchoolIds.includes(school.id)}
+                            onCheckedChange={() => handleSchoolToggle(school.id)}
+                            className="flex-shrink-0"
+                          />
+                          <Label
+                            htmlFor={`school-${school.id}`}
+                            className="flex-1 font-normal cursor-pointer text-sm break-words"
+                          >
+                            {school.name}
+                          </Label>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {formData.selectedSchoolIds.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {formData.selectedSchoolIds.length} school{formData.selectedSchoolIds.length !== 1 ? 's' : ''} selected
+                    </p>
+                  )}
+                  {formData.selectedSchoolIds.length === 0 && formData.scope === 'school' && (
+                    <p className="text-xs text-destructive">
+                      Please select at least one school
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {/* File Upload Section */}
@@ -334,14 +470,19 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
                     variant="outline"
                     onClick={() => imageInputRef.current?.click()}
                     disabled={uploading}
-                    className="flex-1"
+                    className="w-full sm:w-auto"
                   >
                     {uploading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <span className="hidden sm:inline">Uploading...</span>
+                      </>
                     ) : (
-                      <Upload className="w-4 h-4 mr-2" />
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Image
+                      </>
                     )}
-                    Upload Image
                   </Button>
                 </div>
               )}
@@ -386,14 +527,19 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
                     variant="outline"
                     onClick={() => videoInputRef.current?.click()}
                     disabled={uploading}
-                    className="flex-1"
+                    className="w-full sm:w-auto"
                   >
                     {uploading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <span className="hidden sm:inline">Uploading...</span>
+                      </>
                     ) : (
-                      <Upload className="w-4 h-4 mr-2" />
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Video
+                      </>
                     )}
-                    Upload Video
                   </Button>
                 </div>
               )}
@@ -410,12 +556,14 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
                   onChange={(e) => handleInputChange('imageUrl', e.target.value)}
                   placeholder="Image URL (optional)"
                   type="url"
+                  className="w-full"
                 />
                 <Input
                   value={formData.videoUrl}
                   onChange={(e) => handleInputChange('videoUrl', e.target.value)}
                   placeholder="Video URL (optional)"
                   type="url"
+                  className="w-full"
                 />
               </div>
             </div>
@@ -423,34 +571,40 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
           </form>
         </div>
 
-          <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" form="create-announcement-form" disabled={loading || uploading} className="bg-accent hover:bg-accent/90">
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : uploading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Megaphone className="w-4 h-4 mr-2" />
-                  Create Announcement
-                </>
-              )}
-            </Button>
-          </DialogFooter>
+        <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4 flex-col sm:flex-row gap-2 sm:gap-0">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={loading}
+            className="w-full sm:w-auto order-2 sm:order-1"
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            form="create-announcement-form" 
+            disabled={loading || uploading} 
+            className="bg-accent hover:bg-accent/90 w-full sm:w-auto order-1 sm:order-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : uploading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Megaphone className="w-4 h-4 mr-2" />
+                Create Announcement
+              </>
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

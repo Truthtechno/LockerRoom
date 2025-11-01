@@ -411,6 +411,23 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
+// Banners table for dashboard-level communications
+export const banners = pgTable("banners", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  category: text("category").notNull().default("info"), // info, warning, success, error, announcement
+  targetRoles: text("target_roles").array().notNull().default(sql`'{}'`), // Array of roles: scout_admin, school_admin, xen_scout, xen_watch
+  targetSchoolIds: text("target_school_ids").array(), // Array of school IDs (only applies when school_admin is in target_roles). NULL means all schools.
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(0), // Higher priority shown first
+  createdByAdminId: varchar("created_by_admin_id").notNull(), // References users(id)
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -580,6 +597,12 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertBannerSchema = createInsertSchema(banners).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type Viewer = typeof viewers.$inferSelect;
@@ -619,6 +642,7 @@ export type XenWatchSubmissionDB = typeof xenWatchSubmissions.$inferSelect;
 export type XenWatchReviewDB = typeof xenWatchReviews.$inferSelect;
 export type XenWatchFeedbackDB = typeof xenWatchFeedback.$inferSelect;
 export type NotificationDB = typeof notifications.$inferSelect;
+export type BannerDB = typeof banners.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertViewer = z.infer<typeof insertViewerSchema>;
@@ -658,6 +682,7 @@ export type InsertXenWatchSubmission = z.infer<typeof insertXenWatchSubmissionSc
 export type InsertXenWatchReview = z.infer<typeof insertXenWatchReviewSchema>;
 export type InsertXenWatchFeedback = z.infer<typeof insertXenWatchFeedbackSchema>;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type InsertBanner = z.infer<typeof insertBannerSchema>;
 
 // Extended types for joins  
 export type PostCommentWithUser = PostComment & {

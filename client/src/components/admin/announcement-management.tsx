@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { timeAgo } from "@/lib/timeAgo";
 import { Loader2, Megaphone, Edit, Trash2, MoreHorizontal, Eye, Calendar, Users, Globe, Building, Upload, X, Image, Video, FileImage, FileVideo } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { PostWithDetails } from "@shared/schema";
 
 interface AnnouncementManagementProps {
@@ -39,8 +40,23 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
     content: '',
     imageUrl: '',
     videoUrl: '',
-    scope: userRole === 'system_admin' ? 'global' : 'school'
+    scope: userRole === 'system_admin' ? 'global' : 'school',
+    selectedSchoolIds: [] as string[]
   });
+
+  // Fetch schools list for system admin edit modal
+  const { data: schoolsData } = useQuery({
+    queryKey: ["/api/system-admin/schools"],
+    queryFn: async () => {
+      if (userRole !== 'system_admin') return null;
+      const response = await apiRequest("GET", "/api/system-admin/schools");
+      const data = await response.json();
+      return data;
+    },
+    enabled: userRole === 'system_admin' && isEditModalOpen,
+  });
+
+  const schools = schoolsData?.schools || [];
 
   // Fetch announcements
   const { data: announcementsData, isLoading, error } = useQuery({
@@ -96,7 +112,7 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
       if (!response.ok) throw new Error('Failed to update announcement');
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Announcement Updated",
         description: "Your announcement has been updated successfully.",
@@ -105,8 +121,18 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
         ? "/api/school-admin/announcements" 
         : "/api/system-admin/announcements";
       queryClient.invalidateQueries({ queryKey: [announcementsKey] });
+      
+      // CRITICAL: Clear and invalidate feed cache to ensure fresh data
+      queryClient.removeQueries({ queryKey: ["/api/posts/feed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/posts/feed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/posts/admin-feed"] });
+      
+      // Force refetch after a short delay to ensure backend has processed the update
+      setTimeout(async () => {
+        await queryClient.refetchQueries({ queryKey: ["/api/posts/feed"] });
+        console.log('✅ Feed cache cleared and refetched after announcement update');
+      }, 500);
+      
       setIsEditModalOpen(false);
       setEditingAnnouncement(null);
       setEditUploadedFiles({});
@@ -116,7 +142,8 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
         content: '',
         imageUrl: '',
         videoUrl: '',
-        scope: userRole === 'system_admin' ? 'global' : 'school'
+        scope: userRole === 'system_admin' ? 'global' : 'school',
+        selectedSchoolIds: []
       });
     },
     onError: (error: any) => {
@@ -161,12 +188,20 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
     const hasImage = announcement.mediaType === 'image' && announcement.mediaUrl;
     const hasVideo = announcement.mediaType === 'video' && announcement.mediaUrl;
     
+    // Determine selected school IDs - if it's a school-scoped announcement, include the schoolId
+    // Note: For existing announcements, we only support single school (announcement.schoolId)
+    // Multi-school support would require handling multiple announcement records
+    const selectedSchoolIds = announcement.scope === 'school' && announcement.schoolId 
+      ? [announcement.schoolId] 
+      : [];
+    
     setEditFormData({
       title: announcement.title || '',
       content: announcement.caption || '',
       imageUrl: hasImage ? announcement.mediaUrl : '',
       videoUrl: hasVideo ? announcement.mediaUrl : '',
-      scope: announcement.scope || 'global'
+      scope: announcement.scope || 'global',
+      selectedSchoolIds: selectedSchoolIds
     });
     
     // Set uploaded files state for preview
@@ -316,17 +351,34 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
       return;
     }
 
+    // Validate school selection if changing to school scope
+    if (userRole === 'system_admin' && editFormData.scope === 'school' && editFormData.selectedSchoolIds.length === 0) {
+      toast({
+        title: "Missing School Selection",
+        description: "Please select at least one school for the announcement.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Use uploaded files if available, otherwise use URL inputs
     const imageUrl = editUploadedFiles.image?.url || editFormData.imageUrl || '';
     const videoUrl = editUploadedFiles.video?.url || editFormData.videoUrl || '';
     
-    updateAnnouncementMutation.mutate({
+    const payload: any = {
       title: editFormData.title,
       content: editFormData.content,
       imageUrl: imageUrl,
       videoUrl: videoUrl,
       scope: editFormData.scope
-    });
+    };
+
+    // For system admin with specific school scope, send selected school IDs
+    if (userRole === 'system_admin' && editFormData.scope === 'school') {
+      payload.targetSchoolIds = editFormData.selectedSchoolIds;
+    }
+    
+    updateAnnouncementMutation.mutate(payload);
   };
 
   const getScopeIcon = (scope: string) => {
@@ -359,17 +411,21 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
   if (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to load announcements';
     return (
-      <div className="text-center p-8">
-        <p className="text-destructive mb-4">Failed to load announcements. Please try again.</p>
-        <p className="text-sm text-muted-foreground">{errorMessage}</p>
-        <Button
-          onClick={() => window.location.reload()}
-          variant="outline"
-          className="mt-4"
-        >
-          Reload Page
-        </Button>
-      </div>
+      <Card>
+        <CardContent className="text-center p-8">
+          <Megaphone className="w-12 h-12 text-destructive mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Failed to Load Announcements</h3>
+          <p className="text-muted-foreground mb-4">
+            {errorMessage}
+          </p>
+          <Button
+            onClick={() => window.location.reload()}
+            variant="outline"
+          >
+            Reload Page
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -379,8 +435,8 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Manage Announcements</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-xl font-semibold text-foreground">Manage Announcements</h2>
+          <p className="text-muted-foreground text-sm">
             View, edit, and delete your announcements
           </p>
         </div>
@@ -467,7 +523,7 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
 
       {/* Edit Announcement Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[95vw] sm:w-full sm:max-w-[600px] max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center">
               <Edit className="w-5 h-5 mr-2 text-accent" />
@@ -488,7 +544,12 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
                 onChange={(e) => setEditFormData(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="Enter announcement title..."
                 required
+                className="w-full"
+                maxLength={200}
               />
+              <p className="text-xs text-muted-foreground">
+                {editFormData.title.length}/200 characters
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -500,26 +561,111 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
                 placeholder="Enter announcement content..."
                 rows={4}
                 required
+                className="w-full resize-y min-h-[100px]"
+                maxLength={2000}
               />
+              <p className="text-xs text-muted-foreground">
+                {editFormData.content.length}/2000 characters
+              </p>
             </div>
 
             {userRole === 'system_admin' && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-scope">Announcement Scope</Label>
-                <Select 
-                  value={editFormData.scope} 
-                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, scope: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select scope" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="global">All Schools</SelectItem>
-                    <SelectItem value="school">Specific School</SelectItem>
-                    <SelectItem value="staff">XEN Staff Only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-scope">Announcement Scope *</Label>
+                  <Select 
+                    value={editFormData.scope} 
+                    onValueChange={(value) => {
+                      setEditFormData(prev => ({ 
+                        ...prev, 
+                        scope: value,
+                        // Clear school selection if changing to global
+                        selectedSchoolIds: value === 'global' ? [] : prev.selectedSchoolIds
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select scope" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="global">All Schools</SelectItem>
+                      <SelectItem value="school">Specific Schools</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {editFormData.scope === 'school' && (
+                  <div className="space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <Label className="text-sm font-medium">Select Schools *</Label>
+                      {schools.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (editFormData.selectedSchoolIds.length === schools.length) {
+                              setEditFormData(prev => ({ ...prev, selectedSchoolIds: [] }));
+                            } else {
+                              setEditFormData(prev => ({ ...prev, selectedSchoolIds: schools.map((s: any) => s.id) }));
+                            }
+                          }}
+                          className="h-auto py-1 text-xs self-start sm:self-auto"
+                        >
+                          {editFormData.selectedSchoolIds.length === schools.length ? 'Deselect All' : 'Select All'}
+                        </Button>
+                      )}
+                    </div>
+                    <div className="border rounded-lg p-3 sm:p-4 max-h-48 sm:max-h-64 overflow-y-auto space-y-2 bg-background">
+                      {schools.length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-4">
+                          <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
+                          <p>Loading schools...</p>
+                        </div>
+                      ) : (
+                        schools.map((school: any) => (
+                          <div key={school.id} className="flex items-center space-x-2 py-1">
+                            <Checkbox
+                              id={`edit-school-${school.id}`}
+                              checked={editFormData.selectedSchoolIds.includes(school.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setEditFormData(prev => ({
+                                    ...prev,
+                                    selectedSchoolIds: [...prev.selectedSchoolIds, school.id]
+                                  }));
+                                } else {
+                                  setEditFormData(prev => ({
+                                    ...prev,
+                                    selectedSchoolIds: prev.selectedSchoolIds.filter(id => id !== school.id)
+                                  }));
+                                }
+                              }}
+                              className="flex-shrink-0"
+                            />
+                            <Label
+                              htmlFor={`edit-school-${school.id}`}
+                              className="flex-1 font-normal cursor-pointer text-sm break-words"
+                            >
+                              {school.name}
+                            </Label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {editFormData.selectedSchoolIds.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {editFormData.selectedSchoolIds.length} school{editFormData.selectedSchoolIds.length !== 1 ? 's' : ''} selected
+                      </p>
+                    )}
+                    {editFormData.selectedSchoolIds.length === 0 && editFormData.scope === 'school' && (
+                      <p className="text-xs text-destructive">
+                        Please select at least one school
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Media Upload Section */}
@@ -698,12 +844,13 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
             </form>
           </div>
 
-          <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4">
+          <DialogFooter className="flex-shrink-0 border-t pt-4 mt-4 flex-col sm:flex-row gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsEditModalOpen(false)}
               disabled={updateAnnouncementMutation.isPending}
+              className="w-full sm:w-auto order-2 sm:order-1"
             >
               Cancel
             </Button>
@@ -711,7 +858,7 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
               type="submit" 
               form="edit-announcement-form"
               disabled={updateAnnouncementMutation.isPending}
-              className="bg-accent hover:bg-accent/90"
+              className="bg-accent hover:bg-accent/90 w-full sm:w-auto order-1 sm:order-2"
             >
               {updateAnnouncementMutation.isPending ? (
                 <>

@@ -313,7 +313,7 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
                announcementScope === 'school' ? 'SCHOOL ANNOUNCEMENT' : 
                'ANNOUNCEMENT'}
             </span>
-            {announcementScope === 'school' && announcementSchool && (
+            {announcementScope === 'school' && announcementSchool && post.student?.name !== 'XEN SPORTS ARMOURY' && (
               <span className="text-xs text-muted-foreground">
                 • {announcementSchool.name}
               </span>
@@ -343,9 +343,7 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
             <div>
               {isAnnouncement ? (
                 <h3 className="font-semibold text-foreground">
-                  {isSystemAnnouncement 
-                    ? 'XEN Sports Platform' 
-                    : (announcementSchool?.name || 'School Administration')}
+                  {post.student?.name || 'XEN SPORTS ARMOURY'}
                 </h3>
               ) : (
                 <Link href={`/profile/${post.student?.id}`}>

@@ -15,6 +15,7 @@ import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
+import { DashboardBanner } from "@/components/ui/dashboard-banner";
 import type { StudentSubmission, StudentSubmissionsResponse } from "@shared/schema";
 
 export default function XenWatch() {
@@ -235,6 +236,9 @@ export default function XenWatch() {
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* XEN Watch Page Banners */}
+          <DashboardBanner />
+
           {/* Page Title */}
           <div className="mb-8">
             <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">

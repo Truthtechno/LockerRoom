@@ -1,8 +1,8 @@
 import { Express } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { db } from '../db';
-import { users, schools, schoolAdmins, systemAdmins, students, subscriptions, schoolSettings, schoolApplications, posts, studentFollowers } from '../../shared/schema';
-import { eq, sql } from 'drizzle-orm';
+import { users, schools, schoolAdmins, systemAdmins, students, subscriptions, schoolSettings, schoolApplications, posts, studentFollowers, banners } from '../../shared/schema';
+import { eq, sql, and } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import { AuthStorage } from '../auth-storage';
 import { storage } from '../storage';
@@ -63,104 +63,8 @@ const handleMulterError = (error: any, req: any, res: any, next: any) => {
 };
 
 export function registerSystemAdminRoutes(app: Express) {
-  // Create System Announcement
-  app.post('/api/system/announcements',
-    requireAuth,
-    requireRole('system_admin'),
-    async (req, res) => {
-      try {
-        const { title, content, media, scope, schoolId } = req.body;
-        const adminId = (req as any).auth.id;
-        
-        // Validation
-        if (!title || !content) {
-          return res.status(400).json({ 
-            error: { 
-              code: 'validation_error', 
-              message: 'Title and content are required' 
-            } 
-          });
-        }
-
-        // Validate scope
-        if (!['global', 'school', 'staff'].includes(scope)) {
-          return res.status(400).json({ 
-            error: { 
-              code: 'validation_error', 
-              message: 'Scope must be global, school, or staff' 
-            } 
-          });
-        }
-
-        // If scope is school, schoolId is required
-        if (scope === 'school' && !schoolId) {
-          return res.status(400).json({ 
-            error: { 
-              code: 'validation_error', 
-              message: 'School ID is required for school-scoped announcements' 
-            } 
-          });
-        }
-
-        // Validate school exists if provided
-        if (schoolId) {
-          const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
-          if (!school) {
-            return res.status(404).json({ 
-              error: { 
-                code: 'school_not_found', 
-                message: 'School not found' 
-              } 
-            });
-          }
-        }
-
-        // Create announcement post
-        const announcementData = {
-          studentId: null, // Announcements don't have a student
-          mediaUrl: media?.url || null,
-          mediaType: media?.type || null,
-          caption: content,
-          title: title,
-          type: 'announcement',
-          broadcast: true,
-          scope: scope,
-          schoolId: scope === 'school' ? schoolId : null,
-          createdByAdminId: adminId,
-          status: 'ready'
-        };
-
-        const [announcement] = await db.insert(posts).values(announcementData).returning();
-
-        console.log(`📢 System announcement created: ${title} (ID: ${announcement.id})`);
-
-        res.json({
-          success: true,
-          announcement: {
-            id: announcement.id,
-            title: announcement.title,
-            content: announcement.caption,
-            media: media ? {
-              type: media.type,
-              url: media.url,
-              publicId: media.publicId
-            } : null,
-            scope: announcement.scope,
-            schoolId: announcement.schoolId,
-            createdAt: announcement.createdAt
-          }
-        });
-      } catch (error) {
-        console.error('❌ Error creating system announcement:', error);
-        res.status(500).json({ 
-          error: { 
-            code: 'server_error', 
-            message: 'Failed to create announcement' 
-          } 
-        });
-      }
-    }
-  );
+  // Note: System announcements endpoint is handled in routes.ts
+  // to support multi-school functionality
 
   // Create School
   app.post('/api/system-admin/create-school',
@@ -876,6 +780,447 @@ export function registerSystemAdminRoutes(app: Express) {
           error: { 
             code: 'server_error', 
             message: 'Failed to upload profile picture' 
+          } 
+        });
+      }
+    }
+  );
+
+  // ========== BANNERS API ENDPOINTS ==========
+  
+  // Get all banners (system admin only)
+  app.get('/api/system-admin/banners',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const bannersList = await db
+          .select()
+          .from(banners)
+          .orderBy(sql`${banners.priority} DESC, ${banners.createdAt} DESC`);
+        
+        res.json({
+          success: true,
+          banners: bannersList
+        });
+      } catch (error) {
+        console.error('❌ Error fetching banners:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to fetch banners' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Get active banners for current user's role (public endpoint for dashboards)
+  app.get('/api/banners/active',
+    requireAuth,
+    async (req, res) => {
+      try {
+        const userRole = (req as any).auth.role;
+        const currentTime = new Date();
+        
+        // Get active banners for this role
+        // Query banners where:
+        // 1. is_active = true
+        // 2. Current time is within start_date and end_date range (or dates are null)
+        // 3. User's role is in the target_roles array
+        const allBanners = await db
+          .select()
+          .from(banners)
+          .where(eq(banners.isActive, true));
+        
+        // Get user's school ID if they are a school admin
+        let userSchoolId: string | null = null;
+        if (userRole === 'school_admin') {
+          userSchoolId = (req as any).auth.schoolId || null;
+        }
+
+        // Filter banners based on date range, role, and school targeting
+        const activeBanners = allBanners.filter(banner => {
+          // Check date range
+          if (banner.startDate && new Date(banner.startDate) > currentTime) {
+            return false;
+          }
+          if (banner.endDate && new Date(banner.endDate) < currentTime) {
+            return false;
+          }
+          
+          // Check if user role matches banner target roles
+          // For XEN Watch page, allow if user is a student/viewer and banner targets 'xen_watch'
+          // For other roles, check if user role is in target roles
+          let shouldShow = false;
+          
+          if (banner.targetRoles && banner.targetRoles.includes('xen_watch')) {
+            // XEN Watch banners should show to students and viewers
+            if (userRole === 'student' || userRole === 'viewer') {
+              shouldShow = true;
+            }
+          }
+          
+          if (!shouldShow && banner.targetRoles && banner.targetRoles.includes(userRole)) {
+            shouldShow = true;
+          }
+          
+          if (!shouldShow) {
+            return false;
+          }
+          
+          // If user is a school admin and banner targets school_admin, check school targeting
+          if (userRole === 'school_admin' && banner.targetRoles.includes('school_admin')) {
+            // If banner has specific school IDs, user's school must be in the list
+            if (banner.targetSchoolIds && banner.targetSchoolIds.length > 0) {
+              if (!userSchoolId || !banner.targetSchoolIds.includes(userSchoolId)) {
+                return false; // Banner is targeted to specific schools, and user's school is not in the list
+              }
+            }
+            // If banner.targetSchoolIds is null or empty array, it means all schools, so show it
+          }
+          
+          return true;
+        });
+        
+        // Sort by priority (desc) and creation date (desc)
+        activeBanners.sort((a, b) => {
+          if (a.priority !== b.priority) {
+            return (b.priority || 0) - (a.priority || 0);
+          }
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        
+        res.json({
+          success: true,
+          banners: activeBanners
+        });
+      } catch (error) {
+        console.error('❌ Error fetching active banners:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to fetch active banners' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Get single banner
+  app.get('/api/system-admin/banners/:id',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        
+        const [banner] = await db
+          .select()
+          .from(banners)
+          .where(eq(banners.id, id))
+          .limit(1);
+        
+        if (!banner) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'not_found', 
+              message: 'Banner not found' 
+            } 
+          });
+        }
+        
+        res.json({
+          success: true,
+          banner
+        });
+      } catch (error) {
+        console.error('❌ Error fetching banner:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to fetch banner' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Create banner
+  app.post('/api/system-admin/banners',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const adminId = (req as any).auth.id;
+        const { title, message, category, targetRoles, targetSchoolIds, startDate, endDate, priority, isActive } = req.body;
+        
+        // Validation
+        if (!title || !message) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Title and message are required' 
+            } 
+          });
+        }
+
+        if (!category || !['info', 'warning', 'success', 'error', 'announcement'].includes(category)) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Valid category is required (info, warning, success, error, announcement)' 
+            } 
+          });
+        }
+
+        if (!targetRoles || !Array.isArray(targetRoles) || targetRoles.length === 0) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'At least one target role is required' 
+            } 
+          });
+        }
+
+        // Validate roles
+        const validRoles = ['scout_admin', 'school_admin', 'xen_scout', 'xen_watch'];
+        const invalidRoles = targetRoles.filter((role: string) => !validRoles.includes(role));
+        if (invalidRoles.length > 0) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: `Invalid roles: ${invalidRoles.join(', ')}` 
+            } 
+          });
+        }
+
+        // Parse dates if provided
+        const parsedStartDate = startDate ? new Date(startDate) : null;
+        const parsedEndDate = endDate ? new Date(endDate) : null;
+
+        // Validate date range
+        if (parsedStartDate && parsedEndDate && parsedStartDate >= parsedEndDate) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'End date must be after start date' 
+            } 
+          });
+        }
+
+        // Validate targetSchoolIds if school_admin is in targetRoles
+        let parsedTargetSchoolIds: string[] | null = null;
+        if (targetRoles.includes('school_admin')) {
+          if (targetSchoolIds && Array.isArray(targetSchoolIds) && targetSchoolIds.length > 0) {
+            parsedTargetSchoolIds = targetSchoolIds;
+          }
+          // If targetSchoolIds is null/undefined or empty array, it means all schools (NULL in DB)
+        }
+
+        // Create banner
+        const [newBanner] = await db.insert(banners).values({
+          title,
+          message,
+          category,
+          targetRoles: targetRoles,
+          targetSchoolIds: parsedTargetSchoolIds,
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
+          priority: priority || 0,
+          isActive: isActive !== undefined ? isActive : true,
+          createdByAdminId: adminId,
+        }).returning();
+
+        console.log(`📢 Banner created: ${title} (ID: ${newBanner.id})`);
+
+        res.json({
+          success: true,
+          banner: newBanner
+        });
+      } catch (error) {
+        console.error('❌ Error creating banner:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to create banner' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Update banner
+  app.put('/api/system-admin/banners/:id',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { title, message, category, targetRoles, targetSchoolIds, startDate, endDate, priority, isActive } = req.body;
+        
+        // Check if banner exists
+        const [existingBanner] = await db
+          .select()
+          .from(banners)
+          .where(eq(banners.id, id))
+          .limit(1);
+        
+        if (!existingBanner) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'not_found', 
+              message: 'Banner not found' 
+            } 
+          });
+        }
+
+        // Validation
+        if (category && !['info', 'warning', 'success', 'error', 'announcement'].includes(category)) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Invalid category' 
+            } 
+          });
+        }
+
+        if (targetRoles && (!Array.isArray(targetRoles) || targetRoles.length === 0)) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'At least one target role is required' 
+            } 
+          });
+        }
+
+        // Validate roles if provided
+        if (targetRoles) {
+          const validRoles = ['scout_admin', 'school_admin', 'xen_scout', 'xen_watch'];
+          const invalidRoles = targetRoles.filter((role: string) => !validRoles.includes(role));
+          if (invalidRoles.length > 0) {
+            return res.status(400).json({ 
+              error: { 
+                code: 'validation_error', 
+                message: `Invalid roles: ${invalidRoles.join(', ')}` 
+              } 
+            });
+          }
+        }
+
+        // Parse dates if provided
+        const parsedStartDate = startDate !== undefined ? (startDate ? new Date(startDate) : null) : existingBanner.startDate;
+        const parsedEndDate = endDate !== undefined ? (endDate ? new Date(endDate) : null) : existingBanner.endDate;
+
+        // Validate date range
+        if (parsedStartDate && parsedEndDate && parsedStartDate >= parsedEndDate) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'End date must be after start date' 
+            } 
+          });
+        }
+
+        // Handle targetSchoolIds if school_admin is in targetRoles
+        let parsedTargetSchoolIds: string[] | null = undefined;
+        const finalTargetRoles = targetRoles !== undefined ? targetRoles : existingBanner.targetRoles;
+        if (finalTargetRoles.includes('school_admin')) {
+          if (targetSchoolIds !== undefined) {
+            if (targetSchoolIds && Array.isArray(targetSchoolIds) && targetSchoolIds.length > 0) {
+              parsedTargetSchoolIds = targetSchoolIds;
+            } else {
+              parsedTargetSchoolIds = null; // Empty array or null means all schools
+            }
+          } else {
+            // Keep existing value if not provided
+            parsedTargetSchoolIds = existingBanner.targetSchoolIds;
+          }
+        } else {
+          // If school_admin is not in targetRoles, clear targetSchoolIds
+          parsedTargetSchoolIds = null;
+        }
+
+        // Update banner
+        const updateData: any = {
+          title: title !== undefined ? title : existingBanner.title,
+          message: message !== undefined ? message : existingBanner.message,
+          category: category !== undefined ? category : existingBanner.category,
+          targetRoles: finalTargetRoles,
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
+          priority: priority !== undefined ? priority : existingBanner.priority,
+          isActive: isActive !== undefined ? isActive : existingBanner.isActive,
+          updatedAt: sql`now()`,
+        };
+
+        // Only update targetSchoolIds if it changed or school_admin role changed
+        if (parsedTargetSchoolIds !== undefined) {
+          updateData.targetSchoolIds = parsedTargetSchoolIds;
+        }
+
+        const [updatedBanner] = await db.update(banners)
+          .set(updateData)
+          .where(eq(banners.id, id))
+          .returning();
+
+        console.log(`📢 Banner updated: ${updatedBanner.title} (ID: ${id})`);
+
+        res.json({
+          success: true,
+          banner: updatedBanner
+        });
+      } catch (error) {
+        console.error('❌ Error updating banner:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to update banner' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Delete banner
+  app.delete('/api/system-admin/banners/:id',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        
+        // Check if banner exists
+        const [existingBanner] = await db
+          .select()
+          .from(banners)
+          .where(eq(banners.id, id))
+          .limit(1);
+        
+        if (!existingBanner) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'not_found', 
+              message: 'Banner not found' 
+            } 
+          });
+        }
+
+        // Delete banner
+        await db.delete(banners).where(eq(banners.id, id));
+
+        console.log(`🗑️ Banner deleted: ${existingBanner.title} (ID: ${id})`);
+
+        res.json({
+          success: true,
+          message: 'Banner deleted successfully'
+        });
+      } catch (error) {
+        console.error('❌ Error deleting banner:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to delete banner' 
           } 
         });
       }

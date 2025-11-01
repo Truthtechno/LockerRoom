@@ -339,9 +339,7 @@ export default function PostDetail() {
                     {post.isAnnouncement || post.type === 'announcement' ? (
                       <>
                         <h3 className="font-semibold text-foreground">
-                          {post.announcementScope === 'global' 
-                            ? 'XEN Sports Platform' 
-                            : (post.announcementSchool?.name || post.student?.name || 'School Administration')}
+                          {post.student?.name || 'XEN SPORTS ARMOURY'}
                         </h3>
                         <p className="text-sm text-muted-foreground">
                           Official Announcement • {timeAgo(post.createdAt)}
@@ -529,6 +527,20 @@ export default function PostDetail() {
   );
 }
 
+// Helper function to format role names
+function formatRoleName(role: string | null | undefined): string | null {
+  if (!role) return null;
+  
+  const roleMap: Record<string, string> = {
+    'school_admin': 'School Admin',
+    'system_admin': 'System Admin',
+    'scout_admin': 'Scout Admin',
+    'xen_scout': 'Scout',
+  };
+  
+  return roleMap[role] || null;
+}
+
 // Post Comments Component
 function PostComments({ postId, post }: { postId: string; post: PostWithDetails }) {
   const { data: comments, isLoading } = useQuery<PostCommentWithUser[]>({
@@ -551,50 +563,61 @@ function PostComments({ postId, post }: { postId: string; post: PostWithDetails 
   return (
     <div className="space-y-4">
       {comments && comments.length > 0 ? (
-        comments.map((comment) => (
-          <div key={comment.id} className="flex items-start space-x-3">
-            <Link href={`/profile/${comment.user?.id}`}>
-              <AvatarWithFallback 
-                src={comment.user?.profilePicUrl}
-                alt={comment.user?.name || "User"}
-                size="sm"
-                className="cursor-pointer hover:opacity-80 transition-opacity"
-              />
-            </Link>
-            <div className="flex-1">
-              <div className="flex items-center space-x-2 mb-1">
-                <Link href={`/profile/${comment.user?.id}`}>
-                  <span className="font-medium text-sm text-foreground hover:text-accent cursor-pointer transition-colors">
+        comments.map((comment) => {
+          const userRole = comment.user?.role;
+          const formattedRole = formatRoleName(userRole);
+          const shouldShowRole = formattedRole !== null; // Only show for admins and scouts
+          
+          return (
+            <div key={comment.id} className="flex items-start space-x-3">
+              <Link href={`/profile/${comment.user?.id}`}>
+                <AvatarWithFallback 
+                  src={comment.user?.profilePicUrl}
+                  alt={comment.user?.name || "User"}
+                  size="sm"
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                />
+              </Link>
+              <div className="flex-1">
+                <div className="flex items-center space-x-2 mb-1">
+                  <Link href={`/profile/${comment.user?.id}`}>
+                    <span className="font-medium text-sm text-foreground hover:text-accent cursor-pointer transition-colors">
+                      {(() => {
+                        // If this is an announcement post and the commenter is the admin who created it, show school:name
+                        const isAnnouncement = post?.isAnnouncement || post?.type === 'announcement';
+                        const isCreatorComment = post?.createdByAdminId === comment.user?.id;
+                        
+                        if (isAnnouncement && isCreatorComment && post?.announcementSchool) {
+                          return post.announcementSchool.name;
+                        }
+                        return comment.user?.name || 'Anonymous';
+                      })()}
+                    </span>
+                    {shouldShowRole && (
+                      <span className="text-xs text-muted-foreground ml-2 font-medium">
+                        • {formattedRole}
+                      </span>
+                    )}
                     {(() => {
-                      // If this is an announcement post and the commenter is the admin who created it, show school:name
+                      // Show "Official Announcement" instead of position for announcement creator comments
                       const isAnnouncement = post?.isAnnouncement || post?.type === 'announcement';
                       const isCreatorComment = post?.createdByAdminId === comment.user?.id;
                       
-                      if (isAnnouncement && isCreatorComment && post?.announcementSchool) {
-                        return post.announcementSchool.name;
+                      if (isAnnouncement && isCreatorComment) {
+                        return <span className="text-xs text-muted-foreground ml-2">• Official Announcement</span>;
                       }
-                      return comment.user?.name || 'Anonymous';
+                      return null;
                     })()}
+                  </Link>
+                  <span className="text-xs text-muted-foreground">
+                    {timeAgo(comment.createdAt)}
                   </span>
-                  {(() => {
-                    // Show "Official Announcement" instead of position for announcement creator comments
-                    const isAnnouncement = post?.isAnnouncement || post?.type === 'announcement';
-                    const isCreatorComment = post?.createdByAdminId === comment.user?.id;
-                    
-                    if (isAnnouncement && isCreatorComment) {
-                      return <span className="text-xs text-muted-foreground ml-2">• Official Announcement</span>;
-                    }
-                    return null;
-                  })()}
-                </Link>
-                <span className="text-xs text-muted-foreground">
-                  {timeAgo(comment.createdAt)}
-                </span>
+                </div>
+                <p className="text-sm text-foreground">{comment.content}</p>
               </div>
-              <p className="text-sm text-foreground">{comment.content}</p>
             </div>
-          </div>
-        ))
+          );
+        })
       ) : (
         <div className="text-center py-8 text-muted-foreground">
           No comments yet. Be the first to comment!

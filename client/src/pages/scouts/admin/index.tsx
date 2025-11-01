@@ -24,6 +24,7 @@ import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
 import { timeAgo } from "@/lib/timeAgo";
 import { AdminDashboardSkeleton } from "@/components/ui/admin-skeleton";
+import { DashboardBanner } from "@/components/ui/dashboard-banner";
 
 interface AnalyticsData {
   totals: {
@@ -156,6 +157,9 @@ export default function ScoutAdminDashboard() {
               Monitor XEN Watch submissions and scout performance
             </p>
           </div>
+
+          {/* Dashboard Banners */}
+          <DashboardBanner />
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

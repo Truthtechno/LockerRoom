@@ -15,6 +15,7 @@ import { Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AnnouncementModal } from "@/components/ui/announcement-modal";
 import { AnnouncementManagement } from "@/components/admin/announcement-management";
+import { DashboardBanner } from "@/components/ui/dashboard-banner";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
@@ -456,6 +457,8 @@ export default function SchoolAdmin() {
           </TabsList>
           
           <TabsContent value="overview" className="space-y-8">
+            {/* Dashboard Banners */}
+            <DashboardBanner />
             {/* Advanced KPI Cards */}
             {statsLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
@@ -662,99 +665,8 @@ export default function SchoolAdmin() {
 
         {/* Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-          {/* Recent Activity */}
-          <div className="lg:col-span-2">
-            <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-              <div className="px-4 sm:px-6 py-4 border-b border-border">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground">Recent Student Activity</h2>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {period === "week" ? "Last 7 days" : period === "month" ? "Last 30 days" : "All time"}
-                    </p>
-                  </div>
-                  {recentActivity && recentActivity.length > ACTIVITY_LIMIT && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowAllActivity(!showAllActivity)}
-                      className="text-xs sm:text-sm"
-                    >
-                      {showAllActivity ? "Show Less" : `View All (${recentActivity.length})`}
-                      <ChevronRight className={`w-4 h-4 ml-1 transition-transform ${showAllActivity ? 'rotate-90' : ''}`} />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="divide-y divide-border max-h-[600px] overflow-y-auto">
-                {/* Debug logging for activity data */}
-                {recentActivity && (() => {
-                  console.log("📈 Rendering activity with data:", recentActivity);
-                  return null;
-                })()}
-                
-                {activityLoading ? (
-                  <ActivitySkeleton />
-                ) : recentActivity && recentActivity.length > 0 ? (
-                  <>
-                    {(showAllActivity ? recentActivity : recentActivity.slice(0, ACTIVITY_LIMIT)).map((activity) => (
-                      <div key={activity.id} className="p-3 sm:p-6 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center space-x-3 sm:space-x-4">
-                          <Avatar className="h-6 w-6 sm:h-8 sm:w-8 lg:h-10 lg:w-10 flex-shrink-0">
-                            <AvatarImage 
-                              src={activity.studentProfilePic || activity.mediaUrl || ""} 
-                              alt={activity.studentName} 
-                            />
-                            <AvatarFallback>{activity.studentName.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs sm:text-sm text-foreground">
-                              <span className="font-medium">{activity.studentName}</span> posted a new {activity.postType}
-                              {activity.content && (
-                                <span className="text-muted-foreground">: {activity.content}</span>
-                              )}
-                            </p>
-                            <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 text-xs sm:text-sm text-muted-foreground">
-                              <span>{activity.sport}</span>
-                              <div className="flex items-center space-x-1">
-                                <Clock className="w-3 h-3" />
-                                <span>{timeAgo(activity.createdAt)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
-                            {activity.engagement} engagement
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {!showAllActivity && recentActivity.length > ACTIVITY_LIMIT && (
-                      <div className="p-4 text-center border-t">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowAllActivity(true)}
-                          className="w-full"
-                        >
-                          Show {recentActivity.length - ACTIVITY_LIMIT} more activities
-                          <ChevronRight className="w-4 h-4 ml-2" />
-                        </Button>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="p-6 text-center text-muted-foreground">
-                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No recent activity yet</p>
-                    <p className="text-sm">Students haven't posted anything recently</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* School Management */}
-          <div className="space-y-4 sm:space-y-6">
+          {/* School Management - First on mobile, second on desktop */}
+          <div className="space-y-4 sm:space-y-6 order-1 lg:order-2">
             {/* Top Performing Students */}
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
               <div className="px-4 sm:px-6 py-4 border-b border-border">
@@ -845,10 +757,12 @@ export default function SchoolAdmin() {
 
             {/* Quick Actions - Accordion on mobile */}
             <div className="bg-card border border-border rounded-xl shadow-sm">
-              <Disclosure>
+              <Disclosure defaultOpen={true}>
                 {({ open }: { open: boolean }) => (
-                  <>
-                    <DisclosureButton className="w-full px-4 sm:px-6 py-4 text-left flex items-center justify-between hover:bg-muted/50 transition-colors">
+                  <div>
+                    <DisclosureButton 
+                      className="w-full px-4 sm:px-6 py-4 text-left flex items-center justify-between hover:bg-muted/50 transition-colors"
+                    >
                       <h2 className="text-lg font-semibold text-foreground">Quick Actions</h2>
                       <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} />
                     </DisclosureButton>
@@ -893,9 +807,100 @@ export default function SchoolAdmin() {
                 </AnnouncementModal>
                       </div>
                     </DisclosurePanel>
-                  </>
+                  </div>
                 )}
               </Disclosure>
+            </div>
+          </div>
+
+          {/* Recent Activity - Second on mobile, first on desktop */}
+          <div className="lg:col-span-2 order-2 lg:order-1">
+            <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+              <div className="px-4 sm:px-6 py-4 border-b border-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">Recent Student Activity</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {period === "week" ? "Last 7 days" : period === "month" ? "Last 30 days" : "All time"}
+                    </p>
+                  </div>
+                  {recentActivity && recentActivity.length > ACTIVITY_LIMIT && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAllActivity(!showAllActivity)}
+                      className="text-xs sm:text-sm"
+                    >
+                      {showAllActivity ? "Show Less" : `View All (${recentActivity.length})`}
+                      <ChevronRight className={`w-4 h-4 ml-1 transition-transform ${showAllActivity ? 'rotate-90' : ''}`} />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="divide-y divide-border max-h-[600px] overflow-y-auto">
+                {/* Debug logging for activity data */}
+                {recentActivity && (() => {
+                  console.log("📈 Rendering activity with data:", recentActivity);
+                  return null;
+                })()}
+                
+                {activityLoading ? (
+                  <ActivitySkeleton />
+                ) : recentActivity && recentActivity.length > 0 ? (
+                  <>
+                    {(showAllActivity ? recentActivity : recentActivity.slice(0, ACTIVITY_LIMIT)).map((activity) => (
+                      <div key={activity.id} className="p-3 sm:p-6 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center space-x-3 sm:space-x-4">
+                          <Avatar className="h-6 w-6 sm:h-8 sm:w-8 lg:h-10 lg:w-10 flex-shrink-0">
+                            <AvatarImage 
+                              src={activity.studentProfilePic || activity.mediaUrl || ""} 
+                              alt={activity.studentName} 
+                            />
+                            <AvatarFallback>{activity.studentName.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs sm:text-sm text-foreground">
+                              <span className="font-medium">{activity.studentName}</span> posted a new {activity.postType}
+                              {activity.content && (
+                                <span className="text-muted-foreground">: {activity.content}</span>
+                              )}
+                            </p>
+                            <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 text-xs sm:text-sm text-muted-foreground">
+                              <span>{activity.sport}</span>
+                              <div className="flex items-center space-x-1">
+                                <Clock className="w-3 h-3" />
+                                <span>{timeAgo(activity.createdAt)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-xs sm:text-sm text-muted-foreground flex-shrink-0">
+                            {activity.engagement} engagement
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!showAllActivity && recentActivity.length > ACTIVITY_LIMIT && (
+                      <div className="p-4 text-center border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAllActivity(true)}
+                          className="w-full"
+                        >
+                          Show {recentActivity.length - ACTIVITY_LIMIT} more activities
+                          <ChevronRight className="w-4 h-4 ml-2" />
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="p-6 text-center text-muted-foreground">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No recent activity yet</p>
+                    <p className="text-sm">Students haven't posted anything recently</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

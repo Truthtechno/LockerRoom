@@ -97,13 +97,27 @@ export default function Feed() {
         }
       }
     }
-    // Front-end safety: if viewer is a student, only allow their school's announcements
+    // Front-end safety: if viewer is a student, only allow global announcements or their school's announcements
     if (user?.role === 'student') {
       const viewerSchoolId = (user as any)?.schoolId;
-      return uniquePosts.filter((p: any) => {
+      const filtered = uniquePosts.filter((p: any) => {
         if (p?.type !== 'announcement') return true;
-        return p?.scope === 'school' && p?.schoolId === viewerSchoolId;
+        // Allow global announcements OR school-specific announcements for this student's school
+        const isGlobal = p?.scope === 'global';
+        const isForMySchool = p?.scope === 'school' && p?.schoolId === viewerSchoolId;
+        
+        // Log for debugging
+        if (p?.type === 'announcement') {
+          console.log(`📢 FEED FRONTEND: Announcement "${p?.title}" - scope: ${p?.scope}, schoolId: ${p?.schoolId}, viewerSchoolId: ${viewerSchoolId}, allowed: ${isGlobal || isForMySchool}`);
+        }
+        
+        return isGlobal || isForMySchool;
       });
+      
+      const announcementCount = filtered.filter((p: any) => p?.type === 'announcement').length;
+      console.log(`📢 FEED FRONTEND: Filtered to ${filtered.length} posts (${announcementCount} announcements)`);
+      
+      return filtered;
     }
     return uniquePosts;
   }, [data, user]);

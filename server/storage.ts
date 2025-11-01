@@ -2254,7 +2254,7 @@ export class PostgresStorage implements IStorage {
           eq(posts.broadcast, true),
           sql`${posts.status} != 'processing' OR ${posts.status} IS NULL`,
           or(
-            eq(posts.scope, 'global'),
+            and(eq(posts.scope, 'global'), sql`${posts.schoolId} IS NULL`),
             and(eq(posts.scope, 'school'), eq(posts.schoolId, schoolId))
           )
         ))
@@ -2262,10 +2262,28 @@ export class PostgresStorage implements IStorage {
         .limit(limit)
         .offset(offset);
     } else if (userRole === 'student') {
-      // Students should only see announcements from their own school
+      // Students should see global announcements AND announcements from their own school
       if (!schoolId) {
+        console.log(`📢 STORAGE: No schoolId provided for student, returning empty announcements`);
         return [];
       }
+      
+      console.log(`📢 STORAGE: Getting announcements for student in school ${schoolId}`);
+      
+      // First, check what global announcements exist
+      const globalCheck = await db
+        .select()
+        .from(posts)
+        .where(and(
+          eq(posts.type, 'announcement'),
+          eq(posts.scope, 'global')
+        ));
+      
+      console.log(`📢 STORAGE: Found ${globalCheck.length} announcements with scope='global'`);
+      globalCheck.forEach(a => {
+        console.log(`   - Global: ${a.title}, SchoolId: ${a.schoolId}`);
+      });
+      
       announcementQuery = await db
         .select()
         .from(posts)
@@ -2273,11 +2291,19 @@ export class PostgresStorage implements IStorage {
           eq(posts.type, 'announcement'),
           eq(posts.broadcast, true),
           sql`${posts.status} != 'processing' OR ${posts.status} IS NULL`,
-          and(eq(posts.scope, 'school'), eq(posts.schoolId, schoolId))
+          or(
+            and(eq(posts.scope, 'global'), sql`${posts.schoolId} IS NULL`),
+            and(eq(posts.scope, 'school'), eq(posts.schoolId, schoolId))
+          )
         ))
         .orderBy(desc(posts.createdAt))
         .limit(limit)
         .offset(offset);
+      
+      console.log(`📢 STORAGE: Query returned ${announcementQuery.length} announcements for student`);
+      announcementQuery.forEach(a => {
+        console.log(`   - Result: ${a.title}, Scope: ${a.scope}, SchoolId: ${a.schoolId}`);
+      });
     } else {
       // Other roles see no announcements
       return [];
@@ -2328,10 +2354,17 @@ export class PostgresStorage implements IStorage {
       const effectiveMediaType = announcement.mediaType || 'image';
       const effectiveStatus = announcement.status || 'ready';
 
-      // For school announcements, use school name; for global announcements, use platform name
-      const displayName = announcement.scope === 'school' && schoolInfo 
-        ? schoolInfo.name 
-        : (announcement.scope === 'global' ? 'XEN Sports Platform' : adminUser.name || 'Admin');
+      // Determine display name based on who created the announcement
+      // System admin announcements always show "XEN SPORTS ARMOURY"
+      // School admin announcements show school name
+      let displayName: string;
+      if (adminUser.role === 'system_admin') {
+        displayName = 'XEN SPORTS ARMOURY';
+      } else if (announcement.scope === 'school' && schoolInfo) {
+        displayName = schoolInfo.name;
+      } else {
+        displayName = adminUser.name || 'School Administration';
+      }
 
       announcementsWithDetails.push({
         ...announcement,
@@ -2885,11 +2918,23 @@ export class PostgresStorage implements IStorage {
         school = schoolResult[0] || null;
       }
 
+      // Determine display name based on who created the announcement
+      // System admin announcements always show "XEN SPORTS ARMOURY"
+      // School admin announcements show school name
+      let displayName: string;
+      if (user.role === 'system_admin') {
+        displayName = 'XEN SPORTS ARMOURY';
+      } else if (post.scope === 'school' && school) {
+        displayName = school.name;
+      } else {
+        displayName = user.name || 'School Administration';
+      }
+
       // Create a mock student object for announcements
       student = {
         id: 'announcement',
         userId: user.id,
-        name: user.name || 'Admin',
+        name: displayName,
         sport: '',
         position: '',
         roleNumber: '',

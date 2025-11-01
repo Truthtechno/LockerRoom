@@ -43,7 +43,7 @@ import {
   studentFollowers
 } from "@shared/schema";
 import type { PostWithDetails } from "@shared/schema";
-import { eq, desc, sql, and, or } from 'drizzle-orm';
+import { eq, desc, sql, and, or, isNull, inArray } from 'drizzle-orm';
 import { db } from './db';
 
 // Configure Cloudinary
@@ -2163,13 +2163,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const student = await storage.getStudentByUserId(userId);
           if (student) {
             schoolId = student.schoolId;
+            console.log(`📢 FEED: Fetching announcements for student ${userId} in school ${schoolId}`);
             announcements = await storage.getAnnouncementsForUser(userId, userRole, student.schoolId, 5, 0); // Limit announcements
-            // Extra safety: enforce school-only visibility for students regardless of storage behavior
+            console.log(`📢 FEED: Storage returned ${announcements.length} announcements`);
+            
+            // Log each announcement
+            announcements.forEach((a: any) => {
+              console.log(`   - Announcement: ${a.title}, Scope: ${a.scope}, SchoolId: ${a.schoolId}`);
+            });
+            
+            // Filter to ensure we only show global announcements or announcements for this student's school
+            const beforeFilter = announcements.length;
             announcements = (announcements || []).filter(a =>
               (a as any).type === 'announcement' &&
-              ((a as any).scope === 'school') &&
-              ((a as any).schoolId === schoolId)
+              (
+                (a as any).scope === 'global' ||
+                ((a as any).scope === 'school' && (a as any).schoolId === schoolId)
+              )
             );
+            console.log(`📢 FEED: After filter: ${announcements.length} announcements (filtered ${beforeFilter - announcements.length})`);
+          } else {
+            console.log(`📢 FEED: No student record found for user ${userId}`);
           }
         } else if (userRole === 'school_admin') {
           // School admins can see global announcements and their school's announcements
@@ -2185,8 +2199,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Merge announcements with posts, avoiding duplicates
       if (announcements.length > 0) {
+        console.log(`📢 FEED: Merging ${announcements.length} announcement(s) with ${posts.length} post(s)`);
         const announcementIds = new Set(announcements.map(a => a.id));
         const nonAnnouncementPosts = posts.filter(p => !announcementIds.has(p.id));
+        
+        console.log(`📢 FEED: After filtering duplicates: ${nonAnnouncementPosts.length} posts remain`);
+        console.log(`📢 FEED: Final merge: ${announcements.length} announcements + ${nonAnnouncementPosts.length} posts = ${announcements.length + nonAnnouncementPosts.length} total`);
         
         // Prioritize announcements at the top, then sort by creation date
         posts = [...announcements, ...nonAnnouncementPosts].sort((a, b) => {
@@ -2195,6 +2213,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!a.isAnnouncement && b.isAnnouncement) return 1;
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
+        
+        console.log(`📢 FEED: Final sorted posts array has ${posts.length} items`);
+        console.log(`📢 FEED: First ${Math.min(3, posts.length)} items:`, posts.slice(0, 3).map(p => ({
+          id: p.id,
+          title: (p as any).title,
+          isAnnouncement: p.isAnnouncement,
+          scope: (p as any).scope
+        })));
+      } else {
+        console.log(`📢 FEED: No announcements to merge (announcements.length = 0)`);
       }
       
       // Check if there are more posts available by checking if we got the full requested limit
@@ -2204,12 +2232,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate nextOffset based on original posts offset (not including announcements)
       const nextOffset = offset + originalPostsLength;
       
-      // Final safety: if viewer is a student, strip any announcements not from their school
+      // Final safety: if viewer is a student, only show global announcements or their school's announcements
+      // NOTE: This should match the same logic in getAnnouncementsForUser - allow global OR school-specific
       if (userRole === 'student' && schoolId) {
+        const beforeSafetyFilter = posts.length;
         posts = posts.filter((p: any) => {
           if (p?.type !== 'announcement') return true;
-          return p?.scope === 'school' && p?.schoolId === schoolId;
+          // Allow global announcements OR school-specific announcements for this student's school
+          const isGlobal = p?.scope === 'global';
+          const isForMySchool = p?.scope === 'school' && p?.schoolId === schoolId;
+          
+          if (!isGlobal && !isForMySchool) {
+            console.log(`📢 FEED SAFETY FILTER: Removing announcement "${p?.title}" - scope: ${p?.scope}, schoolId: ${p?.schoolId}`);
+          }
+          
+          return isGlobal || isForMySchool;
         });
+        console.log(`📢 FEED SAFETY FILTER: Filtered ${beforeSafetyFilter} posts to ${posts.length} (removed ${beforeSafetyFilter - posts.length})`);
       }
 
       // Return posts with metadata for infinite scroll
@@ -2365,7 +2404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // System Admin Announcements
   app.post("/api/system/announcements", requireAuth, requireRole('system_admin'), async (req, res) => {
     try {
-      const { title, content, imageUrl, videoUrl, scope = 'global', targetSchoolId } = req.body;
+      const { title, content, imageUrl, videoUrl, scope = 'global', targetSchoolId, targetSchoolIds } = req.body;
       
       if (!title || !content) {
         return res.status(400).json({ 
@@ -2376,11 +2415,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      if (scope === 'school' && !targetSchoolId) {
+      // Handle both old format (single school) and new format (multiple schools)
+      // Support targetSchoolIds (array) or targetSchoolId (single string) for backward compatibility
+      let schoolIds: string[] = [];
+      if (targetSchoolIds && Array.isArray(targetSchoolIds)) {
+        schoolIds = targetSchoolIds;
+      } else if (targetSchoolId) {
+        schoolIds = [targetSchoolId];
+      }
+      
+      if (scope === 'school' && schoolIds.length === 0) {
         return res.status(400).json({ 
           error: { 
             code: 'validation_error', 
-            message: 'Target school ID is required when scope is "school"' 
+            message: 'At least one target school is required when scope is "school". Please select one or more schools.' 
           } 
         });
       }
@@ -2399,25 +2447,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create announcement as a special post with proper scope handling
-      const announcementPost = await db.insert(posts).values({
-        studentId: null, // Announcements don't have a student
+      // Validate schools exist if specific schools are targeted
+      if (scope === 'school' && schoolIds.length > 0) {
+        for (const schoolId of schoolIds) {
+          const [school] = await db.select().from(schools).where(eq(schools.id, schoolId)).limit(1);
+          if (!school) {
+            return res.status(404).json({ 
+              error: { 
+                code: 'school_not_found', 
+                message: `School with ID ${schoolId} not found` 
+              } 
+            });
+          }
+        }
+      }
+
+      // Create announcement(s)
+      // If scope is 'school', create one announcement per selected school
+      // If scope is 'global' or 'staff', create a single announcement
+      const announcementData = {
+        studentId: null,
         mediaUrl: imageUrl || videoUrl || '',
         mediaType: videoUrl ? 'video' : (imageUrl ? 'image' : 'text'),
         caption: content,
         title: title,
         type: 'announcement',
-        broadcast: scope !== 'staff', // Staff announcements are not broadcast to students
+        broadcast: true, // All announcements are broadcast (staff-only is now handled by banners)
         scope: scope,
-        schoolId: scope === 'school' ? targetSchoolId : null,
         createdByAdminId: adminId,
         status: 'ready'
-      }).returning();
+      };
+
+      let createdAnnouncements = [];
+
+      if (scope === 'school') {
+        // Create one announcement per school
+        for (const schoolId of schoolIds) {
+          const [announcement] = await db.insert(posts).values({
+            ...announcementData,
+            schoolId: schoolId,
+          }).returning();
+          createdAnnouncements.push(announcement);
+        }
+      } else {
+        // Create single announcement for global or staff scope
+        const [announcement] = await db.insert(posts).values({
+          ...announcementData,
+          schoolId: null,
+        }).returning();
+        createdAnnouncements.push(announcement);
+      }
       
       res.json({
         success: true,
-        announcement: announcementPost[0],
-        message: 'System announcement created successfully'
+        announcements: createdAnnouncements,
+        message: scope === 'school' 
+          ? `System announcement created successfully for ${createdAnnouncements.length} school(s)`
+          : 'System announcement created successfully'
       });
       
     } catch (error) {
@@ -2508,10 +2594,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const effectiveMediaType = announcement.mediaType || 'image';
           const effectiveStatus = announcement.status || 'ready';
 
-          // For school announcements, use school name; for global announcements, use platform name
-          const displayName = announcement.scope === 'school' && schoolInfo 
-            ? schoolInfo.name 
-            : (announcement.scope === 'global' ? 'XEN Sports Platform' : adminUser.name || 'Admin');
+          // Determine display name based on who created the announcement
+          // System admin announcements always show "XEN SPORTS ARMOURY"
+          // School admin announcements show school name
+          let displayName: string;
+          if (adminUser.role === 'system_admin') {
+            displayName = 'XEN SPORTS ARMOURY';
+          } else if (announcement.scope === 'school' && schoolInfo) {
+            displayName = schoolInfo.name;
+          } else {
+            displayName = adminUser.name || 'School Administration';
+          }
 
           announcementsWithDetails.push({
             ...announcement,
@@ -2653,12 +2746,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const effectiveMediaType = announcement.mediaType || 'image';
         const effectiveStatus = announcement.status || 'ready';
 
+        // Determine display name based on who created the announcement
+        // System admin announcements always show "XEN SPORTS ARMOURY"
+        // School admin announcements show school name
+        let displayName: string;
+        if (adminUser.role === 'system_admin') {
+          displayName = 'XEN SPORTS ARMOURY';
+        } else if (announcement.scope === 'school' && schoolInfo) {
+          displayName = schoolInfo.name;
+        } else {
+          displayName = adminUser.name || 'School Administration';
+        }
+
         announcementsWithDetails.push({
           ...announcement,
           student: {
             id: 'announcement',
             userId: adminUser.id,
-            name: adminUser.name || 'Admin',
+            name: displayName,
             sport: '',
             position: '',
             roleNumber: '',
@@ -2735,20 +2840,324 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Update the announcement
-      const [updatedAnnouncement] = await db.update(posts)
-        .set({
-          title: title || announcement[0].title,
-          caption: content || announcement[0].caption,
-          mediaUrl: imageUrl || videoUrl || announcement[0].mediaUrl,
+      // Determine the scope value and handle schoolId appropriately
+      const newScope = scope !== undefined ? scope : announcement[0].scope;
+      const isChangingToGlobal = newScope === 'global' && announcement[0].scope !== 'global';
+      const isChangingToSchool = newScope === 'school' && announcement[0].scope !== 'school';
+      
+      console.log(`📢 Updating announcement ${id}:`);
+      console.log(`   Current scope: ${announcement[0].scope}, New scope: ${newScope}`);
+      console.log(`   Current schoolId: ${announcement[0].schoolId}`);
+      console.log(`   Is changing to global: ${isChangingToGlobal}`);
+      console.log(`   Is changing to school: ${isChangingToSchool}`);
+      
+      // CRITICAL FIX: When changing from school-specific to global, we need to:
+      // 1. Find ALL related announcements (same admin, created around same time OR same title/caption)
+      // 2. Delete ALL school-specific versions
+      // 3. Create a SINGLE global announcement
+      if (isChangingToGlobal && userRole === 'system_admin') {
+        console.log(`📢 Converting school-specific announcement(s) to global...`);
+        console.log(`📢 Original announcement: ID=${id}, Title="${announcement[0].title}", CreatedAt=${announcement[0].createdAt}`);
+        
+        // Use the current or updated title/caption
+        const finalTitle = title !== undefined ? title : announcement[0].title;
+        const finalCaption = content !== undefined ? content : announcement[0].caption;
+        const originalTitle = announcement[0].title;
+        const originalCaption = announcement[0].caption;
+        
+        // Strategy 1: Find by same admin, same original title/caption (handles multi-school case)
+        const relatedByContent = await db
+          .select()
+          .from(posts)
+          .where(and(
+            eq(posts.type, 'announcement'),
+            eq(posts.createdByAdminId, announcement[0].createdByAdminId),
+            eq(posts.scope, 'school'),
+            eq(posts.title, originalTitle),
+            eq(posts.caption, originalCaption)
+          ));
+        
+        console.log(`📢 Found ${relatedByContent.length} announcements with same original title/caption`);
+        
+        // Strategy 2: Also find by same admin and similar creation time (within 5 minutes)
+        // This handles cases where title/content was edited
+        const createdAtTime = new Date(announcement[0].createdAt);
+        const timeWindowStart = new Date(createdAtTime.getTime() - 5 * 60 * 1000); // 5 minutes before
+        const timeWindowEnd = new Date(createdAtTime.getTime() + 5 * 60 * 1000); // 5 minutes after
+        
+        const relatedByTime = await db
+          .select()
+          .from(posts)
+          .where(and(
+            eq(posts.type, 'announcement'),
+            eq(posts.createdByAdminId, announcement[0].createdByAdminId),
+            eq(posts.scope, 'school'),
+            sql`${posts.createdAt} >= ${timeWindowStart.toISOString()}::timestamp`,
+            sql`${posts.createdAt} <= ${timeWindowEnd.toISOString()}::timestamp`
+          ));
+        
+        console.log(`📢 Found ${relatedByTime.length} announcements created within 5 minutes`);
+        
+        // Combine both strategies - get unique IDs
+        const allRelatedIds = new Set<string>();
+        relatedByContent.forEach(a => allRelatedIds.add(a.id));
+        relatedByTime.forEach(a => allRelatedIds.add(a.id));
+        allRelatedIds.add(id); // Always include the current one
+        
+        const idsToDelete = Array.from(allRelatedIds);
+        
+        console.log(`📢 Total ${idsToDelete.length} announcement(s) to delete: ${idsToDelete.join(', ')}`);
+        
+        // Delete ALL related school-specific announcements
+        if (idsToDelete.length > 0) {
+          await db.delete(posts).where(inArray(posts.id, idsToDelete));
+          console.log(`📢 ✅ Deleted ${idsToDelete.length} school-specific announcement(s)`);
+        }
+        
+        // Create a NEW global announcement with the updated content
+        const globalAnnouncementData = {
+          studentId: null,
+          mediaUrl: (imageUrl || videoUrl) !== undefined ? (imageUrl || videoUrl || '') : announcement[0].mediaUrl,
           mediaType: videoUrl ? 'video' : (imageUrl ? 'image' : announcement[0].mediaType),
-          scope: scope || announcement[0].scope,
-          updatedAt: new Date()
-        })
+          caption: finalCaption,
+          title: finalTitle,
+          type: 'announcement',
+          broadcast: true,
+          scope: 'global',
+          schoolId: null, // EXPLICITLY set to null
+          createdByAdminId: announcement[0].createdByAdminId,
+          status: 'ready'
+        };
+        
+        console.log(`📢 Creating global announcement with data:`, {
+          title: globalAnnouncementData.title,
+          scope: globalAnnouncementData.scope,
+          schoolId: globalAnnouncementData.schoolId
+        });
+        
+        const [newGlobalAnnouncement] = await db.insert(posts).values(globalAnnouncementData).returning();
+        console.log(`📢 ✅ Created new global announcement: ${newGlobalAnnouncement.id}`);
+        console.log(`📢   Final values - Scope: ${newGlobalAnnouncement.scope}, SchoolId: ${newGlobalAnnouncement.schoolId}`);
+        
+        // Immediately verify from database
+        const verifyFromDb = await db.select().from(posts).where(eq(posts.id, newGlobalAnnouncement.id)).limit(1);
+        if (verifyFromDb[0]) {
+          console.log(`📢 Database verification - Scope: ${verifyFromDb[0].scope}, SchoolId: ${verifyFromDb[0].schoolId}`);
+          if (verifyFromDb[0].scope !== 'global' || verifyFromDb[0].schoolId !== null) {
+            console.error(`❌ CRITICAL: Global announcement not set correctly in database!`);
+            console.error(`   Expected: scope='global', schoolId=null`);
+            console.error(`   Actual: scope='${verifyFromDb[0].scope}', schoolId='${verifyFromDb[0].schoolId}'`);
+          }
+        }
+        
+        // Verify it appears in queries for ANY school
+        const anySchool = await db.select().from(schools).limit(1);
+        const testSchoolId = anySchool.length > 0 ? anySchool[0].id : 'test-school-id';
+        
+        const testQuery = await db
+          .select()
+          .from(posts)
+          .where(and(
+            eq(posts.id, newGlobalAnnouncement.id),
+            eq(posts.type, 'announcement'),
+            eq(posts.broadcast, true),
+            sql`${posts.status} != 'processing' OR ${posts.status} IS NULL`,
+            or(
+              and(eq(posts.scope, 'global'), sql`${posts.schoolId} IS NULL`),
+              and(eq(posts.scope, 'school'), eq(posts.schoolId, testSchoolId))
+            )
+          ))
+          .limit(1);
+        
+        console.log(`📢 TEST: Query test for school ${testSchoolId} - Found ${testQuery.length} result(s) (should be 1)`);
+        
+        if (testQuery.length === 0) {
+          console.error(`❌ ERROR: New global announcement NOT found in test query!`);
+          console.error(`   This means students won't see it. Check database values.`);
+        } else {
+          console.log(`✅ SUCCESS: New global announcement will appear in all feeds`);
+        }
+        
+        // Return the new global announcement
+        return res.json({
+          success: true,
+          announcement: newGlobalAnnouncement,
+          message: `Converted ${idsToDelete.length} school-specific announcement(s) to a single global announcement`
+        });
+      }
+      
+      // CRITICAL FIX: When changing from global to school, delete global and create multiple school-specific
+      if (isChangingToSchool && userRole === 'system_admin' && req.body.targetSchoolIds) {
+        console.log(`📢 Converting global announcement to school-specific...`);
+        
+        const schoolIds = Array.isArray(req.body.targetSchoolIds) ? req.body.targetSchoolIds : [req.body.targetSchoolId];
+        const finalTitle = title !== undefined ? title : announcement[0].title;
+        const finalCaption = content !== undefined ? content : announcement[0].caption;
+        
+        // Delete the global announcement
+        await db.delete(posts).where(eq(posts.id, id));
+        console.log(`📢 Deleted global announcement ${id}`);
+        
+        // Create one announcement per selected school
+        const createdAnnouncements = [];
+        for (const schoolId of schoolIds) {
+          const schoolAnnouncementData = {
+            studentId: null,
+            mediaUrl: (imageUrl || videoUrl) !== undefined ? (imageUrl || videoUrl || '') : announcement[0].mediaUrl,
+            mediaType: videoUrl ? 'video' : (imageUrl ? 'image' : announcement[0].mediaType),
+            caption: finalCaption,
+            title: finalTitle,
+            type: 'announcement',
+            broadcast: true,
+            scope: 'school',
+            schoolId: schoolId,
+            createdByAdminId: announcement[0].createdByAdminId,
+            status: 'ready'
+          };
+          
+          const [newAnnouncement] = await db.insert(posts).values(schoolAnnouncementData).returning();
+          createdAnnouncements.push(newAnnouncement);
+          console.log(`📢 Created school-specific announcement for school ${schoolId}: ${newAnnouncement.id}`);
+        }
+        
+        console.log(`📢 ✅ Created ${createdAnnouncements.length} school-specific announcement(s)`);
+        
+        // Return the first created announcement
+        return res.json({
+          success: true,
+          announcement: createdAnnouncements[0],
+          message: `Converted global announcement to ${createdAnnouncements.length} school-specific announcement(s)`
+        });
+      }
+      
+      // Standard update (no scope change or simple update)
+      let updateData: any = {
+        title: title !== undefined ? title : announcement[0].title,
+        caption: content !== undefined ? content : announcement[0].caption,
+        mediaUrl: (imageUrl || videoUrl) !== undefined ? (imageUrl || videoUrl || '') : announcement[0].mediaUrl,
+        mediaType: videoUrl ? 'video' : (imageUrl ? 'image' : announcement[0].mediaType),
+        scope: newScope
+      };
+      
+      // CRITICAL: When scope is 'global', schoolId MUST be null
+      // This handles both: changing TO global AND keeping it global (already global)
+      if (newScope === 'global') {
+        updateData.schoolId = null; // ALWAYS set to null for global, even if already global
+        console.log(`   Setting schoolId to null for global announcement (handles both new and existing global)`);
+        
+        // If it's already global but schoolId might be set, ensure it's cleared
+        if (announcement[0].scope === 'global' && announcement[0].schoolId !== null) {
+          console.log(`   ⚠️  WARNING: Announcement is already global but has schoolId=${announcement[0].schoolId}, fixing...`);
+        }
+      } else if (newScope === 'school') {
+        if (userRole === 'school_admin') {
+          // School admin always uses their school
+          updateData.schoolId = userSchoolId;
+          console.log(`   Setting schoolId to ${userSchoolId} for school admin`);
+        } else if (announcement[0].schoolId) {
+          // Keep existing schoolId if available
+          updateData.schoolId = announcement[0].schoolId;
+          console.log(`   Keeping existing schoolId: ${announcement[0].schoolId}`);
+        }
+      }
+      
+      // Update the announcement
+      console.log(`📢 Update data being sent to database:`, JSON.stringify(updateData, null, 2));
+      const [updatedAnnouncement] = await db.update(posts)
+        .set(updateData)
         .where(eq(posts.id, id))
         .returning();
       
-      console.log(`📢 Announcement updated: ${updatedAnnouncement.title} (ID: ${id})`);
+      console.log(`📢 Announcement updated successfully: ${updatedAnnouncement.title} (ID: ${id})`);
+      console.log(`📢 Final scope: ${updatedAnnouncement.scope}, Final schoolId: ${updatedAnnouncement.schoolId}`);
+      
+      // Verify the update worked correctly by re-querying from database
+      const verifyQuery = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+      if (verifyQuery.length > 0) {
+        const verified = verifyQuery[0];
+        console.log(`📢 VERIFIED from database - Scope: ${verified.scope}, SchoolId: ${verified.schoolId}`);
+        
+        if (verified.scope === 'global' && verified.schoolId !== null) {
+          console.error(`⚠️ WARNING: Global announcement still has schoolId in database! Attempting fix...`);
+          // Try to fix it - use explicit SQL to ensure null is set
+          await db.execute(sql`UPDATE posts SET school_id = NULL WHERE id = ${id}`);
+          console.log(`📢 Fixed schoolId to null using SQL`);
+          
+          // Re-verify
+          const reVerify = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+          if (reVerify[0] && reVerify[0].schoolId === null) {
+            console.log(`✅ Confirmed: schoolId is now NULL`);
+            updatedAnnouncement.schoolId = null; // Update the return value
+          } else {
+            console.error(`❌ ERROR: schoolId still not NULL after fix!`);
+          }
+        }
+      }
+      
+      // Test query: Check if announcement would appear for a student from a different school
+      if (updatedAnnouncement.scope === 'global') {
+        // Get any school ID to test with
+        const anySchool = await db.select().from(schools).limit(1);
+        const testSchoolId = anySchool.length > 0 ? anySchool[0].id : 'test-school-id';
+        
+        const testQuery = await db
+          .select()
+          .from(posts)
+          .where(and(
+            eq(posts.id, id),
+            eq(posts.type, 'announcement'),
+            eq(posts.broadcast, true),
+            sql`${posts.status} != 'processing' OR ${posts.status} IS NULL`,
+            or(
+              and(eq(posts.scope, 'global'), sql`${posts.schoolId} IS NULL`),
+              and(eq(posts.scope, 'school'), eq(posts.schoolId, testSchoolId))
+            )
+          ))
+          .limit(1);
+        console.log(`📢 TEST: Global announcement query test for school ${testSchoolId} - Found ${testQuery.length} result(s) (should be 1)`);
+        
+        if (testQuery.length === 0) {
+          console.error(`❌ ERROR: Global announcement NOT found in query! This means it won't appear in feeds!`);
+          const verifyAgain = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+          if (verifyAgain[0]) {
+            console.error(`   Current scope: ${verifyAgain[0].scope}, Current schoolId: ${verifyAgain[0].schoolId}`);
+          }
+        } else {
+          console.log(`✅ SUCCESS: Global announcement would appear in feeds for any school`);
+        }
+      }
+      
+      // If changing from global to school, verify it won't appear in other schools
+      if (updatedAnnouncement.scope === 'school' && updatedAnnouncement.schoolId) {
+        // Get a different school ID to test exclusion
+        const otherSchools = await db.select().from(schools)
+          .where(sql`id != ${updatedAnnouncement.schoolId}`)
+          .limit(1);
+        
+        if (otherSchools.length > 0) {
+          const testQuery = await db
+            .select()
+            .from(posts)
+            .where(and(
+              eq(posts.id, id),
+              eq(posts.type, 'announcement'),
+              eq(posts.broadcast, true),
+              sql`${posts.status} != 'processing' OR ${posts.status} IS NULL`,
+              or(
+                and(eq(posts.scope, 'global'), sql`${posts.schoolId} IS NULL`),
+                and(eq(posts.scope, 'school'), eq(posts.schoolId, otherSchools[0].id))
+              )
+            ))
+            .limit(1);
+          console.log(`📢 TEST: School-scoped announcement should NOT appear in other school ${otherSchools[0].id} - Found ${testQuery.length} result(s) (should be 0)`);
+          
+          if (testQuery.length > 0 && testQuery[0].scope === 'school' && testQuery[0].schoolId !== otherSchools[0].id) {
+            console.log(`✅ Correctly excluded from other school`);
+          } else if (testQuery.length === 0) {
+            console.log(`✅ Correctly excluded from other school`);
+          }
+        }
+      }
       
       res.json({
         success: true,
@@ -2761,6 +3170,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: { 
           code: 'server_error', 
           message: 'Failed to update announcement' 
+        } 
+      });
+    }
+  });
+
+  // TEST/DEBUG ENDPOINT: Verify global announcements appear for students
+  app.get("/api/test/announcements/:schoolId", requireAuth, async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      
+      console.log(`🧪 TEST: Checking announcements for school ${schoolId}`);
+      
+      // Get ALL announcements in database
+      const allAnnouncements = await db
+        .select()
+        .from(posts)
+        .where(and(
+          eq(posts.type, 'announcement'),
+          eq(posts.broadcast, true),
+          sql`${posts.status} != 'processing' OR ${posts.status} IS NULL`
+        ))
+        .orderBy(desc(posts.createdAt));
+      
+      console.log(`🧪 TEST: Found ${allAnnouncements.length} total announcements in database`);
+      
+      // Categorize announcements
+      const globalAnnouncements = allAnnouncements.filter(a => a.scope === 'global');
+      const schoolAnnouncements = allAnnouncements.filter(a => a.scope === 'school');
+      const forThisSchool = schoolAnnouncements.filter(a => a.schoolId === schoolId);
+      
+      console.log(`🧪 TEST: ${globalAnnouncements.length} global announcements`);
+      console.log(`🧪 TEST: ${schoolAnnouncements.length} school-specific announcements`);
+      console.log(`🧪 TEST: ${forThisSchool.length} for school ${schoolId}`);
+      
+      // Test the actual query used by storage
+      const testQuery = await db
+        .select()
+        .from(posts)
+        .where(and(
+          eq(posts.type, 'announcement'),
+          eq(posts.broadcast, true),
+          sql`${posts.status} != 'processing' OR ${posts.status} IS NULL`,
+          or(
+            and(eq(posts.scope, 'global'), sql`${posts.schoolId} IS NULL`),
+            and(eq(posts.scope, 'school'), eq(posts.schoolId, schoolId))
+          )
+        ))
+        .orderBy(desc(posts.createdAt))
+        .limit(20);
+      
+      console.log(`🧪 TEST: Query returned ${testQuery.length} announcements`);
+      
+      // Test using storage method
+      const userId = (req as any).auth.id;
+      const storageResults = await storage.getAnnouncementsForUser(userId, 'student', schoolId, 20, 0);
+      
+      console.log(`🧪 TEST: Storage method returned ${storageResults.length} announcements`);
+      
+      res.json({
+        success: true,
+        schoolId,
+        totalAnnouncements: allAnnouncements.length,
+        globalAnnouncements: globalAnnouncements.length,
+        schoolAnnouncements: schoolAnnouncements.length,
+        forThisSchool: forThisSchool.length,
+        queryReturned: testQuery.length,
+        storageReturned: storageResults.length,
+        globalAnnouncementsList: globalAnnouncements.map(a => ({
+          id: a.id,
+          title: a.title,
+          scope: a.scope,
+          schoolId: a.schoolId,
+          broadcast: a.broadcast,
+          createdAt: a.createdAt
+        })),
+        queryResults: testQuery.map(a => ({
+          id: a.id,
+          title: a.title,
+          scope: a.scope,
+          schoolId: a.schoolId,
+          createdAt: a.createdAt
+        })),
+        storageResults: storageResults.map((a: any) => ({
+          id: a.id,
+          title: a.title,
+          scope: a.scope,
+          schoolId: a.schoolId,
+          createdAt: a.createdAt
+        }))
+      });
+    } catch (error) {
+      console.error('🧪 TEST endpoint error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: 'server_error', 
+          message: 'Test failed',
+          details: error instanceof Error ? error.message : String(error)
         } 
       });
     }
@@ -2951,16 +3457,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create notification for post owner when someone likes their post
       try {
         const post = await storage.getPost(postId);
-        if (post && post.studentId) {
-          const student = await storage.getStudent(post.studentId);
-          if (student && student.userId !== userId) { // Don't notify if user liked their own post
+        if (post) {
+          let targetUserId: string | null = null;
+          
+          // Check if this is an announcement created by an admin
+          if (post.type === 'announcement' && post.createdByAdminId) {
+            // For announcements, notify the admin who created it
+            targetUserId = post.createdByAdminId;
+          } else if (post.studentId) {
+            // For regular posts, notify the student who created it
+            const student = await storage.getStudent(post.studentId);
+            if (student) {
+              targetUserId = student.userId;
+            }
+          }
+          
+          // Send notification if we have a target user and it's not the user's own action
+          if (targetUserId && targetUserId !== userId) {
             const likerUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
             if (likerUser[0]) {
+              const messageText = post.type === 'announcement' 
+                ? `${likerUser[0].name || 'Someone'} liked your announcement`
+                : `${likerUser[0].name || 'Someone'} liked your post`;
+              
               await storage.createNotification({
-                userId: student.userId,
+                userId: targetUserId,
                 type: 'post_like',
                 title: 'New Like',
-                message: `${likerUser[0].name || 'Someone'} liked your post`,
+                message: messageText,
                 entityType: 'post',
                 entityId: postId,
                 relatedUserId: userId,
@@ -3031,19 +3555,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create notification for post owner when someone comments on their post
       try {
         const post = await storage.getPost(postId);
-        if (post && post.studentId) {
-          const student = await storage.getStudent(post.studentId);
-          if (student && student.userId !== (req as any).auth.id) { // Don't notify if user commented on their own post
+        if (post) {
+          let targetUserId: string | null = null;
+          
+          // Check if this is an announcement created by an admin
+          if (post.type === 'announcement' && post.createdByAdminId) {
+            // For announcements, notify the admin who created it
+            targetUserId = post.createdByAdminId;
+          } else if (post.studentId) {
+            // For regular posts, notify the student who created it
+            const student = await storage.getStudent(post.studentId);
+            if (student) {
+              targetUserId = student.userId;
+            }
+          }
+          
+          // Send notification if we have a target user and it's not the user's own action
+          if (targetUserId && targetUserId !== (req as any).auth.id) {
             const commenterUser = await db.select().from(users).where(eq(users.id, (req as any).auth.id)).limit(1);
             if (commenterUser[0]) {
               const commentText = commentData.content.length > 50 
                 ? commentData.content.substring(0, 50) + '...' 
                 : commentData.content;
+              
+              const messageText = post.type === 'announcement'
+                ? `${commenterUser[0].name || 'Someone'} commented on your announcement: "${commentText}"`
+                : `${commenterUser[0].name || 'Someone'} commented: "${commentText}"`;
+              
               await storage.createNotification({
-                userId: student.userId,
+                userId: targetUserId,
                 type: 'post_comment',
                 title: 'New Comment',
-                message: `${commenterUser[0].name || 'Someone'} commented: "${commentText}"`,
+                message: messageText,
                 entityType: 'post',
                 entityId: postId,
                 relatedUserId: (req as any).auth.id,
