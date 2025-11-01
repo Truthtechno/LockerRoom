@@ -192,7 +192,6 @@ export default function Sidebar() {
         { name: "Add Student", href: "/school-admin/add-student", icon: UserPlus, active: location.startsWith("/school-admin/add-student") },
         { name: "Live Reports", href: "/school-admin/live-reports", icon: BarChart3, active: location.startsWith("/school-admin/live-reports") },
         { name: "Student Search", href: "/school-admin/student-search", icon: Search, active: location.startsWith("/school-admin/student-search") },
-        { name: "Manage Settings", href: "/school-admin/manage-settings", icon: Settings, active: location.startsWith("/school-admin/manage-settings") },
         { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "system_admin") {

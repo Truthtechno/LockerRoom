@@ -18,7 +18,6 @@ import { Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AnnouncementModal } from "@/components/ui/announcement-modal";
 import { AnnouncementManagement } from "@/components/admin/announcement-management";
-import { AdminFeed } from "@/components/admin/admin-feed";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
@@ -255,10 +254,9 @@ export default function SystemAdmin() {
         {/* Main Dashboard */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-8">
+            <TabsList className="grid w-full grid-cols-2 mb-8">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="announcements">Announcements</TabsTrigger>
-              <TabsTrigger value="feed">Feed</TabsTrigger>
             </TabsList>
             
             <TabsContent value="overview" className="space-y-8">
@@ -628,12 +626,6 @@ export default function SystemAdmin() {
 
           <TabsContent value="announcements" className="space-y-8">
             <AnnouncementManagement userRole="system_admin" />
-          </TabsContent>
-
-          <TabsContent value="feed" className="space-y-8">
-            <div className="bg-card border border-border rounded-xl p-2 sm:p-4 lg:p-6 shadow-sm">
-              <AdminFeed userRole="system_admin" />
-            </div>
           </TabsContent>
           </Tabs>
         </div>

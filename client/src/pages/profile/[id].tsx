@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useParams, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -1083,20 +1082,21 @@ function PostComments({ postId }: { postId: string }) {
         {comments && comments.length > 0 ? (
           comments.map((comment) => (
             <div key={comment.id} className="flex items-start space-x-3">
-              <Avatar className="w-8 h-8">
-                <AvatarImage 
-                  src="/default-avatar.png" 
-                  alt={comment.user?.name || "User"} 
+              <Link href={`/profile/${comment.user?.id}`}>
+                <AvatarWithFallback 
+                  src={comment.user?.profilePicUrl}
+                  alt={comment.user?.name || "User"}
+                  size="sm"
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
                 />
-                <AvatarFallback className="bg-accent/20 text-accent font-semibold text-xs">
-                  {comment.user?.name?.slice(0, 2).toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
+              </Link>
               <div className="flex-1">
                 <div className="flex items-center space-x-2 mb-1">
-                  <span className="font-medium text-sm text-foreground">
-                    {comment.user?.name || 'Anonymous'}
-                  </span>
+                  <Link href={`/profile/${comment.user?.id}`}>
+                    <span className="font-medium text-sm text-foreground hover:text-accent cursor-pointer transition-colors">
+                      {comment.user?.name || 'Anonymous'}
+                    </span>
+                  </Link>
                   <span className="text-xs text-muted-foreground">
                     {timeAgo(comment.createdAt)}
                   </span>

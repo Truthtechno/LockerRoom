@@ -51,12 +51,6 @@ export function MobileAdminNav({ userRole, schoolName, onRefreshData }: MobileAd
     }
   };
 
-  const handleManageSettings = () => {
-    if (userRole === 'school_admin') {
-      handleNavigation("/school-admin/manage-settings");
-    }
-  };
-
   const handleCreateSchool = () => {
     if (userRole === 'system_admin') {
       handleNavigation("/system-admin/create-school");
@@ -103,7 +97,6 @@ export function MobileAdminNav({ userRole, schoolName, onRefreshData }: MobileAd
   ] : [
     { icon: UserPlus, label: "Add New Student", action: handleAddStudent, variant: "default" as const },
     { icon: BarChart3, label: "View Reports", action: handleViewReports, variant: "secondary" as const },
-    { icon: Settings, label: "Manage Settings", action: handleManageSettings, variant: "secondary" as const },
     { icon: Search, label: "Student Search & Ratings", action: handleStudentSearch, variant: "secondary" as const },
   ];
 

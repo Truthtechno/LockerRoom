@@ -3358,6 +3358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/schools/:schoolId/stats", requireAuth, async (req, res) => {
     try {
       const { schoolId } = req.params;
+      const period = req.query.period as string;
       const authSchoolId = req.user?.schoolId || (req as any).auth?.schoolId;
       
       // Ensure school admins can only access their own school's stats
@@ -3370,7 +3371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const stats = await storage.getSchoolStats(schoolId);
+      const stats = await storage.getSchoolStats(schoolId, period);
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch school stats" });
@@ -4923,24 +4924,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Enhanced school stats for analytics
-  app.get("/api/schools/:schoolId/analytics", async (req, res) => {
+  app.get("/api/schools/:schoolId/analytics", requireAuth, async (req, res) => {
     try {
       const { schoolId } = req.params;
+      const authSchoolId = req.user?.schoolId || (req as any).auth?.schoolId;
+      
+      // Ensure school admins can only access their own school's analytics
+      if (authSchoolId && authSchoolId !== schoolId) {
+        return res.status(403).json({ 
+          error: { 
+            code: 'access_denied', 
+            message: 'You can only access your own school\'s analytics' 
+          } 
+        });
+      }
       
       const students = await storage.getStudentsBySchool(schoolId);
+      const studentIds = students.map(s => s.id);
       const totalStudents = students.length;
       
-      // Get ratings statistics
-      const ratingsStats = await Promise.all(
+      // Get student engagement statistics instead of ratings
+      const engagementStats = await Promise.all(
         students.map(async (student) => {
-          const avgRating = await storage.getAverageRating(student.id);
-          const ratings = await storage.getStudentRatings(student.id);
-          return { studentId: student.id, avgRating, ratingsCount: ratings.length };
+          // Get student posts
+          const studentPosts = await db
+            .select()
+            .from(posts)
+            .where(
+              and(
+                eq(posts.studentId, student.id),
+                sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`
+              )
+            );
+          
+          let totalEngagement = 0;
+          let totalLikes = 0;
+          let totalComments = 0;
+          let totalViews = 0;
+          let totalFollowers = 0;
+          
+          for (const post of studentPosts) {
+            const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
+            const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+            const views = await db.select().from(postViews).where(eq(postViews.postId, post.id));
+            
+            totalLikes += likes.length;
+            totalComments += comments.length;
+            totalViews += views.length;
+            totalEngagement += likes.length + comments.length + views.length;
+          }
+          
+          // Get followers count
+          const followers = await db
+            .select()
+            .from(studentFollowers)
+            .where(eq(studentFollowers.studentId, student.id));
+          totalFollowers = followers.length;
+          
+          // Calculate engagement score (normalized 0-100)
+          // Based on: posts count, engagement per post, followers, and consistency
+          const avgEngagementPerPost = studentPosts.length > 0 
+            ? totalEngagement / studentPosts.length 
+            : 0;
+          
+          // Score calculation: 
+          // - Base score from engagement per post (0-50 points)
+          // - Posts count bonus (up to 20 points)
+          // - Followers bonus (up to 20 points)
+          // - Views bonus (up to 10 points)
+          const engagementScore = Math.min(100, Math.round(
+            Math.min(50, avgEngagementPerPost * 5) + // Engagement quality (0-50)
+            Math.min(20, studentPosts.length * 2) + // Post activity (0-20)
+            Math.min(20, totalFollowers * 1.5) + // Social reach (0-20)
+            Math.min(10, totalViews / 10) // Visibility (0-10)
+          ));
+          
+          return {
+            studentId: student.id,
+            totalPosts: studentPosts.length,
+            totalEngagement,
+            totalLikes,
+            totalComments,
+            totalViews,
+            totalFollowers,
+            engagementScore,
+            avgEngagementPerPost: Math.round(avgEngagementPerPost * 10) / 10
+          };
         })
       );
 
-      const averageSchoolRating = ratingsStats.length > 0 
-        ? ratingsStats.reduce((sum, stat) => sum + stat.avgRating, 0) / ratingsStats.length
+      // Calculate average engagement metrics
+      const studentsWithPosts = engagementStats.filter(stat => stat.totalPosts > 0);
+      const averageEngagementPerStudent = studentsWithPosts.length > 0
+        ? Math.round((engagementStats.reduce((sum, stat) => sum + stat.totalEngagement, 0) / studentsWithPosts.length) * 10) / 10
+        : 0;
+      
+      const averageEngagementScore = engagementStats.length > 0
+        ? Math.round((engagementStats.reduce((sum, stat) => sum + stat.engagementScore, 0) / engagementStats.length) * 10) / 10
         : 0;
 
       // Grade distribution
@@ -4959,14 +5039,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         totalStudents,
-        averageSchoolRating: Math.round(averageSchoolRating * 100) / 100,
+        averageEngagementPerStudent,
+        averageEngagementScore,
         gradeDistribution,
         genderDistribution,
-        ratingsStats: ratingsStats.filter(stat => stat.ratingsCount > 0),
+        engagementStats: engagementStats.filter(stat => stat.totalPosts > 0).sort((a, b) => b.totalEngagement - a.totalEngagement),
       });
     } catch (error) {
       console.error('Get school analytics error:', error);
       res.status(500).json({ message: "Failed to fetch school analytics" });
+    }
+  });
+
+  // Get engagement trends
+  app.get("/api/schools/:schoolId/analytics/engagement-trends", requireAuth, async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const period = (req.query.period as string) || 'week';
+      const authSchoolId = req.user?.schoolId || (req as any).auth?.schoolId;
+      
+      if (authSchoolId && authSchoolId !== schoolId) {
+        return res.status(403).json({ 
+          error: { code: 'access_denied', message: 'Access denied' } 
+        });
+      }
+      
+      const trends = await storage.getSchoolEngagementTrends(schoolId, period);
+      res.json(trends);
+    } catch (error) {
+      console.error('Get engagement trends error:', error);
+      res.status(500).json({ message: "Failed to fetch engagement trends" });
+    }
+  });
+
+  // Get post trends
+  app.get("/api/schools/:schoolId/analytics/post-trends", requireAuth, async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const period = (req.query.period as string) || 'week';
+      const authSchoolId = req.user?.schoolId || (req as any).auth?.schoolId;
+      
+      if (authSchoolId && authSchoolId !== schoolId) {
+        return res.status(403).json({ 
+          error: { code: 'access_denied', message: 'Access denied' } 
+        });
+      }
+      
+      const trends = await storage.getSchoolPostTrends(schoolId, period);
+      res.json(trends);
+    } catch (error) {
+      console.error('Get post trends error:', error);
+      res.status(500).json({ message: "Failed to fetch post trends" });
+    }
+  });
+
+  // Get post analytics
+  app.get("/api/schools/:schoolId/analytics/posts", requireAuth, async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const authSchoolId = req.user?.schoolId || (req as any).auth?.schoolId;
+      
+      if (authSchoolId && authSchoolId !== schoolId) {
+        return res.status(403).json({ 
+          error: { code: 'access_denied', message: 'Access denied' } 
+        });
+      }
+      
+      const analytics = await storage.getSchoolPostAnalytics(schoolId, limit);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get post analytics error:', error);
+      res.status(500).json({ message: "Failed to fetch post analytics" });
+    }
+  });
+
+  // Get student engagement metrics
+  app.get("/api/schools/:schoolId/analytics/student-engagement", requireAuth, async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const period = (req.query.period as string) || 'month';
+      const authSchoolId = req.user?.schoolId || (req as any).auth?.schoolId;
+      
+      if (authSchoolId && authSchoolId !== schoolId) {
+        return res.status(403).json({ 
+          error: { code: 'access_denied', message: 'Access denied' } 
+        });
+      }
+      
+      const engagement = await storage.getSchoolStudentEngagement(schoolId, period);
+      res.json(engagement);
+    } catch (error) {
+      console.error('Get student engagement error:', error);
+      res.status(500).json({ message: "Failed to fetch student engagement" });
+    }
+  });
+
+  // Get sport analytics
+  app.get("/api/schools/:schoolId/analytics/sports", requireAuth, async (req, res) => {
+    try {
+      const { schoolId } = req.params;
+      const authSchoolId = req.user?.schoolId || (req as any).auth?.schoolId;
+      
+      if (authSchoolId && authSchoolId !== schoolId) {
+        return res.status(403).json({ 
+          error: { code: 'access_denied', message: 'Access denied' } 
+        });
+      }
+      
+      const analytics = await storage.getSchoolSportAnalytics(schoolId);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get sport analytics error:', error);
+      res.status(500).json({ message: "Failed to fetch sport analytics" });
     }
   });
 

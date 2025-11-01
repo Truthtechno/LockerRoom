@@ -46,6 +46,49 @@ type StudentStats = {
 
 const STUDENTS_PER_PAGE = 10;
 
+// Component for post media preview
+function PostMediaPreview({ post }: { post: any }) {
+  const [imageError, setImageError] = useState(false);
+  const mediaUrl = post.effectiveMediaUrl || post.mediaUrl || '';
+  const mediaType = post.effectiveMediaType || post.mediaType || 'image';
+  const hasMedia = !!mediaUrl;
+  
+  if (!hasMedia || imageError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-2xl">
+        📄
+      </div>
+    );
+  }
+  
+  if (mediaType === 'video') {
+    return (
+      <>
+        <video
+          src={mediaUrl}
+          className="w-full h-full object-cover"
+          muted
+          preload="metadata"
+        />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+          <div className="w-6 h-6 border-2 border-white rounded-full flex items-center justify-center">
+            <div className="w-0 h-0 border-l-[6px] border-l-white border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent ml-0.5"></div>
+          </div>
+        </div>
+      </>
+    );
+  }
+  
+  return (
+    <img
+      src={mediaUrl}
+      alt="Post preview"
+      className="w-full h-full object-cover"
+      onError={() => setImageError(true)}
+    />
+  );
+}
+
 export default function StudentSearch() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -89,6 +132,23 @@ export default function StudentSearch() {
     },
     enabled: !!selectedStudent?.id,
     retry: 1,
+  });
+
+  // Fetch posts for selected student
+  const { data: studentPosts, isLoading: postsLoading } = useQuery<any[]>({
+    queryKey: ["/api/posts/student", selectedStudent?.id],
+    queryFn: async () => {
+      if (!selectedStudent?.id) {
+        throw new Error("No student selected");
+      }
+      const response = await apiRequest("GET", `/api/posts/student/${selectedStudent.id}?limit=50`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch student posts");
+      }
+      const data = await response.json();
+      return data;
+    },
+    enabled: !!selectedStudent?.id,
   });
 
   const students = searchQuery ? searchResults : allStudents;
@@ -542,13 +602,85 @@ export default function StudentSearch() {
                             <div>
                               <p className="text-muted-foreground mb-1">Engagement Rate</p>
                               <p className="text-lg font-semibold">
-                                {statsData.followers > 0 
-                                  ? ((statsData.engagement / statsData.followers) * 100).toFixed(1) + '%'
+                                {statsData.views > 0 
+                                  ? ((statsData.engagement / statsData.views) * 100).toFixed(1) + '%'
                                   : 'N/A'}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {statsData.views > 0 
+                                  ? `${statsData.engagement} engagements / ${statsData.views} views`
+                                  : 'No views yet'}
                               </p>
                             </div>
                           </div>
                         </div>
+
+                        {/* Student Posts with Engagement */}
+                        {selectedStudent && (
+                          <div className="pt-6 border-t border-border mt-6">
+                            <h4 className="font-medium text-sm mb-4">Student Posts & Engagement</h4>
+                            {postsLoading ? (
+                              <div className="text-center py-8 text-muted-foreground">
+                                Loading posts...
+                              </div>
+                            ) : studentPosts && studentPosts.length > 0 ? (
+                              <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
+                                {studentPosts.map((post) => {
+                                  return (
+                                    <div 
+                                      key={post.id}
+                                      onClick={() => window.location.href = `/post/${post.id}`}
+                                      className="p-4 bg-background border border-border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                                    >
+                                      <div className="flex items-start gap-4">
+                                        {/* Media Preview */}
+                                        <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-muted relative">
+                                          <PostMediaPreview post={post} />
+                                        </div>
+                                        
+                                        {/* Post Content */}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <p className="text-xs text-muted-foreground">
+                                              {new Date(post.createdAt).toLocaleDateString()}
+                                            </p>
+                                          </div>
+                                          {post.caption && (
+                                            <p className="text-sm text-foreground mb-3 line-clamp-2">
+                                              {post.caption}
+                                            </p>
+                                          )}
+                                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                            <div className="flex items-center gap-1">
+                                              <Eye className="w-3 h-3" />
+                                              <span>{post.viewCount || 0}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              <Heart className="w-3 h-3 text-red-500" />
+                                              <span>{post.likesCount || 0}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              <MessageCircle className="w-3 h-3 text-blue-500" />
+                                              <span>{post.commentsCount || 0}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              <Bookmark className="w-3 h-3 text-yellow-500" />
+                                              <span>{post.savesCount || 0}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-center py-8 text-muted-foreground">
+                                <p>No posts found for this student.</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-center py-12">

@@ -35,21 +35,14 @@ export function AvatarWithFallback({
   
   const fallback = fallbackText || generateInitials(alt);
   
-  // Ensure we have a valid src or use default
-  const avatarSrc = src && src.trim() ? src : "/default-avatar.png";
+  // Only use src if it's a valid non-empty string, otherwise use undefined to trigger fallback
+  const avatarSrc = (src && typeof src === 'string' && src.trim().length > 0) ? src.trim() : undefined;
 
   return (
     <Avatar className={`${sizeClasses[size]} ${className}`}>
       <AvatarImage 
         src={avatarSrc}
         alt={alt}
-        onError={(e) => {
-          // Prevent infinite loops by setting to default if current src fails
-          const target = e.target as HTMLImageElement;
-          if (target.src !== "/default-avatar.png") {
-            target.src = "/default-avatar.png";
-          }
-        }}
       />
       <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
         {fallback}

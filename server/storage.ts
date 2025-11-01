@@ -66,6 +66,7 @@ import {
   viewers,
   schoolAdmins,
   systemAdmins,
+  admins,
   schools,
   students,
   posts,
@@ -193,10 +194,15 @@ export interface IStorage {
   isFollowing(followerUserId: string, targetUserId: string): Promise<boolean>;
   
   // Stats operations
-  getSchoolStats(schoolId: string): Promise<any>;
+  getSchoolStats(schoolId: string, period?: string): Promise<any>;
   getSystemStats(): Promise<any>;
   getSchoolRecentActivity(schoolId: string, limit?: number): Promise<any[]>;
   getSchoolTopPerformers(schoolId: string, limit?: number): Promise<any[]>;
+  getSchoolEngagementTrends(schoolId: string, period?: string): Promise<any[]>;
+  getSchoolPostTrends(schoolId: string, period?: string): Promise<any[]>;
+  getSchoolPostAnalytics(schoolId: string, limit?: number): Promise<any>;
+  getSchoolStudentEngagement(schoolId: string, period?: string): Promise<any>;
+  getSchoolSportAnalytics(schoolId: string): Promise<any>;
   
   // School application operations
   getSchoolApplications(): Promise<SchoolApplication[]>;
@@ -2753,9 +2759,92 @@ export class PostgresStorage implements IStorage {
         .limit(1);
       
       if (userResult[0]) {
+        const user = userResult[0];
+        let profilePicUrl = user.profilePicUrl; // Default to users table profilePicUrl
+        
+        // Fetch profile picture from role-specific table if needed
+        if (user.role === 'school_admin' && user.linkedId) {
+          const adminResult = await db.select({ profilePicUrl: schoolAdmins.profilePicUrl })
+            .from(schoolAdmins)
+            .where(eq(schoolAdmins.id, user.linkedId))
+            .limit(1);
+          if (adminResult[0]?.profilePicUrl) {
+            profilePicUrl = adminResult[0].profilePicUrl;
+          }
+        } else if (user.role === 'system_admin' && user.linkedId) {
+          const adminResult = await db.select({ profilePicUrl: systemAdmins.profilePicUrl })
+            .from(systemAdmins)
+            .where(eq(systemAdmins.id, user.linkedId))
+            .limit(1);
+          if (adminResult[0]?.profilePicUrl) {
+            profilePicUrl = adminResult[0].profilePicUrl;
+          }
+        } else if ((user.role === 'viewer' || user.role === 'public_viewer') && user.linkedId) {
+          const viewerResult = await db.select({ profilePicUrl: viewers.profilePicUrl })
+            .from(viewers)
+            .where(eq(viewers.id, user.linkedId))
+            .limit(1);
+          if (viewerResult[0]?.profilePicUrl) {
+            profilePicUrl = viewerResult[0].profilePicUrl;
+          }
+        } else if (user.role === 'student' && user.linkedId) {
+          // Students might have profilePicUrl in students table
+          const studentResult = await db.select({ profilePicUrl: students.profilePicUrl })
+            .from(students)
+            .where(eq(students.id, user.linkedId))
+            .limit(1);
+          if (studentResult[0]?.profilePicUrl) {
+            profilePicUrl = studentResult[0].profilePicUrl;
+          }
+        } else if (user.role === 'scout_admin' || user.role === 'xen_scout') {
+          // Scout roles: check multiple possible locations for profile picture
+          // 1. Check scoutProfiles table using linkedId
+          if (user.linkedId) {
+            const scoutProfileResult = await db.select({ profilePicUrl: scoutProfiles.profilePicUrl })
+              .from(scoutProfiles)
+              .where(eq(scoutProfiles.id, user.linkedId))
+              .limit(1);
+            if (scoutProfileResult[0]?.profilePicUrl) {
+              profilePicUrl = scoutProfileResult[0].profilePicUrl;
+            } else {
+              // 2. Check admins table using linkedId
+              const adminResultById = await db.select({ profilePicUrl: admins.profilePicUrl })
+                .from(admins)
+                .where(eq(admins.id, user.linkedId))
+                .limit(1);
+              if (adminResultById[0]?.profilePicUrl) {
+                profilePicUrl = adminResultById[0].profilePicUrl;
+              }
+            }
+          }
+          // 3. Fallback: Check admins table using user email if still not found
+          if (!profilePicUrl && user.email) {
+            const adminResultByEmail = await db.select({ profilePicUrl: admins.profilePicUrl })
+              .from(admins)
+              .where(eq(admins.email, user.email))
+              .limit(1);
+            if (adminResultByEmail[0]?.profilePicUrl) {
+              profilePicUrl = adminResultByEmail[0].profilePicUrl;
+            }
+          }
+        } else if (['moderator', 'finance', 'support', 'coach', 'analyst'].includes(user.role)) {
+          // Other admin roles: check admins table using userId or linkedId
+          const adminResult = await db.select({ profilePicUrl: admins.profilePicUrl })
+            .from(admins)
+            .where(eq(admins.id, user.linkedId || user.id))
+            .limit(1);
+          if (adminResult[0]?.profilePicUrl) {
+            profilePicUrl = adminResult[0].profilePicUrl;
+          }
+        }
+        
+        // Create user object with the correct profilePicUrl
         commentsWithUsers.push({
           ...comment,
-          user: userResult[0]
+          user: {
+            ...user,
+            profilePicUrl: profilePicUrl
+          }
         });
       }
     }
@@ -3014,7 +3103,7 @@ export class PostgresStorage implements IStorage {
     await db.delete(posts).where(eq(posts.id, postId));
   }
 
-  async getSchoolStats(schoolId: string): Promise<any> {
+  async getSchoolStats(schoolId: string, period?: string): Promise<any> {
     const schoolStudents = await this.getStudentsBySchool(schoolId);
     const studentIds = schoolStudents.map(s => s.id);
     
@@ -3024,33 +3113,95 @@ export class PostgresStorage implements IStorage {
         totalPosts: 0,
         totalEngagement: 0,
         activeSports: 0,
+        previousPeriodPosts: 0,
+        previousPeriodEngagement: 0,
       };
     }
     
+    // Calculate time period for comparison
+    const now = new Date();
+    let startDate: Date | null = null;
+    let previousStartDate: Date | null = null;
+    
+    if (period) {
+      switch (period) {
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          previousStartDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          previousStartDate = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+          break;
+      }
+    }
+    
     // Only count student posts, exclude announcements
-    const schoolPosts = await db
-      .select()
-      .from(posts)
-      .where(
-        and(
-          inArray(posts.studentId, studentIds),
-          sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`
-        )
-      );
+    let schoolPosts;
+    if (startDate) {
+      schoolPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`,
+            sql`${posts.createdAt} >= ${startDate}`
+          )
+        );
+    } else {
+      schoolPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`
+          )
+        );
+    }
+    
+    // Get previous period posts for comparison
+    let previousPeriodPosts: any[] = [];
+    if (previousStartDate && startDate) {
+      previousPeriodPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`,
+            sql`${posts.createdAt} >= ${previousStartDate}`,
+            sql`${posts.createdAt} < ${startDate}`
+          )
+        );
+    }
     
     let totalLikes = 0;
     let totalComments = 0;
     let totalSaves = 0;
+    let previousPeriodLikes = 0;
+    let previousPeriodComments = 0;
+    let previousPeriodSaves = 0;
 
     for (const post of schoolPosts) {
       const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
       const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
       const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
-      const views = await getPostViews(post.id);
       
       totalLikes += likes.length;
       totalComments += comments.length;
       totalSaves += saves.length;
+    }
+
+    for (const post of previousPeriodPosts) {
+      const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
+      const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+      const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
+      
+      previousPeriodLikes += likes.length;
+      previousPeriodComments += comments.length;
+      previousPeriodSaves += saves.length;
     }
 
     return {
@@ -3058,6 +3209,8 @@ export class PostgresStorage implements IStorage {
       totalPosts: schoolPosts.length,
       totalEngagement: totalLikes + totalComments + totalSaves,
       activeSports: Array.from(new Set(schoolStudents.map(s => s.sport).filter(Boolean))).length,
+      previousPeriodPosts: previousPeriodPosts.length,
+      previousPeriodEngagement: previousPeriodLikes + previousPeriodComments + previousPeriodSaves,
     };
   }
 
@@ -3180,6 +3333,481 @@ export class PostgresStorage implements IStorage {
     return performers
       .sort((a, b) => b.totalEngagement - a.totalEngagement)
       .slice(0, limit);
+  }
+
+  async getSchoolEngagementTrends(schoolId: string, period: string = 'week'): Promise<any[]> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const schoolStudents = await this.getStudentsBySchool(schoolId);
+    const studentIds = schoolStudents.map(s => s.id);
+    
+    if (studentIds.length === 0) return [];
+
+    const now = new Date();
+    let startDate: Date | null = null;
+    let interval: string;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        interval = 'hour';
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        interval = 'day';
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        interval = 'day';
+        break;
+      case 'all':
+        startDate = null; // No date filter - get all data
+        interval = 'day';
+        break;
+      default:
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        interval = 'day';
+    }
+
+    // Get all posts in the period
+    let schoolPosts;
+    if (startDate) {
+      schoolPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`,
+            sql`${posts.createdAt} >= ${startDate}`
+          )
+        )
+        .orderBy(posts.createdAt);
+    } else {
+      // No date filter - get all posts
+      schoolPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`
+          )
+        )
+        .orderBy(posts.createdAt);
+    }
+
+    // Group by time interval and calculate engagement
+    const trends: Record<string, { date: string; engagement: number; posts: number }> = {};
+    
+    for (const post of schoolPosts) {
+      const postDate = new Date(post.createdAt);
+      let key: string;
+      
+      if (interval === 'hour') {
+        key = postDate.toISOString().slice(0, 13) + ':00';
+      } else {
+        key = postDate.toISOString().slice(0, 10);
+      }
+      
+      if (!trends[key]) {
+        trends[key] = { date: key, engagement: 0, posts: 0 };
+      }
+      
+      trends[key].posts += 1;
+      
+      // Calculate engagement for this post
+      const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
+      const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+      const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
+      const views = await getPostViews(post.id);
+      
+      trends[key].engagement += likes.length + comments.length + saves.length + views.length;
+    }
+    
+    return Object.values(trends).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getSchoolPostTrends(schoolId: string, period: string = 'week'): Promise<any[]> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const schoolStudents = await this.getStudentsBySchool(schoolId);
+    const studentIds = schoolStudents.map(s => s.id);
+    
+    if (studentIds.length === 0) return [];
+
+    const now = new Date();
+    let startDate: Date | null = null;
+    let interval: string;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        interval = 'hour';
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        interval = 'day';
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        interval = 'day';
+        break;
+      case 'all':
+        startDate = null; // No date filter - get all data
+        interval = 'day';
+        break;
+      default:
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        interval = 'day';
+    }
+
+    let schoolPosts;
+    if (startDate) {
+      schoolPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`,
+            sql`${posts.createdAt} >= ${startDate}`
+          )
+        )
+        .orderBy(posts.createdAt);
+    } else {
+      // No date filter - get all posts
+      schoolPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`
+          )
+        )
+        .orderBy(posts.createdAt);
+    }
+
+    const trends: Record<string, { date: string; posts: number; images: number; videos: number }> = {};
+    
+    for (const post of schoolPosts) {
+      const postDate = new Date(post.createdAt);
+      let key: string;
+      
+      if (interval === 'hour') {
+        key = postDate.toISOString().slice(0, 13) + ':00';
+      } else {
+        key = postDate.toISOString().slice(0, 10);
+      }
+      
+      if (!trends[key]) {
+        trends[key] = { date: key, posts: 0, images: 0, videos: 0 };
+      }
+      
+      trends[key].posts += 1;
+      if (post.mediaType === 'video') {
+        trends[key].videos += 1;
+      } else {
+        trends[key].images += 1;
+      }
+    }
+    
+    return Object.values(trends).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getSchoolPostAnalytics(schoolId: string, limit: number = 10): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const schoolStudents = await this.getStudentsBySchool(schoolId);
+    const studentIds = schoolStudents.map(s => s.id);
+    
+    if (studentIds.length === 0) {
+      return {
+        topPosts: [],
+        engagementBreakdown: { likes: 0, comments: 0, saves: 0, views: 0 },
+        contentMix: { images: 0, videos: 0 }
+      };
+    }
+
+    const schoolPosts = await db
+      .select()
+      .from(posts)
+      .where(
+        and(
+          inArray(posts.studentId, studentIds),
+          sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`
+        )
+      )
+      .orderBy(desc(posts.createdAt))
+      .limit(100);
+
+    const topPosts = [];
+    let totalLikes = 0;
+    let totalComments = 0;
+    let totalSaves = 0;
+    let totalViews = 0;
+    let imageCount = 0;
+    let videoCount = 0;
+
+    for (const post of schoolPosts) {
+      const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
+      const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+      const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
+      const views = await getPostViews(post.id);
+      
+      const student = schoolStudents.find(s => s.id === post.studentId);
+      const user = student ? await this.getUser(student.userId) : null;
+      
+      const engagement = likes.length + comments.length + saves.length + views.length;
+      
+      totalLikes += likes.length;
+      totalComments += comments.length;
+      totalSaves += saves.length;
+      totalViews += views.length;
+      
+      if (post.mediaType === 'video') {
+        videoCount += 1;
+      } else {
+        imageCount += 1;
+      }
+
+      if (user && student) {
+        topPosts.push({
+          id: post.id,
+          studentId: student.id,
+          studentName: user.name,
+          studentProfilePic: student.profilePicUrl || user.profilePicUrl,
+          sport: student.sport,
+          mediaUrl: post.mediaUrl,
+          mediaType: post.mediaType || 'image',
+          caption: post.caption,
+          createdAt: post.createdAt,
+          likes: likes.length,
+          comments: comments.length,
+          saves: saves.length,
+          views: views.length,
+          engagement: engagement
+        });
+      }
+    }
+
+    topPosts.sort((a, b) => b.engagement - a.engagement);
+
+    return {
+      topPosts: topPosts.slice(0, limit),
+      engagementBreakdown: {
+        likes: totalLikes,
+        comments: totalComments,
+        saves: totalSaves,
+        views: totalViews,
+        total: totalLikes + totalComments + totalSaves + totalViews
+      },
+      contentMix: {
+        images: imageCount,
+        videos: videoCount,
+        total: imageCount + videoCount
+      }
+    };
+  }
+
+  async getSchoolStudentEngagement(schoolId: string, period: string = 'month'): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const schoolStudents = await this.getStudentsBySchool(schoolId);
+    const studentIds = schoolStudents.map(s => s.id);
+    
+    if (studentIds.length === 0) {
+      return {
+        activeStudents: 0,
+        activePercentage: 0,
+        engagementDistribution: [],
+        activityByDay: []
+      };
+    }
+
+    const now = new Date();
+    let startDate: Date | null = null;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'all':
+        startDate = null; // No date filter
+        break;
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const activeStudentsSet = new Set<string>();
+    const engagementByStudent: Record<string, number> = {};
+    const activityByDay: Record<string, number> = {};
+
+    // Initialize activityByDay for the period
+    if (startDate) {
+      const daysDiff = Math.ceil((now.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+      for (let i = 0; i < daysDiff; i++) {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        const dayKey = date.toISOString().slice(0, 10);
+        activityByDay[dayKey] = 0;
+      }
+    }
+
+    let schoolPosts;
+    if (startDate) {
+      schoolPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`,
+            sql`${posts.createdAt} >= ${startDate}`
+          )
+        );
+    } else {
+      // No date filter - get all posts
+      schoolPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            inArray(posts.studentId, studentIds),
+            sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`
+          )
+        );
+    }
+
+    for (const post of schoolPosts) {
+      activeStudentsSet.add(post.studentId || '');
+      
+      if (!engagementByStudent[post.studentId || '']) {
+        engagementByStudent[post.studentId || ''] = 0;
+      }
+
+      const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
+      const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+      const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
+      const views = await getPostViews(post.id);
+      
+      const engagement = likes.length + comments.length + saves.length + views.length;
+      engagementByStudent[post.studentId || ''] += engagement;
+
+      // Track activity by day
+      const postDate = new Date(post.createdAt);
+      const dayKey = postDate.toISOString().slice(0, 10);
+      if (activityByDay[dayKey] !== undefined) {
+        activityByDay[dayKey] += 1;
+      }
+    }
+
+    // Create engagement distribution buckets
+    const engagementValues = Object.values(engagementByStudent);
+    const buckets = { low: 0, medium: 0, high: 0, veryHigh: 0 };
+    
+    engagementValues.forEach(eng => {
+      if (eng < 10) buckets.low++;
+      else if (eng < 50) buckets.medium++;
+      else if (eng < 100) buckets.high++;
+      else buckets.veryHigh++;
+    });
+
+    return {
+      activeStudents: activeStudentsSet.size,
+      activePercentage: (activeStudentsSet.size / studentIds.length) * 100,
+      engagementDistribution: [
+        { level: 'Low (0-9)', count: buckets.low },
+        { level: 'Medium (10-49)', count: buckets.medium },
+        { level: 'High (50-99)', count: buckets.high },
+        { level: 'Very High (100+)', count: buckets.veryHigh }
+      ],
+      activityByDay: Object.entries(activityByDay).map(([date, count]) => ({ date, posts: count }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    };
+  }
+
+  async getSchoolSportAnalytics(schoolId: string): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const schoolStudents = await this.getStudentsBySchool(schoolId);
+    const studentIds = schoolStudents.map(s => s.id);
+    
+    if (studentIds.length === 0) {
+      return {
+        sports: [],
+        sportEngagement: [],
+        sportPostCounts: []
+      };
+    }
+
+    const sportStats: Record<string, { students: number; posts: number; engagement: number }> = {};
+
+    // Initialize sport stats
+    schoolStudents.forEach(student => {
+      const sport = student.sport || 'No Sport';
+      if (!sportStats[sport]) {
+        sportStats[sport] = { students: 0, posts: 0, engagement: 0 };
+      }
+      sportStats[sport].students += 1;
+    });
+
+    const schoolPosts = await db
+      .select()
+      .from(posts)
+      .where(
+        and(
+          inArray(posts.studentId, studentIds),
+          sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`
+        )
+      );
+
+    for (const post of schoolPosts) {
+      const student = schoolStudents.find(s => s.id === post.studentId);
+      const sport = student?.sport || 'No Sport';
+      
+      if (!sportStats[sport]) {
+        sportStats[sport] = { students: 0, posts: 0, engagement: 0 };
+      }
+      
+      sportStats[sport].posts += 1;
+
+      const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
+      const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+      const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
+      const views = await getPostViews(post.id);
+      
+      sportStats[sport].engagement += likes.length + comments.length + saves.length + views.length;
+    }
+
+    const sports = Object.keys(sportStats);
+    
+    return {
+      sports: sports.map(sport => ({
+        name: sport,
+        students: sportStats[sport].students,
+        posts: sportStats[sport].posts,
+        engagement: sportStats[sport].engagement,
+        avgEngagementPerPost: sportStats[sport].posts > 0 
+          ? Math.round((sportStats[sport].engagement / sportStats[sport].posts) * 10) / 10 
+          : 0
+      })).sort((a, b) => b.engagement - a.engagement),
+      sportEngagement: sports.map(sport => ({
+        name: sport,
+        engagement: sportStats[sport].engagement
+      })).sort((a, b) => b.engagement - a.engagement),
+      sportPostCounts: sports.map(sport => ({
+        name: sport,
+        posts: sportStats[sport].posts
+      })).sort((a, b) => b.posts - a.posts)
+    };
   }
 
   async followStudent(insertFollow: InsertStudentFollower): Promise<StudentFollower> {
