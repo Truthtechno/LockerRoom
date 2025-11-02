@@ -143,6 +143,7 @@ export class AuthStorage {
       schoolId: users.schoolId,
       emailVerified: users.emailVerified,
       isOneTimePassword: users.isOneTimePassword,
+      isFrozen: users.isFrozen,
       createdAt: users.createdAt,
       // Get schoolId from school_admins table for school_admin role
       schoolIdFromProfile: schoolAdmins.schoolId
@@ -153,6 +154,12 @@ export class AuthStorage {
     
     if (!user) {
       console.log('🔐 Password verification failed: User not found for email:', email);
+      return null;
+    }
+
+    // Check if account is frozen
+    if (user.isFrozen) {
+      console.log('🔐 Login blocked: Account is frozen for user:', user.id, 'email:', email);
       return null;
     }
     
@@ -262,6 +269,7 @@ export class AuthStorage {
         schoolId: users.schoolId,
         emailVerified: users.emailVerified,
         isOneTimePassword: users.isOneTimePassword,
+        isFrozen: users.isFrozen,
         createdAt: users.createdAt,
         // Get schoolId from school_admins table for school_admin role
         schoolIdFromProfile: schoolAdmins.schoolId
@@ -272,6 +280,12 @@ export class AuthStorage {
       
       if (!user) {
         console.log('🔐 OTP verification failed: User not found for email:', email);
+        return null;
+      }
+
+      // Check if account is frozen
+      if (user.isFrozen) {
+        console.log('🔐 Login blocked: Account is frozen for user:', user.id, 'email:', email);
         return null;
       }
       

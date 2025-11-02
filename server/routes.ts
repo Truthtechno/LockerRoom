@@ -22,6 +22,7 @@ import {
   insertSystemBrandingSchema,
   insertSystemAppearanceSchema,
   insertSystemPaymentSchema,
+  insertPaymentTransactionSchema,
   insertAdminRoleSchema,
   insertAnalyticsLogSchema,
   insertStudentSchema,
@@ -40,7 +41,8 @@ import {
   postComments,
   postViews,
   schools,
-  studentFollowers
+  studentFollowers,
+  paymentTransactions
 } from "@shared/schema";
 import type { PostWithDetails } from "@shared/schema";
 import { eq, desc, sql, and, or, isNull, inArray } from 'drizzle-orm';
@@ -405,6 +407,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (otpResult) {
         const { user, profile, requiresPasswordReset } = otpResult;
 
+        // Note: Frozen check is already done in verifyOTP, but we add an extra check here for safety
+        if ((user as any).isFrozen) {
+          console.log('🔐 Login blocked: Account is frozen for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "account_frozen", 
+              message: "Your account has been temporarily disabled. Please contact your administrator." 
+            } 
+          });
+        }
+
         // Validate linkedId is present for roles that require it
         const rolesRequiringLinkedId = ['student', 'school_admin', 'system_admin', 'viewer', 'public_viewer'];
         if (rolesRequiringLinkedId.includes(user.role) && !user.linkedId) {
@@ -455,6 +468,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await authStorage.verifyPassword(email, password);
       
       if (!result) {
+        // Check if account exists and is frozen
+        const [user] = await db.select({ isFrozen: users.isFrozen }).from(users).where(eq(users.email, email));
+        if (user?.isFrozen) {
+          console.log('🔐 Login blocked: Account is frozen for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "account_frozen", 
+              message: "Your account has been temporarily disabled. Please contact your administrator." 
+            } 
+          });
+        }
+        
         console.log('🔐 Login failed: Invalid credentials for:', email);
         return res.status(401).json({ 
           error: { 
@@ -613,18 +638,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('🔐 Attempting password reset for user:', userId, 'role:', decoded.role);
 
-      // Check if this is an admin user
-      const isAdminRole = ['system_admin', 'moderator', 'scout_admin', 'xen_scout', 'finance', 'support', 'coach', 'analyst'].includes(decoded.role);
+      // Check which table the user exists in
+      // Scouts (xen_scout, scout_admin) are stored in users table, NOT admins table
+      // Only system admins and school admins might be in admins table
+      // For consistency with student password reset, check users table first for scout roles
+      const isScoutRole = decoded.role === 'xen_scout' || decoded.role === 'scout_admin';
       
       let success = false;
-      if (isAdminRole) {
-        // Use admin password reset
-        success = await authStorage.resetAdminPassword(userId, password);
-        console.log('🔐 Admin password reset result:', success);
-      } else {
-        // Use regular user password reset
+      if (isScoutRole) {
+        // Scouts are always in users table - use regular user password reset (same as students)
+        console.log('🔐 Scout role detected, using regular user password reset (users table)');
         success = await authStorage.resetPassword(userId, password);
-        console.log('🔐 User password reset result:', success);
+        console.log('🔐 Scout password reset result:', success);
+      } else {
+        // For other roles, check which table they exist in
+        const [adminRecord] = await db.select({ id: admins.id }).from(admins).where(eq(admins.id, userId));
+        
+        if (adminRecord) {
+          // User exists in admins table - use admin password reset
+          console.log('🔐 User found in admins table, using admin password reset');
+          success = await authStorage.resetAdminPassword(userId, password);
+          console.log('🔐 Admin password reset result:', success);
+        } else {
+          // User exists in users table (students, viewers, etc.) - use regular user password reset
+          console.log('🔐 User found in users table, using regular password reset');
+          success = await authStorage.resetPassword(userId, password);
+          console.log('🔐 User password reset result:', success);
+        }
       }
       
       if (!success) {
@@ -5234,6 +5274,265 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Update system payment error:', error);
       res.status(500).json({ message: "Failed to update system payment config" });
+    }
+  });
+
+  // Public pricing endpoint (for students to see prices)
+  app.get("/api/payments/pricing", async (req, res) => {
+    try {
+      const payment = await storage.getSystemPayment();
+      if (!payment) {
+        return res.json({
+          currency: "USD",
+          xenScoutPrice: 10.00,
+          scoutAiPrice: 10.00,
+          xenScoutPriceCents: 1000, // Legacy support
+          scoutAiPriceCents: 1000, // Legacy support
+          mockModeEnabled: true,
+        });
+      }
+      
+      // Convert price to number if it's a string (from decimal column)
+      const getPrice = (price: any, priceCents: any): number => {
+        if (price !== undefined && price !== null) {
+          return typeof price === 'string' ? parseFloat(price) : price;
+        }
+        // Fallback to cents if decimal not available
+        if (priceCents !== undefined && priceCents !== null) {
+          return priceCents / 100;
+        }
+        return 10.0; // Default
+      };
+      
+      // Return only pricing info, not sensitive config
+      res.json({
+        currency: payment.currency || "USD",
+        xenScoutPrice: getPrice((payment as any).xenScoutPrice, (payment as any).xenScoutPriceCents),
+        scoutAiPrice: getPrice((payment as any).scoutAiPrice, (payment as any).scoutAiPriceCents),
+        // Legacy support (convert to cents for backward compatibility)
+        xenScoutPriceCents: Math.round(getPrice((payment as any).xenScoutPrice, (payment as any).xenScoutPriceCents) * 100),
+        scoutAiPriceCents: Math.round(getPrice((payment as any).scoutAiPrice, (payment as any).scoutAiPriceCents) * 100),
+        mockModeEnabled: payment.mockModeEnabled !== false,
+      });
+    } catch (error) {
+      console.error('Get pricing error:', error);
+      res.status(500).json({ message: "Failed to fetch pricing" });
+    }
+  });
+
+  // Payment Processing Routes
+  app.post("/api/payments/process", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).auth?.id;
+      
+      console.log('🔍 Full payment request:', {
+        body: req.body,
+        bodyKeys: Object.keys(req.body || {}),
+        bodyStringified: JSON.stringify(req.body)
+      });
+      
+      const { type, amount, amountCents, currency, provider, cardData, metadata } = req.body;
+
+      console.log('💰 Payment processing request:', {
+        hasType: !!type,
+        typeValue: type,
+        hasAmount: amount !== undefined,
+        amountValue: amount,
+        hasAmountCents: amountCents !== undefined,
+        amountCentsValue: amountCents,
+        hasCurrency: !!currency,
+        currencyValue: currency,
+        hasProvider: !!provider,
+        providerValue: provider,
+        userId
+      });
+
+      // Support both new format (amount) and legacy format (amountCents)
+      let amountInCents: number;
+      if (amount !== undefined && amount !== null) {
+        // New format: actual currency amount
+        amountInCents = Math.round(parseFloat(String(amount)) * 100);
+      } else if (amountCents !== undefined && amountCents !== null) {
+        // Legacy format: already in cents
+        amountInCents = parseInt(String(amountCents));
+      } else {
+        console.error('❌ Missing amount:', { amount, amountCents });
+        return res.status(400).json({ 
+          error: { 
+            code: "validation_error", 
+            message: "Missing required payment amount (amount or amountCents)" 
+          } 
+        });
+      }
+
+      // Validate required fields
+      if (!type) {
+        console.error('❌ Missing type - received:', { type, body: req.body });
+        return res.status(400).json({ 
+          error: { 
+            code: "validation_error", 
+            message: "Missing payment type" 
+          } 
+        });
+      }
+      
+      if (isNaN(amountInCents) || amountInCents <= 0) {
+        console.error('❌ Invalid amount - received:', { amount, amountCents, amountInCents });
+        return res.status(400).json({ 
+          error: { 
+            code: "validation_error", 
+            message: "Invalid payment amount" 
+          } 
+        });
+      }
+      
+      if (!currency || currency.trim() === '') {
+        console.error('❌ Missing or empty currency - received:', { currency, body: req.body });
+        return res.status(400).json({ 
+          error: { 
+            code: "validation_error", 
+            message: "Missing currency" 
+          } 
+        });
+      }
+      
+      if (!provider || provider.trim() === '') {
+        console.error('❌ Missing or empty provider - received:', { provider, body: req.body });
+        return res.status(400).json({ 
+          error: { 
+            code: "validation_error", 
+            message: "Missing payment provider" 
+          } 
+        });
+      }
+
+      // Validate type
+      if (!['xen_watch', 'scout_ai'].includes(type)) {
+        return res.status(400).json({ 
+          error: { 
+            code: "validation_error", 
+            message: "Invalid payment type" 
+          } 
+        });
+      }
+
+      // Get payment configuration
+      const paymentConfig = await storage.getSystemPayment();
+      const mockModeEnabled = paymentConfig?.mockModeEnabled !== false;
+
+      // Create payment transaction record
+      const transactionData = {
+        userId,
+        type,
+        amountCents: amountInCents, // Store in cents for payment transactions table
+        currency,
+        status: 'pending' as const,
+        provider: provider === 'mock' ? 'mock' : (paymentConfig?.provider || 'mock'),
+        metadata: metadata ? JSON.stringify(metadata) : null,
+      };
+
+      const [transaction] = await db
+        .insert(paymentTransactions)
+        .values(insertPaymentTransactionSchema.parse(transactionData))
+        .returning();
+
+      // Process payment based on provider
+      if (provider === 'mock' || mockModeEnabled) {
+        // Mock payment - always succeeds (unless declined by frontend validation)
+        const [updatedTransaction] = await db
+          .update(paymentTransactions)
+          .set({ 
+            status: 'completed',
+            providerTransactionId: `mock_${Date.now()}`,
+            updatedAt: sql`NOW()`
+          })
+          .where(eq(paymentTransactions.id, transaction.id))
+          .returning();
+
+        res.json({ 
+          success: true,
+          transactionId: updatedTransaction.id,
+          transaction: updatedTransaction
+        });
+      } else if (provider === 'stripe' && paymentConfig?.provider === 'stripe') {
+        // Stripe payment processing
+        // This would integrate with Stripe API
+        // For now, we'll mark it as a placeholder
+        res.status(501).json({ 
+          error: { 
+            code: "not_implemented", 
+            message: "Stripe integration not yet fully implemented" 
+          } 
+        });
+      } else if (provider === 'paypal' && paymentConfig?.provider === 'paypal') {
+        // PayPal payment processing
+        res.status(501).json({ 
+          error: { 
+            code: "not_implemented", 
+            message: "PayPal integration not yet fully implemented" 
+          } 
+        });
+      } else {
+        // Fallback to mock
+        const [updatedTransaction] = await db
+          .update(paymentTransactions)
+          .set({ 
+            status: 'completed',
+            providerTransactionId: `mock_${Date.now()}`,
+            updatedAt: sql`NOW()`
+          })
+          .where(eq(paymentTransactions.id, transaction.id))
+          .returning();
+
+        res.json({ 
+          success: true,
+          transactionId: updatedTransaction.id,
+          transaction: updatedTransaction
+        });
+      }
+    } catch (error: any) {
+      console.error('Payment processing error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "internal_error", 
+          message: error.message || "Payment processing failed" 
+        } 
+      });
+    }
+  });
+
+  // Get payment transaction status
+  app.get("/api/payments/transaction/:transactionId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).auth?.id;
+      const { transactionId } = req.params;
+
+      const [transaction] = await db
+        .select()
+        .from(paymentTransactions)
+        .where(and(
+          eq(paymentTransactions.id, transactionId),
+          eq(paymentTransactions.userId, userId)
+        ));
+
+      if (!transaction) {
+        return res.status(404).json({ 
+          error: { 
+            code: "not_found", 
+            message: "Transaction not found" 
+          } 
+        });
+      }
+
+      res.json({ transaction });
+    } catch (error: any) {
+      console.error('Get transaction error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "internal_error", 
+          message: "Failed to fetch transaction" 
+        } 
+      });
     }
   });
 

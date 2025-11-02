@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Upload, Play, X } from "lucide-react";
 import type { PostWithDetails } from "@shared/schema";
+import PaymentPortal from "@/components/payment/payment-portal";
 
 interface XenWatchSubmitModalProps {
   isOpen: boolean;
@@ -28,6 +29,13 @@ export default function XenWatchSubmitModal({ isOpen, onClose }: XenWatchSubmitM
   const [promoCode, setPromoCode] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPaymentPortal, setShowPaymentPortal] = useState(false);
+  const [pendingSubmissionData, setPendingSubmissionData] = useState<{
+    videoUrl?: string;
+    thumbUrl?: string;
+    notes?: string;
+    promoCode?: string;
+  } | null>(null);
 
   // Fetch user's video posts
   const { data: videoPosts, isLoading: postsLoading } = useQuery<PostWithDetails[]>({
@@ -53,53 +61,16 @@ export default function XenWatchSubmitModal({ isOpen, onClose }: XenWatchSubmitM
     return { videoUrl: data.videoUrl, thumbUrl: data.thumbUrl };
   };
 
-  // Create submission mutation
-  const createSubmissionMutation = useMutation({
-    mutationFn: async () => {
-      let videoUrl: string;
-      let thumbUrl: string | undefined;
-
-      if (selectedPost) {
-        // Use existing post
-        videoUrl = selectedPost.effectiveMediaUrl;
-        thumbUrl = selectedPost.thumbnailUrl;
-      } else if (selectedFile) {
-        // Upload new file
-        const uploadResult = await uploadVideo(selectedFile);
-        videoUrl = uploadResult.videoUrl;
-        thumbUrl = uploadResult.thumbUrl;
-      } else {
-        throw new Error('No video selected');
-      }
-
-      const submissionData = {
-        videoUrl,
-        thumbUrl,
-        notes: notes.trim() || undefined,
-        promoCode: promoCode.trim() || undefined
-      };
-
-      const response = await apiRequest("POST", "/api/xen-watch/submissions", submissionData);
-      if (!response.ok) throw new Error('Failed to create submission');
+  // Fetch payment pricing (public endpoint)
+  const { data: paymentConfig } = useQuery({
+    queryKey: ["/api/payments/pricing"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/payments/pricing");
+      if (!response.ok) throw new Error("Failed to fetch payment pricing");
       return response.json();
     },
-    onSuccess: async (data) => {
-      toast({
-        title: "Submission Successful",
-        description: "Your video has been submitted for review. You'll receive feedback once our scouts have reviewed it.",
-      });
-      // Invalidate and immediately refetch to show the new submission
-      await queryClient.invalidateQueries({ queryKey: ["/api/xen-watch/submissions/me"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/xen-watch/submissions/me"] });
-      handleClose();
-    },
-    onError: (error) => {
-      toast({
-        title: "Submission Failed",
-        description: error.message || "Failed to create submission. Please try again.",
-        variant: "destructive",
-      });
-    }
+    enabled: isOpen,
+    staleTime: 30000, // Cache for 30 seconds
   });
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,7 +94,7 @@ export default function XenWatchSubmitModal({ isOpen, onClose }: XenWatchSubmitM
     setSelectedFile(null); // Clear uploaded file when selecting existing post
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedPost && !selectedFile) {
       toast({
         title: "No Video Selected",
@@ -133,7 +104,88 @@ export default function XenWatchSubmitModal({ isOpen, onClose }: XenWatchSubmitM
       return;
     }
 
-    createSubmissionMutation.mutate();
+    // Prepare submission data (but don't submit yet)
+    let videoUrl: string;
+    let thumbUrl: string | undefined;
+
+    if (selectedPost) {
+      videoUrl = selectedPost.effectiveMediaUrl;
+      thumbUrl = selectedPost.thumbnailUrl || undefined;
+    } else if (selectedFile) {
+      // For new files, we need to upload first, but we'll do this after payment
+      // For now, we'll prepare the data structure
+      videoUrl = ""; // Will be set after upload
+      thumbUrl = undefined;
+    } else {
+      return;
+    }
+
+    // Store submission data for after payment
+    setPendingSubmissionData({
+      videoUrl,
+      thumbUrl,
+      notes: notes.trim() || undefined,
+      promoCode: promoCode.trim() || undefined,
+    });
+
+    // Show payment portal
+    setShowPaymentPortal(true);
+  };
+
+  // Handle successful payment - now create the submission
+  const handlePaymentSuccess = async (transactionId: string) => {
+    if (!pendingSubmissionData) return;
+
+    setIsSubmitting(true);
+
+    try {
+      let videoUrl: string;
+      let thumbUrl: string | undefined;
+
+      if (selectedPost) {
+        // Use existing post
+        videoUrl = selectedPost.effectiveMediaUrl;
+        thumbUrl = selectedPost.thumbnailUrl || undefined;
+      } else if (selectedFile) {
+        // Upload new file
+        const uploadResult = await uploadVideo(selectedFile);
+        videoUrl = uploadResult.videoUrl;
+        thumbUrl = uploadResult.thumbUrl;
+      } else {
+        throw new Error('No video selected');
+      }
+
+      const submissionData = {
+        videoUrl,
+        thumbUrl,
+        notes: pendingSubmissionData.notes,
+        promoCode: pendingSubmissionData.promoCode,
+        transactionId, // Include transaction ID with submission
+      };
+
+      const response = await apiRequest("POST", "/api/xen-watch/submissions", submissionData);
+      if (!response.ok) throw new Error('Failed to create submission');
+      const data = await response.json();
+
+      toast({
+        title: "Submission Successful",
+        description: "Your video has been submitted for review. You'll receive feedback once our scouts have reviewed it.",
+      });
+
+      // Invalidate and immediately refetch to show the new submission
+      await queryClient.invalidateQueries({ queryKey: ["/api/xen-watch/submissions/me"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/xen-watch/submissions/me"] });
+      
+      handleClose();
+    } catch (error: any) {
+      toast({
+        title: "Submission Failed",
+        description: error.message || "Failed to create submission. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
@@ -142,6 +194,8 @@ export default function XenWatchSubmitModal({ isOpen, onClose }: XenWatchSubmitM
     setPromoCode('');
     setNotes('');
     setIsSubmitting(false);
+    setShowPaymentPortal(false);
+    setPendingSubmissionData(null);
     onClose();
   };
 
@@ -270,13 +324,13 @@ export default function XenWatchSubmitModal({ isOpen, onClose }: XenWatchSubmitM
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={createSubmissionMutation.isPending || (!selectedPost && !selectedFile)}
+            disabled={isSubmitting || (!selectedPost && !selectedFile)}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            {createSubmissionMutation.isPending ? (
+            {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Submitting...
+                Processing...
               </>
             ) : (
               'Submit for Review'
@@ -284,6 +338,29 @@ export default function XenWatchSubmitModal({ isOpen, onClose }: XenWatchSubmitM
           </Button>
         </div>
       </DialogContent>
+
+      {/* Payment Portal */}
+      <PaymentPortal
+        isOpen={showPaymentPortal}
+        onClose={() => setShowPaymentPortal(false)}
+        onSuccess={handlePaymentSuccess}
+        type="xen_watch"
+        amountCents={
+          // Support both new format (xenScoutPrice) and legacy (xenScoutPriceCents)
+          paymentConfig?.xenScoutPrice 
+            ? Math.round((typeof paymentConfig.xenScoutPrice === 'string' 
+                ? parseFloat(paymentConfig.xenScoutPrice) 
+                : paymentConfig.xenScoutPrice) * 100)
+            : (paymentConfig?.xenScoutPriceCents || 1000)
+        }
+        currency={paymentConfig?.currency || "USD"}
+        metadata={{
+          selectedPostId: selectedPost?.id,
+          hasNewFile: !!selectedFile,
+          notes: notes.trim() || undefined,
+          promoCode: promoCode.trim() || undefined,
+        }}
+      />
     </Dialog>
   );
 }

@@ -404,10 +404,12 @@ function SearchResultItem({ student, onClearSearch }: { student: any; onClearSea
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [isFollowing, setIsFollowing] = useState(student.isFollowing);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleFollow = async () => {
+  const handleFollow = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent navigation when clicking follow button
     if (!user) {
       toast({
         title: "Login required",
@@ -445,22 +447,31 @@ function SearchResultItem({ student, onClearSearch }: { student: any; onClearSea
     }
   };
 
+  const handleCardClick = () => {
+    onClearSearch(); // Clear search when navigating
+    setLocation(`/profile/${student.id}`);
+  };
+
   return (
-    <div className="p-4 hover:bg-muted/50 border-b border-border last:border-b-0 cursor-pointer">
+    <div 
+      className="p-4 hover:bg-muted/50 border-b border-border last:border-b-0 cursor-pointer"
+      onClick={handleCardClick}
+    >
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-1 min-w-0">
           <AvatarWithFallback 
             src={student.profilePicUrl}
             alt={student.user.name}
             size="lg"
+            className="flex-shrink-0"
           />
-          <div>
-            <h3 className="font-medium text-foreground">{student.user.name}</h3>
-            <p className="text-sm text-muted-foreground">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium text-foreground truncate">{student.user.name}</h3>
+            <p className="text-sm text-muted-foreground truncate">
               {student.position || 'Player'} • #{student.roleNumber}
             </p>
             {student.school && (
-              <p className="text-xs text-muted-foreground">{student.school.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{student.school.name}</p>
             )}
           </div>
         </div>
@@ -469,7 +480,7 @@ function SearchResultItem({ student, onClearSearch }: { student: any; onClearSea
           disabled={isLoading}
           variant={isFollowing ? "outline" : "default"}
           size="sm"
-          className={isFollowing ? "bg-background hover:bg-muted" : "bg-accent hover:bg-accent/90"}
+          className={isFollowing ? "bg-background hover:bg-muted flex-shrink-0 ml-2" : "bg-accent hover:bg-accent/90 flex-shrink-0 ml-2"}
           data-testid={`follow-button-${student.id}`}
         >
           {isLoading ? (

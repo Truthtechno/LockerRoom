@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -27,7 +30,14 @@ import {
   Calendar,
   Award,
   Target,
-  Activity
+  Activity,
+  Check,
+  Copy,
+  AlertTriangle,
+  Trash2,
+  Lock,
+  Unlock,
+  RefreshCw
 } from "lucide-react";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
@@ -59,6 +69,7 @@ interface ScoutProfile {
   performanceTrend: 'improving' | 'declining' | 'stable';
   completionRate: number;
   qualityScore: number;
+  isFrozen?: boolean;
 }
 
 interface ScoutAnalytics {
@@ -98,6 +109,14 @@ export default function ManageScoutsCRM() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [otpDisplay, setOtpDisplay] = useState<string | null>(null);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpCopied, setOtpCopied] = useState(false);
+  const [scoutData, setScoutData] = useState<any>(null);
+  const [selectedScout, setSelectedScout] = useState<ScoutProfile | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [scoutToDelete, setScoutToDelete] = useState<ScoutProfile | null>(null);
 
   // Fetch detailed scout profiles
   const { data: scoutsData, isLoading, error: scoutsError } = useQuery({
@@ -178,22 +197,146 @@ export default function ManageScoutsCRM() {
   const createScoutMutation = useMutation({
     mutationFn: async (scoutData: { name: string; email: string; xenId: string; role: string }) => {
       const response = await apiRequest("POST", "/api/scout-admin/create-scout", scoutData);
-      if (!response.ok) throw new Error('Failed to create scout');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || error.message || 'Failed to create scout');
+      }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Show OTP modal if OTP was generated
+      if (data?.otp || data?.oneTimePassword) {
+        setOtpDisplay(data.otp || data.oneTimePassword);
+        setScoutData(data.scout);
+        setShowOtpModal(true);
+      }
+      
       toast({
         title: "Scout Created",
-        description: "New scout has been created successfully.",
+        description: data.message || "New scout has been created successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/scouts/detailed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/scouts/count"] });
       setIsCreateModalOpen(false);
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
         description: error.message || "Failed to create scout",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const copyOTP = async () => {
+    if (otpDisplay) {
+      try {
+        await navigator.clipboard.writeText(otpDisplay);
+        setOtpCopied(true);
+        toast({
+          title: "OTP Copied",
+          description: "One-time password copied to clipboard",
+        });
+        setTimeout(() => setOtpCopied(false), 2000);
+      } catch (error) {
+        toast({
+          title: "Copy Failed",
+          description: "Could not copy OTP to clipboard",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const closeOTPModal = () => {
+    setShowOtpModal(false);
+    setOtpDisplay(null);
+    setScoutData(null);
+    setOtpCopied(false);
+  };
+
+  // Delete scout mutation
+  const deleteScoutMutation = useMutation({
+    mutationFn: async (scoutId: string) => {
+      const response = await apiRequest("DELETE", `/api/scout-admin/scouts/${scoutId}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to delete scout');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Scout Deleted",
+        description: "The scout has been permanently deleted.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/scouts/detailed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scouts/count"] });
+      setIsDeleteDialogOpen(false);
+      setScoutToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete scout",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Generate new OTP mutation
+  const generateOTPMutation = useMutation({
+    mutationFn: async (scoutId: string) => {
+      const response = await apiRequest("POST", `/api/scout-admin/scouts/${scoutId}/generate-otp`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to generate OTP');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setOtpDisplay(data.otp || data.oneTimePassword);
+      setShowOtpModal(true);
+      toast({
+        title: "New OTP Generated",
+        description: "A new one-time password has been generated for this scout.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/scouts/detailed"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate OTP",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Freeze/unfreeze account mutation
+  const toggleFreezeMutation = useMutation({
+    mutationFn: async ({ scoutId, isFrozen }: { scoutId: string; isFrozen: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/scout-admin/scouts/${scoutId}/freeze`, { isFrozen });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to update account status');
+      }
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: variables.isFrozen ? "Account Frozen" : "Account Unfrozen",
+        description: `The scout account has been ${variables.isFrozen ? 'frozen' : 'unfrozen'} successfully.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/scouts/detailed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scouts/count"] });
+      if (selectedScout) {
+        setSelectedScout({ ...selectedScout, isFrozen: variables.isFrozen } as ScoutProfile);
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update account status",
         variant: "destructive",
       });
     }
@@ -596,6 +739,12 @@ export default function ManageScoutsCRM() {
                                 <div className="flex items-center space-x-2">
                                   {getPerformanceBadge(scout)}
                                   <Badge variant="outline">{scout.role}</Badge>
+                                  {scout.isFrozen && (
+                                    <Badge variant="destructive" className="flex items-center space-x-1">
+                                      <Lock className="w-3 h-3" />
+                                      <span>Frozen</span>
+                                    </Badge>
+                                  )}
                                 </div>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 text-sm text-muted-foreground mb-4">
@@ -652,18 +801,50 @@ export default function ManageScoutsCRM() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.preventDefault();
+                                setSelectedScout(scout);
+                                setIsEditModalOpen(true);
+                              }}>
                                 <Eye className="w-4 h-4 mr-2" />
                                 View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.preventDefault();
+                                setSelectedScout(scout);
+                                setIsEditModalOpen(true);
+                              }}>
                                 <Edit className="w-4 h-4 mr-2" />
                                 Edit Profile
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.preventDefault();
+                                setSelectedScout(scout);
+                                // View Activity - for now just show a toast, can be expanded later
+                                toast({
+                                  title: "View Activity",
+                                  description: `Activity for ${scout.name || scout.email} - Feature coming soon!`,
+                                });
+                              }}>
                                 <Calendar className="w-4 h-4 mr-2" />
                                 View Activity
                               </DropdownMenuItem>
+                              {scout.role === 'xen_scout' && (
+                                <>
+                                  <div className="h-px bg-border my-1" />
+                                  <DropdownMenuItem 
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      setScoutToDelete(scout);
+                                      setIsDeleteDialogOpen(true);
+                                    }}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Delete Scout
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -677,6 +858,241 @@ export default function ManageScoutsCRM() {
           </Card>
         </div>
       </div>
+
+      {/* Professional OTP Success Modal */}
+      <Dialog open={showOtpModal} onOpenChange={setShowOtpModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center text-green-600">
+              <Check className="w-6 h-6 mr-2" />
+              Scout Created Successfully!
+            </DialogTitle>
+            <DialogDescription>
+              The scout has been registered and a temporary password has been generated.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Scout Info */}
+            <div className="bg-muted/50 p-4 rounded-lg">
+              <h4 className="font-medium mb-2">Scout Information</h4>
+              <div className="space-y-1 text-sm">
+                <p><span className="font-medium">Name:</span> {scoutData?.name}</p>
+                <p><span className="font-medium">Email:</span> {scoutData?.email}</p>
+                {scoutData?.xenId && (
+                  <p><span className="font-medium">XEN ID:</span> {scoutData?.xenId}</p>
+                )}
+                {scoutData?.role && (
+                  <p><span className="font-medium">Role:</span> {scoutData?.role}</p>
+                )}
+              </div>
+            </div>
+
+            {/* OTP Display */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Temporary Password (OTP)</Label>
+              <div className="flex items-center space-x-2">
+                <div className="flex-1 p-3 bg-muted rounded-lg border-2 border-dashed border-muted-foreground/25">
+                  <code className="text-lg font-mono font-bold text-primary tracking-wider">
+                    {otpDisplay}
+                  </code>
+                </div>
+                <Button
+                  onClick={copyOTP}
+                  variant="outline"
+                  size="sm"
+                  className="px-3"
+                >
+                  {otpCopied ? (
+                    <Check className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Security Warning */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <div className="flex items-start space-x-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">
+                    Important Security Notice
+                  </p>
+                  <ul className="text-amber-700 dark:text-amber-300 space-y-1">
+                    <li>• Share this OTP securely with the scout</li>
+                    <li>• Scout must reset password after first login</li>
+                    <li>• This OTP can only be used once</li>
+                    <li>• Store securely - it won't be shown again</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex space-x-3 pt-4">
+              <Button
+                onClick={closeOTPModal}
+                className="flex-1"
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Profile Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Scout Profile</DialogTitle>
+            <DialogDescription>
+              Manage scout account settings and permissions
+            </DialogDescription>
+          </DialogHeader>
+          {selectedScout && (
+            <div className="space-y-6">
+              {/* Scout Information */}
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <h4 className="font-medium mb-3">Scout Information</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-muted-foreground">Name:</span>
+                    <p className="text-foreground">{selectedScout.name || 'Unnamed Scout'}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Email:</span>
+                    <p className="text-foreground">{selectedScout.email}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">XEN ID:</span>
+                    <p className="text-foreground">{selectedScout.xen_id || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Role:</span>
+                    <p className="text-foreground">{selectedScout.role}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Joined:</span>
+                    <p className="text-foreground">{new Date(selectedScout.created_at).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Generate New OTP */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base font-semibold">Reset Password</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Generate a new one-time password for this scout
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => generateOTPMutation.mutate(selectedScout.id)}
+                    disabled={generateOTPMutation.isPending}
+                    variant="outline"
+                    className="flex items-center space-x-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${generateOTPMutation.isPending ? 'animate-spin' : ''}`} />
+                    <span>{generateOTPMutation.isPending ? 'Generating...' : 'Generate New OTP'}</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Freeze Account */}
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <Label className="text-base font-semibold">Freeze Account</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Temporarily disable this scout's account. They won't be able to log in while frozen.
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    {selectedScout.isFrozen ? (
+                      <Badge variant="destructive">Frozen</Badge>
+                    ) : (
+                      <Badge variant="default">Active</Badge>
+                    )}
+                    <Switch
+                      checked={selectedScout.isFrozen || false}
+                      onCheckedChange={(checked) => {
+                        toggleFreezeMutation.mutate({
+                          scoutId: selectedScout.id,
+                          isFrozen: checked
+                        });
+                      }}
+                      disabled={toggleFreezeMutation.isPending}
+                    />
+                  </div>
+                </div>
+                {selectedScout.isFrozen && (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                    <div className="flex items-start space-x-2">
+                      <Lock className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-medium text-amber-800 dark:text-amber-200">
+                          Account Frozen
+                        </p>
+                        <p className="text-amber-700 dark:text-amber-300 mt-1">
+                          This scout cannot log in or access their account. Toggle the switch above to unfreeze.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end space-x-3 pt-4 border-t">
+                <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              <AlertTriangle className="w-5 h-5 mr-2 text-red-500" />
+              Delete Scout Permanently
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete:
+              <ul className="mt-2 ml-4 list-disc">
+                <li>Scout account: {scoutToDelete?.name || scoutToDelete?.email}</li>
+                <li>All associated reviews and ratings</li>
+                <li>All submission assignments</li>
+              </ul>
+              <p className="mt-2 font-medium">Are you absolutely sure you want to proceed?</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteScoutMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (scoutToDelete) {
+                  deleteScoutMutation.mutate(scoutToDelete.id);
+                }
+              }}
+              disabled={deleteScoutMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleteScoutMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -4241,16 +4241,24 @@ export class PostgresStorage implements IStorage {
   async updateSystemPayment(payment: Partial<InsertSystemPayment>): Promise<SystemPayment> {
     if (!isDbConnected) throw new Error("Database not connected");
     
+    // Filter out undefined values to avoid database errors
+    const cleanPayment: any = {};
+    Object.keys(payment).forEach(key => {
+      if (payment[key as keyof typeof payment] !== undefined) {
+        cleanPayment[key] = payment[key as keyof typeof payment];
+      }
+    });
+    
     const existing = await this.getSystemPayment();
     if (existing) {
       const [updated] = await db.update(systemPayment)
-        .set({ ...payment, updatedAt: new Date() })
+        .set({ ...cleanPayment, updatedAt: new Date() })
         .where(eq(systemPayment.id, existing.id))
         .returning();
       return updated;
     } else {
       const [created] = await db.insert(systemPayment).values({
-        ...payment,
+        ...cleanPayment,
         updatedBy: 'system',
       } as InsertSystemPayment).returning();
       return created;
@@ -5137,6 +5145,7 @@ export class PostgresStorage implements IStorage {
         u.profile_pic_url,
         u.created_at,
         u.role,
+        COALESCE(u.is_frozen, false) as is_frozen,
         COALESCE(COUNT(DISTINCT sr.submission_id), 0) as total_assignments,
         COALESCE(COUNT(DISTINCT CASE WHEN sr.is_submitted = true THEN sr.submission_id END), 0) as completed_reviews,
         COALESCE(AVG(CASE WHEN sr.is_submitted = true AND sr.rating IS NOT NULL THEN sr.rating END), 0) as avg_rating,
@@ -5154,7 +5163,7 @@ export class PostgresStorage implements IStorage {
       FROM users u
       LEFT JOIN submission_reviews sr ON sr.scout_id = u.id
       WHERE u.role IN ('xen_scout', 'scout_admin') AND ${searchCondition}
-      GROUP BY u.id, COALESCE(u.name, 'Unnamed Scout'), u.email, u.xen_id, u.profile_pic_url, u.created_at, u.role
+      GROUP BY u.id, COALESCE(u.name, 'Unnamed Scout'), u.email, u.xen_id, u.profile_pic_url, u.created_at, u.role, u.is_frozen
       ORDER BY u.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
@@ -5179,6 +5188,7 @@ export class PostgresStorage implements IStorage {
 
       return {
         ...scout,
+        isFrozen: scout.is_frozen || false,
         consistencyScore: Math.round(consistencyScore),
         performanceTrend,
         completionRate: scout.total_assignments > 0 ? Math.round((scout.completed_reviews / scout.total_assignments) * 100) : 0,

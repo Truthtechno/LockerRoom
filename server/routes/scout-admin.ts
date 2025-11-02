@@ -73,14 +73,26 @@ export function registerScoutAdminRoutes(app: Express) {
         const { name, email, role, xenId, otp } = req.body;
         
         // Validation
-        if (!name || !email || !xenId || !otp) {
+        if (!name || !email || !xenId) {
           return res.status(400).json({ 
             error: { 
               code: 'validation_error', 
-              message: 'Name, email, XEN ID, and OTP are required' 
+              message: 'Name, email, and XEN ID are required' 
             } 
           });
         }
+
+        // Generate secure OTP (10 alphanumeric characters) - matching student creation pattern
+        const generateSecureOTP = () => {
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          let result = '';
+          for (let i = 0; i < 10; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          return result;
+        };
+        
+        const generatedOTP = otp || generateSecureOTP();
 
         // Check if email already exists
         const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -135,10 +147,10 @@ export function registerScoutAdminRoutes(app: Express) {
           }
         }
 
-        // Hash the OTP as password
-        const passwordHash = await bcrypt.hash(otp, 10);
+        // Hash the OTP as password (using salt rounds 12 - matching student creation pattern)
+        const passwordHash = await bcrypt.hash(generatedOTP, 12);
 
-        // Create user
+        // Create user (matching student creation pattern exactly)
         const [newUser] = await db.insert(users).values({
           email,
           passwordHash,
@@ -146,9 +158,8 @@ export function registerScoutAdminRoutes(app: Express) {
           linkedId: '', // Will be set after profile creation
           name,
           xenId,
-          otp,
           profilePicUrl,
-          isOneTimePassword: true,
+          isOneTimePassword: true, // Flag to force password reset on first login (matching student pattern)
           emailVerified: false,
         }).returning();
 
@@ -199,7 +210,8 @@ export function registerScoutAdminRoutes(app: Express) {
             profilePicUrl: newUser.profilePicUrl,
             createdAt: newUser.createdAt,
           },
-          otp: otp,
+          otp: generatedOTP,
+          oneTimePassword: generatedOTP, // Also include for consistency with school admin
           message: "Scout created successfully with temporary password"
         });
 
@@ -475,6 +487,176 @@ export function registerScoutAdminRoutes(app: Express) {
             code: "internal_error", 
             message: "Failed to finalize submission" 
           } 
+        });
+      }
+    }
+  );
+
+  // Delete Scout
+  app.delete('/api/scout-admin/scouts/:scoutId',
+    requireAuth,
+    requireRole('scout_admin'),
+    async (req, res) => {
+      try {
+        const { scoutId } = req.params;
+
+        // Verify the scout exists and is a xen_scout
+        const [scout] = await db.select().from(users).where(eq(users.id, scoutId));
+        
+        if (!scout) {
+          return res.status(404).json({
+            error: {
+              code: 'scout_not_found',
+              message: 'Scout not found'
+            }
+          });
+        }
+
+        if (scout.role !== 'xen_scout') {
+          return res.status(400).json({
+            error: {
+              code: 'invalid_role',
+              message: 'Can only delete xen_scout accounts'
+            }
+          });
+        }
+
+        // Delete all submission reviews for this scout
+        await db.delete(submissionReviews).where(eq(submissionReviews.scoutId, scoutId));
+
+        // Delete the user account
+        await db.delete(users).where(eq(users.id, scoutId));
+
+        console.log(`🗑️ Scout deleted: ${scout.name} (${scout.email})`);
+
+        res.json({
+          success: true,
+          message: 'Scout deleted successfully'
+        });
+      } catch (error) {
+        console.error('Error deleting scout:', error);
+        res.status(500).json({
+          error: {
+            code: 'delete_failed',
+            message: 'Failed to delete scout'
+          }
+        });
+      }
+    }
+  );
+
+  // Generate New OTP for Scout
+  app.post('/api/scout-admin/scouts/:scoutId/generate-otp',
+    requireAuth,
+    requireRole('scout_admin'),
+    async (req, res) => {
+      try {
+        const { scoutId } = req.params;
+
+        // Verify the scout exists
+        const [scout] = await db.select().from(users).where(eq(users.id, scoutId));
+        
+        if (!scout) {
+          return res.status(404).json({
+            error: {
+              code: 'scout_not_found',
+              message: 'Scout not found'
+            }
+          });
+        }
+
+        // Generate secure OTP (10 alphanumeric characters) - matching student creation pattern
+        const generateSecureOTP = () => {
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          let result = '';
+          for (let i = 0; i < 10; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          return result;
+        };
+
+        const newOTP = generateSecureOTP();
+        const passwordHash = await bcrypt.hash(newOTP, 12);
+
+        // Update user with new OTP
+        await db.update(users)
+          .set({
+            passwordHash,
+            otp: newOTP,
+            isOneTimePassword: true,
+            emailVerified: false
+          })
+          .where(eq(users.id, scoutId));
+
+        console.log(`🔐 New OTP generated for scout: ${scout.name} (${scout.email})`);
+
+        res.json({
+          success: true,
+          otp: newOTP,
+          oneTimePassword: newOTP,
+          message: 'New OTP generated successfully'
+        });
+      } catch (error) {
+        console.error('Error generating OTP:', error);
+        res.status(500).json({
+          error: {
+            code: 'otp_generation_failed',
+            message: 'Failed to generate OTP'
+          }
+        });
+      }
+    }
+  );
+
+  // Freeze/Unfreeze Scout Account
+  app.patch('/api/scout-admin/scouts/:scoutId/freeze',
+    requireAuth,
+    requireRole('scout_admin'),
+    async (req, res) => {
+      try {
+        const { scoutId } = req.params;
+        const { isFrozen } = req.body;
+
+        if (typeof isFrozen !== 'boolean') {
+          return res.status(400).json({
+            error: {
+              code: 'validation_error',
+              message: 'isFrozen must be a boolean value'
+            }
+          });
+        }
+
+        // Verify the scout exists
+        const [scout] = await db.select().from(users).where(eq(users.id, scoutId));
+        
+        if (!scout) {
+          return res.status(404).json({
+            error: {
+              code: 'scout_not_found',
+              message: 'Scout not found'
+            }
+          });
+        }
+
+        // Update frozen status
+        await db.update(users)
+          .set({ isFrozen })
+          .where(eq(users.id, scoutId));
+
+        console.log(`🔒 Scout account ${isFrozen ? 'frozen' : 'unfrozen'}: ${scout.name} (${scout.email})`);
+
+        res.json({
+          success: true,
+          isFrozen,
+          message: `Scout account ${isFrozen ? 'frozen' : 'unfrozen'} successfully`
+        });
+      } catch (error) {
+        console.error('Error freezing/unfreezing scout:', error);
+        res.status(500).json({
+          error: {
+            code: 'freeze_failed',
+            message: 'Failed to update account status'
+          }
         });
       }
     }

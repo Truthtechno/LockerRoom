@@ -157,6 +157,7 @@ export default function ScoutReviewQueue() {
       }
     } else {
       // For regular scouts, use the single review
+      // Allow editing submitted reviews if submission hasn't been finalized
       setRating(submission.review?.rating || null);
       setNotes(submission.review?.notes || '');
     }
@@ -1107,8 +1108,18 @@ export default function ScoutReviewQueue() {
                   <button
                     key={star}
                     type="button"
-                    onClick={() => setRating(star)}
+                    onClick={() => {
+                      // Allow editing if submission is not finalized
+                      if (selectedSubmission?.status !== 'finalized') {
+                        setRating(star);
+                      }
+                    }}
+                    disabled={selectedSubmission?.status === 'finalized'}
                     className={`p-2 sm:p-3 rounded-xl transition-all duration-200 hover:scale-110 ${
+                      selectedSubmission?.status === 'finalized'
+                        ? 'opacity-50 cursor-not-allowed'
+                        : ''
+                    } ${
                       rating && star <= rating
                         ? 'text-yellow-500 bg-yellow-50 shadow-md border-2 border-yellow-200'
                         : 'text-muted-foreground hover:text-yellow-500 hover:bg-yellow-50 border-2 border-transparent'
@@ -1120,7 +1131,9 @@ export default function ScoutReviewQueue() {
                 ))}
               </div>
               <p className="text-sm text-muted-foreground">
-                Click stars to rate the performance (1 = poor, 5 = excellent)
+                {selectedSubmission?.status === 'finalized' 
+                  ? 'This submission has been finalized. Reviews cannot be edited.'
+                  : 'Click stars to rate the performance (1 = poor, 5 = excellent)'}
               </p>
             </div>
 
@@ -1129,27 +1142,101 @@ export default function ScoutReviewQueue() {
               <Label className="text-base font-semibold text-foreground">Review Notes</Label>
               <Textarea
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => {
+                  // Allow editing if submission is not finalized
+                  if (selectedSubmission?.status !== 'finalized') {
+                    setNotes(e.target.value);
+                  }
+                }}
+                disabled={selectedSubmission?.status === 'finalized'}
                 placeholder="Provide detailed feedback on technique, strengths, areas for improvement, athletic potential, etc. Be specific and constructive in your assessment."
                 rows={6}
-                className="rounded-xl border focus:border-blue-500 focus:ring-blue-500 resize-none"
+                className={`rounded-xl border focus:border-blue-500 focus:ring-blue-500 resize-none ${
+                  selectedSubmission?.status === 'finalized' ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               />
               <p className="text-sm text-muted-foreground">
-                Your detailed feedback will help the student understand their performance and areas for development.
+                {selectedSubmission?.status === 'finalized'
+                  ? 'This submission has been finalized. Your review cannot be modified.'
+                  : selectedSubmission?.review?.isSubmitted && selectedSubmission?.status !== 'finalized'
+                  ? 'You can update your submitted review until the submission is finalized by the scout admin.'
+                  : 'Your detailed feedback will help the student understand their performance and areas for development.'}
               </p>
             </div>
 
-            {/* Other Scouts' Reviews */}
-            {(selectedSubmission?.allReviews || selectedSubmission?.reviews) && ((selectedSubmission.allReviews?.length || 0) > 0 || (selectedSubmission.reviews?.length || 0) > 0) && (
+            {/* Your Review Section */}
+            {(selectedSubmission?.review || (selectedSubmission?.allReviews && selectedSubmission.allReviews.find(r => r.scoutId === user?.id))) && (
               <div className="space-y-4">
                 <h4 className="text-lg font-semibold text-foreground flex items-center">
-                  <Users className="w-5 h-5 mr-2 text-muted-foreground" />
-                  Other Scouts' Reviews
+                  <Star className="w-5 h-5 mr-2 text-yellow-500" />
+                  Your Review
                 </h4>
-                <div className="space-y-3">
-                  {((selectedSubmission.allReviews || selectedSubmission.reviews) || [])
-                    .filter(r => r.scoutId !== user?.id)
-                    .map((review) => (
+                <div className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 rounded-xl p-4 border-2 border-yellow-200 dark:border-yellow-800">
+                  {(() => {
+                    const myReview = selectedSubmission?.review || selectedSubmission?.allReviews?.find(r => r.scoutId === user?.id);
+                    if (!myReview) return null;
+                    
+                    return (
+                      <>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-yellow-100 to-amber-100 dark:from-yellow-900/30 dark:to-amber-900/30 rounded-full flex items-center justify-center shadow-sm border-2 border-yellow-300 dark:border-yellow-700">
+                              <User className="w-5 h-5 text-yellow-700 dark:text-yellow-300" />
+                            </div>
+                            <div>
+                              <span className="text-sm font-semibold text-foreground">You</span>
+                              {user?.xenId && (
+                                <span className="text-xs text-muted-foreground ml-2">({user.xenId})</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            {myReview.rating && (
+                              <div className="flex items-center space-x-1 bg-yellow-100 dark:bg-yellow-900/30 px-3 py-1 rounded-full border border-yellow-300 dark:border-yellow-700">
+                                <Star className="w-4 h-4 text-yellow-600 fill-current" />
+                                <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">{myReview.rating}/5</span>
+                              </div>
+                            )}
+                            <Badge 
+                              variant={myReview.isSubmitted ? "default" : "outline"}
+                              className={myReview.isSubmitted ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800" : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"}
+                            >
+                              {myReview.isSubmitted ? "Submitted" : "Draft"}
+                            </Badge>
+                          </div>
+                        </div>
+                        {myReview.notes && (
+                          <p className="text-sm text-foreground bg-background/50 rounded-lg p-3 border border-yellow-100 dark:border-yellow-900/30">
+                            {myReview.notes}
+                          </p>
+                        )}
+                        <div className="text-xs text-muted-foreground mt-3 flex items-center">
+                          <Calendar className="w-3 h-3 mr-1" />
+                          {myReview.updatedAt 
+                            ? `${new Date(myReview.updatedAt).toLocaleDateString()} at ${new Date(myReview.updatedAt).toLocaleTimeString()}`
+                            : myReview.createdAt 
+                            ? `${new Date(myReview.createdAt).toLocaleDateString()} at ${new Date(myReview.createdAt).toLocaleTimeString()}`
+                            : 'Just now'}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Other Scouts' Reviews - Only show submitted reviews */}
+            {(selectedSubmission?.allReviews || selectedSubmission?.reviews) && ((selectedSubmission.allReviews?.length || 0) > 0 || (selectedSubmission.reviews?.length || 0) > 0) && (
+              ((selectedSubmission.allReviews || selectedSubmission.reviews) || []).filter(r => r.scoutId !== user?.id && r.isSubmitted).length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="text-lg font-semibold text-foreground flex items-center">
+                    <Users className="w-5 h-5 mr-2 text-muted-foreground" />
+                    Other Scouts' Reviews
+                  </h4>
+                  <div className="space-y-3">
+                    {((selectedSubmission.allReviews || selectedSubmission.reviews) || [])
+                      .filter(r => r.scoutId !== user?.id && r.isSubmitted)
+                      .map((review) => (
                       <div key={review.id} className="bg-card rounded-xl p-4 border border shadow-sm hover:shadow-md transition-shadow duration-200">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center space-x-3">
@@ -1187,8 +1274,9 @@ export default function ScoutReviewQueue() {
                         </div>
                       </div>
                     ))}
+                  </div>
                 </div>
-              </div>
+              )
             )}
           </div>
 
@@ -1202,41 +1290,50 @@ export default function ScoutReviewQueue() {
               >
                 Cancel
               </Button>
-              <Button
-                variant="outline"
-                onClick={handleSaveDraft}
-                disabled={saveReviewMutation.isPending}
-                className="w-full sm:w-auto px-6 py-3 font-semibold rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50"
-              >
-                {saveReviewMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent mr-2"></div>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Draft
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleSubmitReview}
-                disabled={saveReviewMutation.isPending || !rating}
-                className="w-full sm:w-auto px-8 py-3 font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all duration-200"
-              >
-                {saveReviewMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 mr-2" />
-                    Submit Review
-                  </>
-                )}
-              </Button>
+              {selectedSubmission?.status !== 'finalized' && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleSaveDraft}
+                    disabled={saveReviewMutation.isPending}
+                    className="w-full sm:w-auto px-6 py-3 font-semibold rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50"
+                  >
+                    {saveReviewMutation.isPending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent mr-2"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Save Draft
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleSubmitReview}
+                    disabled={saveReviewMutation.isPending || !rating}
+                    className="w-full sm:w-auto px-8 py-3 font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all duration-200"
+                  >
+                    {saveReviewMutation.isPending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        {selectedSubmission?.review?.isSubmitted ? 'Updating...' : 'Submitting...'}
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        {selectedSubmission?.review?.isSubmitted ? 'Update Review' : 'Submit Review'}
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+              {selectedSubmission?.status === 'finalized' && (
+                <div className="w-full sm:w-auto px-6 py-3 text-sm text-muted-foreground bg-muted rounded-xl flex items-center justify-center">
+                  <span>This submission has been finalized. Reviews cannot be edited.</span>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>

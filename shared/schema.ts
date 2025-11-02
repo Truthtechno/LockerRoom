@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, unique, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -17,6 +17,7 @@ export const users = pgTable("users", {
   xenId: text("xen_id"), // XEN ID for scouts (e.g., XSA-25###)
   otp: text("otp"), // One-time password for scouts
   profilePicUrl: text("profile_pic_url"), // Profile picture URL
+  isFrozen: boolean("is_frozen").default(false), // Flag for frozen/disabled accounts
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
@@ -258,11 +259,34 @@ export const systemPayment = pgTable("system_payment", {
   paypalMode: text("paypal_mode").default("sandbox"), // sandbox, live
   // General payment settings
   currency: text("currency").notNull().default("USD"),
-  xenScoutPriceCents: integer("xen_scout_price_cents").notNull().default(1000),
+  // New decimal columns for actual currency amounts
+  xenScoutPrice: decimal("xen_scout_price", { precision: 10, scale: 2 }).default("10.00"),
+  scoutAiPrice: decimal("scout_ai_price", { precision: 10, scale: 2 }).default("10.00"),
+  // Legacy cent columns (kept for backward compatibility during migration)
+  xenScoutPriceCents: integer("xen_scout_price_cents"),
+  scoutAiPriceCents: integer("scout_ai_price_cents"),
   enableSubscriptions: boolean("enable_subscriptions").notNull().default(false),
-  subscriptionMonthlyPriceCents: integer("subscription_monthly_price_cents").default(0),
-  subscriptionYearlyPriceCents: integer("subscription_yearly_price_cents").default(0),
+  subscriptionMonthlyPrice: decimal("subscription_monthly_price", { precision: 10, scale: 2 }),
+  subscriptionYearlyPrice: decimal("subscription_yearly_price", { precision: 10, scale: 2 }),
+  // Legacy subscription cent columns
+  subscriptionMonthlyPriceCents: integer("subscription_monthly_price_cents"),
+  subscriptionYearlyPriceCents: integer("subscription_yearly_price_cents"),
   updatedBy: varchar("updated_by").notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+});
+
+// Payment Transactions
+export const paymentTransactions = pgTable("payment_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`).unique(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // 'xen_watch', 'scout_ai'
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  status: text("status").notNull().default("pending"), // 'pending', 'completed', 'failed', 'refunded'
+  provider: text("provider").notNull().default("mock"), // 'mock', 'stripe', 'paypal'
+  providerTransactionId: text("provider_transaction_id"), // Transaction ID from payment provider
+  metadata: text("metadata"), // JSON string with additional data (video URL, submission ID, etc.)
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
 });
 
@@ -527,6 +551,12 @@ export const insertSystemPaymentSchema = createInsertSchema(systemPayment).omit(
   updatedAt: true,
 });
 
+export const insertPaymentTransactionSchema = createInsertSchema(paymentTransactions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertAdminRoleSchema = createInsertSchema(adminRoles).omit({
   id: true,
   createdAt: true,
@@ -625,6 +655,7 @@ export type SystemSetting = typeof systemSettings.$inferSelect;
 export type SystemBranding = typeof systemBranding.$inferSelect;
 export type SystemAppearance = typeof systemAppearance.$inferSelect;
 export type SystemPayment = typeof systemPayment.$inferSelect;
+export type PaymentTransaction = typeof paymentTransactions.$inferSelect;
 export type AdminRole = typeof adminRoles.$inferSelect;
 export type AnalyticsLog = typeof analyticsLogs.$inferSelect;
 export type StudentRating = typeof studentRatings.$inferSelect;
@@ -665,6 +696,7 @@ export type InsertSystemSetting = z.infer<typeof insertSystemSettingSchema>;
 export type InsertSystemBranding = z.infer<typeof insertSystemBrandingSchema>;
 export type InsertSystemAppearance = z.infer<typeof insertSystemAppearanceSchema>;
 export type InsertSystemPayment = z.infer<typeof insertSystemPaymentSchema>;
+export type InsertPaymentTransaction = z.infer<typeof insertPaymentTransactionSchema>;
 export type InsertAdminRole = z.infer<typeof insertAdminRoleSchema>;
 export type InsertAnalyticsLog = z.infer<typeof insertAnalyticsLogSchema>;
 export type InsertStudentRating = z.infer<typeof insertStudentRatingSchema>;

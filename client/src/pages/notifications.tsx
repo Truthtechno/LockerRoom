@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
@@ -112,7 +112,7 @@ export default function Notifications() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"all" | "unread">("all");
   
-  const { data: notifications, isLoading, error } = useQuery<Notification[]>({
+  const { data: notifications, isLoading, error, isFetching } = useQuery<Notification[]>({
     queryKey: ["/api/notifications", user?.id, filter],
     queryFn: async () => {
       if (!user) return [];
@@ -133,10 +133,11 @@ export default function Notifications() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!user,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 60000, // Refetch every 60 seconds (reduced frequency)
     retry: 2,
-    staleTime: 0, // Always refetch to get latest data
+    staleTime: 30000, // Consider data fresh for 30 seconds to reduce unnecessary refetches
     refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 
   const { data: unreadCount } = useQuery<{ count: number }>({
@@ -148,7 +149,8 @@ export default function Notifications() {
       return response.json();
     },
     enabled: !!user,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // Refetch every 60 seconds
+    staleTime: 30000, // Consider data fresh for 30 seconds
   });
 
   const markAsReadMutation = useMutation({
@@ -211,12 +213,9 @@ export default function Notifications() {
       }
     },
     onSuccess: () => {
-      // Invalidate and immediately refetch to ensure consistency
+      // Invalidate queries to ensure consistency (this will trigger refetch on next access)
       queryClient.invalidateQueries({ queryKey: ["/api/notifications", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count", user?.id] });
-      // Force immediate refetch
-      queryClient.refetchQueries({ queryKey: ["/api/notifications", user?.id] });
-      queryClient.refetchQueries({ queryKey: ["/api/notifications/unread-count", user?.id] });
       toast({
         title: "All notifications marked as read",
         description: "All notifications have been marked as read.",
@@ -283,7 +282,12 @@ export default function Notifications() {
     }
   };
 
-  const filteredNotifications = notifications || [];
+  // Memoize filtered notifications to prevent unnecessary re-renders
+  const filteredNotifications = useMemo(() => {
+    if (!notifications) return [];
+    // The filter is already applied server-side via the query, so just return notifications
+    return notifications;
+  }, [notifications]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -338,7 +342,8 @@ export default function Notifications() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex space-x-4">
             <button
               onClick={() => setFilter("all")}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              disabled={isLoading}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 filter === "all"
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -348,7 +353,8 @@ export default function Notifications() {
             </button>
             <button
               onClick={() => setFilter("unread")}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors relative ${
+              disabled={isLoading}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors relative disabled:opacity-50 disabled:cursor-not-allowed ${
                 filter === "unread"
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -366,6 +372,10 @@ export default function Notifications() {
         <main className="flex-1 pb-20 lg:pb-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {isLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : isFetching && !notifications ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
               </div>
@@ -388,8 +398,15 @@ export default function Notifications() {
                 </div>
               </div>
             ) : filteredNotifications.length > 0 ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {filteredNotifications.map((notification) => {
+              <>
+                {isFetching && notifications && (
+                  <div className="mb-4 flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground mr-2" />
+                    <span className="text-sm text-muted-foreground">Updating...</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {filteredNotifications.map((notification) => {
                   const Icon = getNotificationIcon(notification.type);
                   const iconColor = getNotificationColor(notification.type);
                   
@@ -454,7 +471,8 @@ export default function Notifications() {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              </>
             ) : (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="max-w-md w-full bg-card border border-border rounded-2xl p-12 text-center shadow-lg">

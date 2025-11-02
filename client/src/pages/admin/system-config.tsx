@@ -18,6 +18,7 @@ import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
+import { convertCurrency, formatCurrency } from "@/lib/currency-converter";
 
 type SystemBranding = {
   name?: string;
@@ -70,8 +71,15 @@ type SystemPayment = {
   paypalClientSecretEncrypted?: string;
   paypalMode?: string;
   currency?: string;
+  // New decimal prices (actual currency amounts)
+  xenScoutPrice?: number | string;
+  scoutAiPrice?: number | string;
+  // Legacy cent prices (for backward compatibility)
   xenScoutPriceCents?: number;
+  scoutAiPriceCents?: number;
   enableSubscriptions?: boolean;
+  subscriptionMonthlyPrice?: number | string;
+  subscriptionYearlyPrice?: number | string;
   subscriptionMonthlyPriceCents?: number;
   subscriptionYearlyPriceCents?: number;
 };
@@ -759,10 +767,58 @@ export default function SystemConfig() {
   };
 
   const handlePaymentUpdate = (field: string, value: any) => {
-    updatePaymentMutation.mutate({
-      ...payment,
-      [field]: value,
-    });
+    // If currency is changing, convert prices automatically
+    if (field === "currency" && payment) {
+      const oldCurrency = payment.currency || "USD";
+      const newCurrency = value;
+      
+      // Convert prices to new currency
+      const updatedPayment: SystemPayment = { ...payment, currency: newCurrency };
+      
+      // Convert XEN Watch price
+      const currentXenPrice = getPriceValue(
+        (payment as any).xenScoutPrice, 
+        payment.xenScoutPriceCents, 
+        oldCurrency
+      );
+      (updatedPayment as any).xenScoutPrice = convertCurrency(currentXenPrice, oldCurrency, newCurrency);
+      // Clear legacy cents value when using new format
+      updatedPayment.xenScoutPriceCents = undefined;
+      
+      // Convert ScoutAI price
+      const currentScoutAiPrice = getPriceValue(
+        (payment as any).scoutAiPrice, 
+        payment.scoutAiPriceCents, 
+        oldCurrency
+      );
+      (updatedPayment as any).scoutAiPrice = convertCurrency(currentScoutAiPrice, oldCurrency, newCurrency);
+      // Clear legacy cents value when using new format
+      updatedPayment.scoutAiPriceCents = undefined;
+      
+      updatePaymentMutation.mutate(updatedPayment);
+    } else {
+      updatePaymentMutation.mutate({
+        ...payment,
+        [field]: value,
+      });
+    }
+  };
+
+  // Get price value (handles both new decimal format and legacy cents)
+  const getPriceValue = (price?: number | string, priceCents?: number, currency?: string): number => {
+    if (price !== undefined && price !== null) {
+      return typeof price === 'string' ? parseFloat(price) : price;
+    }
+    // Fallback to cents if decimal not available
+    if (priceCents !== undefined && priceCents !== null) {
+      return priceCents / 100;
+    }
+    return 10.0; // Default
+  };
+
+  // Format price with currency
+  const formatPrice = (amount: number, currency: string) => {
+    return formatCurrency(amount, currency);
   };
 
   // Show loading state
@@ -1804,26 +1860,106 @@ export default function SystemConfig() {
                 <CardTitle>Pricing Configuration</CardTitle>
                 <CardDescription>Set up pricing for your services</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="currency">Currency</Label>
-                  <Input
-                    id="currency"
+                  <Select
                     value={payment?.currency || "USD"}
-                    onChange={(e) => handlePaymentUpdate("currency", e.target.value)}
-                    placeholder="USD"
-                  />
+                    onValueChange={(value) => handlePaymentUpdate("currency", value)}
+                  >
+                    <SelectTrigger id="currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="ZAR">ZAR - South African Rand</SelectItem>
+                      <SelectItem value="AED">AED - UAE Dirham</SelectItem>
+                      <SelectItem value="UGX">UGX - Ugandan Shilling</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                      <SelectItem value="KES">KES - Kenyan Shilling</SelectItem>
+                      <SelectItem value="NGN">NGN - Nigerian Naira</SelectItem>
+                      <SelectItem value="GHS">GHS - Ghanaian Cedi</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Select the currency for all payment transactions
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="xenScoutPrice">XEN Scout Review Price (cents)</Label>
-                  <Input
-                    id="xenScoutPrice"
-                    type="number"
-                    value={payment?.xenScoutPriceCents || 1000}
-                    onChange={(e) => handlePaymentUpdate("xenScoutPriceCents", parseInt(e.target.value))}
-                    placeholder="1000"
-                  />
-                  <p className="text-sm text-muted-foreground">Current price: ${((payment?.xenScoutPriceCents || 1000) / 100).toFixed(2)}</p>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label htmlFor="xenScoutPrice" className="text-base font-semibold">XEN Watch Review</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Price charged per video submission for XEN Watch scout review
+                    </p>
+                    <div className="flex gap-3 items-end">
+                      <div className="flex-1 space-y-2">
+                        <Label htmlFor="xenScoutPrice" className="text-sm">Price ({payment?.currency || "USD"})</Label>
+                        <Input
+                          id="xenScoutPrice"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={getPriceValue((payment as any)?.xenScoutPrice, payment?.xenScoutPriceCents, payment?.currency)}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            handlePaymentUpdate("xenScoutPrice", value);
+                          }}
+                          placeholder="10.00"
+                        />
+                      </div>
+                      <div className="pb-2">
+                        <p className="text-sm font-semibold text-muted-foreground">
+                          {formatPrice(
+                            getPriceValue((payment as any)?.xenScoutPrice, payment?.xenScoutPriceCents, payment?.currency),
+                            payment?.currency || "USD"
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Price will automatically convert when you change the currency above
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label htmlFor="scoutAiPrice" className="text-base font-semibold">ScoutAI Analysis</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Price charged per video upload for ScoutAI analysis (Coming soon)
+                    </p>
+                    <div className="flex gap-3 items-end">
+                      <div className="flex-1 space-y-2">
+                        <Label htmlFor="scoutAiPrice" className="text-sm">Price ({payment?.currency || "USD"})</Label>
+                        <Input
+                          id="scoutAiPrice"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={getPriceValue((payment as any)?.scoutAiPrice, payment?.scoutAiPriceCents, payment?.currency)}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            handlePaymentUpdate("scoutAiPrice", value);
+                          }}
+                          placeholder="10.00"
+                          disabled
+                        />
+                      </div>
+                      <div className="pb-2">
+                        <p className="text-sm font-semibold text-muted-foreground">
+                          {formatPrice(
+                            getPriceValue((payment as any)?.scoutAiPrice, payment?.scoutAiPriceCents, payment?.currency),
+                            payment?.currency || "USD"
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground italic">
+                      ScoutAI pricing will be available once the feature is fully developed
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

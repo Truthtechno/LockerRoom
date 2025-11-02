@@ -5,6 +5,7 @@ import {
   submissions, 
   submissionReviews, 
   submissionFinalFeedback,
+  paymentTransactions,
   users,
   admins,
   scoutProfiles,
@@ -25,7 +26,7 @@ const router = express.Router();
 router.post("/submissions", requireAuth, requireRoles(['student']), async (req, res) => {
     try {
       const auth = (req as any).auth;
-      const { videoUrl, thumbUrl, notes, promoCode } = req.body;
+      const { videoUrl, thumbUrl, notes, promoCode, transactionId } = req.body;
 
       if (!videoUrl) {
         return res.status(400).json({ 
@@ -34,6 +35,36 @@ router.post("/submissions", requireAuth, requireRoles(['student']), async (req, 
             message: "Video URL is required" 
           } 
         });
+      }
+
+      // If transactionId is provided, verify the payment transaction is completed
+      if (transactionId) {
+        const [transaction] = await db
+          .select()
+          .from(paymentTransactions)
+          .where(and(
+            eq(paymentTransactions.id, transactionId),
+            eq(paymentTransactions.userId, auth.id),
+            eq(paymentTransactions.type, 'xen_watch')
+          ));
+
+        if (!transaction) {
+          return res.status(400).json({ 
+            error: { 
+              code: "validation_error", 
+              message: "Invalid payment transaction" 
+            } 
+          });
+        }
+
+        if (transaction.status !== 'completed') {
+          return res.status(400).json({ 
+            error: { 
+              code: "validation_error", 
+              message: "Payment transaction is not completed" 
+            } 
+          });
+        }
       }
 
       // Validate input
