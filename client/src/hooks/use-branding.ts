@@ -11,13 +11,15 @@ export type SystemBranding = {
   companyState?: string;
   companyZip?: string;
   companyCountry?: string;
+  companyDescription?: string;
+  companyLogoUrl?: string;
   contactEmail?: string;
   contactPhone?: string;
   websiteUrl?: string;
   socialFacebook?: string;
   socialTwitter?: string;
   socialInstagram?: string;
-  socialLinkedin?: string;
+  socialTiktok?: string;
 };
 
 const DEFAULT_PLATFORM_NAME = "LockerRoom";

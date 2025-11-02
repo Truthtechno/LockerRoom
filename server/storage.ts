@@ -4124,13 +4124,15 @@ export class PostgresStorage implements IStorage {
         companyState: 'companyState',
         companyZip: 'companyZip',
         companyCountry: 'companyCountry',
+        companyDescription: 'companyDescription',
+        companyLogoUrl: 'companyLogoUrl',
         contactEmail: 'contactEmail',
         contactPhone: 'contactPhone',
         websiteUrl: 'websiteUrl',
         socialFacebook: 'socialFacebook',
         socialTwitter: 'socialTwitter',
         socialInstagram: 'socialInstagram',
-        socialLinkedin: 'socialLinkedin',
+        socialTiktok: 'socialTiktok',
       };
       
       // CRITICAL: Process ALL fields that exist in branding object
@@ -4181,13 +4183,15 @@ export class PostgresStorage implements IStorage {
         companyState: branding.companyState || null,
         companyZip: branding.companyZip || null,
         companyCountry: branding.companyCountry || null,
+        companyDescription: branding.companyDescription || null,
+        companyLogoUrl: branding.companyLogoUrl || null,
         contactEmail: branding.contactEmail || null,
         contactPhone: branding.contactPhone || null,
         websiteUrl: branding.websiteUrl || null,
         socialFacebook: branding.socialFacebook || null,
         socialTwitter: branding.socialTwitter || null,
         socialInstagram: branding.socialInstagram || null,
-        socialLinkedin: branding.socialLinkedin || null,
+        socialTiktok: branding.socialTiktok || null,
         updatedBy: updatedBy,
       };
       

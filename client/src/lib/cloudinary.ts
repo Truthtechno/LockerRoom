@@ -26,7 +26,7 @@ export function testCloudinaryEnv(): void {
 }
 
 // Upload branding assets (logo, favicon) to local storage
-export async function uploadBrandingAsset(file: File, type: 'logo' | 'favicon') {
+export async function uploadBrandingAsset(file: File, type: 'logo' | 'favicon' | 'company-logo') {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("type", type);

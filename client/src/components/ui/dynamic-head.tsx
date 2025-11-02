@@ -33,10 +33,18 @@ export function DynamicHead() {
         faviconLink.href = `${faviconUrl}${separator}_=${Date.now()}`;
         faviconLink.type = 'image/x-icon';
       } else {
-        // Keep default favicon behavior if no custom favicon
-        if (faviconLink && faviconLink.href.includes('/uploads/branding/')) {
-          faviconLink.remove();
-        }
+        // CRITICAL: Remove custom favicon links when faviconUrl is cleared
+        // This ensures the browser falls back to default favicon
+        const allFaviconLinks = document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]');
+        allFaviconLinks.forEach(link => {
+          // Remove any custom branding favicon links
+          if (link.href.includes('/uploads/branding/') || link.href.includes('favicon')) {
+            link.remove();
+          }
+        });
+        
+        // Optionally, set a default favicon or let browser use default
+        // For now, we'll let the browser use its default
       }
     } catch (error) {
       // Silently fail - don't crash the app

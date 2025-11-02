@@ -1196,7 +1196,7 @@ export default function Profile() {
                 variant="outline"
               >
                 <ExternalLink className="w-4 h-4 mr-3" />
-                Share on Twitter
+                Share on X
               </Button>
 
               <Button

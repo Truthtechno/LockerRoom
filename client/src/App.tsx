@@ -39,6 +39,7 @@ import SchoolAdminFeed from "./pages/school-admin/feed";
 import SystemAdminAnnouncements from "./pages/system-admin/announcements";
 import SystemAdminFeed from "./pages/system-admin/feed";
 import ScoutPortal from "./pages/scouts/index";
+import About from "./pages/about";
 import ScoutAdminPortal from "./pages/scouts/admin/index";
 import ManageScouts from "./pages/scouts/admin/manage-scouts";
 import XenWatchAnalytics from "./pages/scouts/admin/xen-watch-analytics";
@@ -135,6 +136,12 @@ function Router() {
       <Route path="/settings">
         <ProtectedRoute>
           <StudentSettings />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/about">
+        <ProtectedRoute>
+          <About />
         </ProtectedRoute>
       </Route>
       

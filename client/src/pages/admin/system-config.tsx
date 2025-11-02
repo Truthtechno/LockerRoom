@@ -29,13 +29,15 @@ type SystemBranding = {
   companyState?: string;
   companyZip?: string;
   companyCountry?: string;
+  companyDescription?: string;
+  companyLogoUrl?: string;
   contactEmail?: string;
   contactPhone?: string;
   websiteUrl?: string;
   socialFacebook?: string;
   socialTwitter?: string;
   socialInstagram?: string;
-  socialLinkedin?: string;
+  socialTiktok?: string;
 };
 
 type SystemAppearance = {
@@ -83,9 +85,11 @@ export default function SystemConfig() {
   const [previewColors, setPreviewColors] = useState<any>({});
   
   // File upload refs and state
-  const logoInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null); // For System/Platform logo
+  const companyLogoInputRef = useRef<HTMLInputElement>(null); // For Company logo
   const faviconInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCompanyLogo, setUploadingCompanyLogo] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
   
   // Local form state for branding - separate from query cache
@@ -186,12 +190,32 @@ export default function SystemConfig() {
           }
         }
         
-        if (prev.logoUrl === normalizedBranding.logoUrl && 
-            prev.faviconUrl === normalizedBranding.faviconUrl &&
-            prev.name === normalizedBranding.name) {
+        // Check if ANY field has changed, not just logo/favicon/name
+        // This ensures all fields including companyDescription are updated
+        const hasChanges = 
+          prev.logoUrl !== normalizedBranding.logoUrl || 
+          prev.faviconUrl !== normalizedBranding.faviconUrl ||
+          prev.name !== normalizedBranding.name ||
+          prev.companyName !== normalizedBranding.companyName ||
+          prev.companyAddress !== normalizedBranding.companyAddress ||
+          prev.companyCity !== normalizedBranding.companyCity ||
+          prev.companyState !== normalizedBranding.companyState ||
+        prev.companyZip !== normalizedBranding.companyZip ||
+        prev.companyCountry !== normalizedBranding.companyCountry ||
+        prev.companyDescription !== normalizedBranding.companyDescription ||
+        prev.companyLogoUrl !== normalizedBranding.companyLogoUrl ||
+        prev.contactEmail !== normalizedBranding.contactEmail ||
+          prev.contactPhone !== normalizedBranding.contactPhone ||
+          prev.websiteUrl !== normalizedBranding.websiteUrl ||
+          prev.socialFacebook !== normalizedBranding.socialFacebook ||
+          prev.socialTwitter !== normalizedBranding.socialTwitter ||
+          prev.socialInstagram !== normalizedBranding.socialInstagram ||
+          prev.socialTiktok !== normalizedBranding.socialTiktok;
+        
+        if (!hasChanges) {
           return prev; // No change, keep existing state
         }
-        console.log("🔄 [EFFECT] Form data changed, updating from:", prev.logoUrl, "to:", normalizedBranding.logoUrl);
+        console.log("🔄 [EFFECT] Form data changed, updating form state");
         return normalizedBranding;
       });
     }
@@ -397,9 +421,9 @@ export default function SystemConfig() {
       // If a field is only in original branding, preserve it
       const allFields: (keyof SystemBranding)[] = [
         'logoUrl', 'faviconUrl', 'companyName', 'companyAddress', 
-        'companyCity', 'companyState', 'companyZip', 'companyCountry',
+        'companyCity', 'companyState', 'companyZip', 'companyCountry', 'companyDescription', 'companyLogoUrl',
         'contactEmail', 'contactPhone', 'websiteUrl', 
-        'socialFacebook', 'socialTwitter', 'socialInstagram', 'socialLinkedin'
+        'socialFacebook', 'socialTwitter', 'socialInstagram', 'socialTiktok'
       ];
       
       const originalBranding = branding || {};
@@ -438,12 +462,35 @@ export default function SystemConfig() {
       
       console.log("✅ [SAVE] Save successful, received:", JSON.stringify(savedData, null, 2));
       console.log("✅ [SAVE] Logo URL in saved data:", savedData?.logoUrl, "Type:", typeof savedData?.logoUrl);
+      console.log("✅ [SAVE] Company Description in saved data:", savedData?.companyDescription, "Type:", typeof savedData?.companyDescription);
+      
+      // Helper to normalize text fields (convert null/empty to undefined)
+      const normalizeTextField = (value: string | null | undefined): string | undefined => {
+        if (value === null || value === undefined || (typeof value === 'string' && value.trim() === "")) return undefined;
+        return typeof value === 'string' ? value.trim() : value;
+      };
       
       // CRITICAL: Normalize the saved data IMMEDIATELY
       const normalizedSavedData: SystemBranding = {
         ...savedData,
         logoUrl: normalizeUrl(savedData?.logoUrl), // Convert null/empty to undefined
         faviconUrl: normalizeUrl(savedData?.faviconUrl),
+        // Normalize all text fields to ensure consistency
+        companyDescription: normalizeTextField(savedData?.companyDescription),
+        companyLogoUrl: normalizeUrl(savedData?.companyLogoUrl),
+        companyName: normalizeTextField(savedData?.companyName),
+        companyAddress: normalizeTextField(savedData?.companyAddress),
+        companyCity: normalizeTextField(savedData?.companyCity),
+        companyState: normalizeTextField(savedData?.companyState),
+        companyZip: normalizeTextField(savedData?.companyZip),
+        companyCountry: normalizeTextField(savedData?.companyCountry),
+        contactEmail: normalizeTextField(savedData?.contactEmail),
+        contactPhone: normalizeTextField(savedData?.contactPhone),
+        websiteUrl: normalizeTextField(savedData?.websiteUrl),
+        socialFacebook: normalizeTextField(savedData?.socialFacebook),
+        socialTwitter: normalizeTextField(savedData?.socialTwitter),
+        socialInstagram: normalizeTextField(savedData?.socialInstagram),
+        socialTiktok: normalizeTextField(savedData?.socialTiktok),
       };
       
       console.log("✅ [SAVE] Normalized saved data:", JSON.stringify(normalizedSavedData, null, 2));
@@ -479,17 +526,16 @@ export default function SystemConfig() {
       // CRITICAL: After refetch, FORCE form state to match what we saved
       // Use the saved data (not refetched) to ensure consistency
       // The refetch might return stale data in some edge cases
+      // normalizedSavedData already has all fields normalized, so we can use it directly
       const finalNormalized: SystemBranding = {
         ...normalizedSavedData,
-        logoUrl: normalizedSavedData.logoUrl, // Use the saved value, not refetched
-        faviconUrl: normalizedSavedData.faviconUrl,
       };
       
       // ALWAYS update form state with what we KNOW was saved (not what was refetched)
       setBrandingFormData(finalNormalized);
       console.log("✅ [SAVE] Form state FORCED to saved data:", JSON.stringify(finalNormalized, null, 2));
+      console.log("✅ [SAVE] Final companyDescription:", finalNormalized.companyDescription);
       console.log("✅ [SAVE] Final logoUrl:", finalNormalized.logoUrl);
-      console.log("✅ [SAVE] logoUrl is falsy:", !finalNormalized.logoUrl);
       
       // Reset the flag after a longer delay to ensure useEffect doesn't interfere
       // BUT: Keep the cleared logo tracking indefinitely until a new logo is set
@@ -515,15 +561,16 @@ export default function SystemConfig() {
   };
 
   // Update form field
-  const updateBrandingField = (field: keyof SystemBranding, value: string) => {
+  const updateBrandingField = (field: keyof SystemBranding, value: string | undefined) => {
     setBrandingFormData(prev => ({
       ...prev,
-      [field]: value === "" ? undefined : value, // Convert empty strings to undefined for cleaner state
+      [field]: value === "" || value === undefined ? undefined : value, // Convert empty strings to undefined for cleaner state
     }));
     setHasBrandingChanges(true);
   };
 
 
+  // System/Platform Logo Upload Handler (used in Brand Identity section)
   const handleLogoUpload = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       toast({
@@ -546,28 +593,77 @@ export default function SystemConfig() {
 
     setUploadingLogo(true);
     try {
-      console.log("📤 Starting logo upload:", { fileName: file.name, fileSize: file.size, fileType: file.type });
-      const result = await uploadBrandingAsset(file, "logo");
-      console.log("✅ Logo uploaded locally:", result);
+      console.log("📤 Starting SYSTEM logo upload:", { fileName: file.name, fileSize: file.size, fileType: file.type });
+      const result = await uploadBrandingAsset(file, "logo"); // System logo uses "logo" type
+      console.log("✅ System logo uploaded:", result);
       
-      // Update form data with logo URL
+      // Update SYSTEM logo (logoUrl) - used in headers, login, sidebar
       updateBrandingField("logoUrl", result.secure_url);
       
       toast({
-        title: "Logo Uploaded",
-        description: "Logo has been uploaded. Click 'Save Changes' to apply.",
+        title: "System Logo Uploaded",
+        description: "System logo has been uploaded. Click 'Save Changes' to apply.",
       });
     } catch (error) {
-      console.error("❌ Logo upload error:", error);
+      console.error("❌ System logo upload error:", error);
       toast({
         title: "Upload Failed",
-        description: error instanceof Error ? error.message : "Failed to upload logo. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to upload system logo. Please try again.",
         variant: "destructive",
       });
     } finally {
       setUploadingLogo(false);
       if (logoInputRef.current) {
         logoInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Company Logo Upload Handler (used in Company Information section)
+  const handleCompanyLogoUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file (JPG, PNG, GIF, etc.).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast({
+        title: "File too large",
+        description: "Please select an image smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingCompanyLogo(true);
+    try {
+      console.log("📤 Starting COMPANY logo upload:", { fileName: file.name, fileSize: file.size, fileType: file.type });
+      const result = await uploadBrandingAsset(file, "company-logo"); // Company logo uses "company-logo" type
+      console.log("✅ Company logo uploaded:", result);
+      
+      // Update COMPANY logo (companyLogoUrl) - used only on About page
+      updateBrandingField("companyLogoUrl", result.secure_url);
+      
+      toast({
+        title: "Company Logo Uploaded",
+        description: "Company logo has been uploaded. Click 'Save Changes' to apply.",
+      });
+    } catch (error) {
+      console.error("❌ Company logo upload error:", error);
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload company logo. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingCompanyLogo(false);
+      if (companyLogoInputRef.current) {
+        companyLogoInputRef.current.value = '';
       }
     }
   };
@@ -647,7 +743,8 @@ export default function SystemConfig() {
   };
 
   const handleFaviconRemove = () => {
-    updateBrandingField("faviconUrl", "");
+    // Set to undefined to clear the favicon
+    updateBrandingField("faviconUrl", undefined);
     toast({
       title: "Favicon Removed",
       description: "Favicon will be removed when you save changes.",
@@ -749,111 +846,164 @@ export default function SystemConfig() {
                   </p>
                   </div>
 
-                {/* Logo Upload */}
-                <div className="space-y-2">
-                  <Label>Logo</Label>
-                  {/* DEBUG: Show current logoUrl value */}
-                  {process.env.NODE_ENV === 'development' && (
-                    <div className="text-xs text-muted-foreground mb-2">
-                      Debug: logoUrl = "{String(brandingFormData.logoUrl)}" (type: {typeof brandingFormData.logoUrl}, truthy: {String(!!brandingFormData.logoUrl)})
-                    </div>
-                  )}
-                  {brandingFormData.logoUrl && typeof brandingFormData.logoUrl === 'string' && brandingFormData.logoUrl.trim() !== "" ? (
-                    <div className="relative border border-border rounded-lg overflow-hidden bg-muted/50">
-                      <div className="p-4 flex items-center gap-4">
-                        <img
-                          src={brandingFormData.logoUrl}
-                          alt="Platform logo"
-                          className="h-16 w-auto max-w-[200px] object-contain rounded"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">Current Logo</p>
-                          <p className="text-xs text-muted-foreground mt-1">Logo is set and will be used throughout the system</p>
+                {/* System/Platform Logo Section */}
+                <div className="space-y-4 pt-4 border-t border-border">
+                  <div className="space-y-2">
+                    <Label className="text-base font-semibold">System Logo (Platform Logo)</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Upload the system/platform logo. This logo appears in navigation headers, sidebar, login page, and throughout the platform interface (where the "LR" icon currently appears).
+                    </p>
                   </div>
-                        <div className="flex flex-col gap-2">
-                          <input
-                            ref={logoInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleLogoUpload(file);
+                  
+                  {/* System Logo URL Input (Manual Entry) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="logoUrl" className="text-sm font-medium">System Logo URL</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="logoUrl"
+                        type="url"
+                        value={brandingFormData.logoUrl || ""}
+                        onChange={(e) => updateBrandingField("logoUrl", e.target.value)}
+                        placeholder="https://example.com/system-logo.png"
+                        className="flex-1"
+                      />
+                      {brandingFormData.logoUrl && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={handleLogoRemove}
+                          title="Clear system logo URL"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Enter a direct URL to your system logo image, or upload a file below. This is used for navigation, login, and platform branding.
+                    </p>
+                  </div>
+
+                  {/* System Logo Upload (File) */}
+                  <div className="space-y-2">
+                    <Label>Upload System Logo File</Label>
+                    {brandingFormData.logoUrl && typeof brandingFormData.logoUrl === 'string' && brandingFormData.logoUrl.trim() !== "" ? (
+                      <div className="relative border border-border rounded-lg overflow-hidden bg-muted/50">
+                        <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                          <img
+                            src={`${brandingFormData.logoUrl}${brandingFormData.logoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
+                            alt="System logo preview"
+                            className="h-20 w-auto max-w-[200px] object-contain rounded border border-border bg-background p-2"
+                            onError={(e) => {
+                              console.error("System logo image failed to load:", brandingFormData.logoUrl);
+                              (e.target as HTMLImageElement).style.display = 'none';
                             }}
-                            className="hidden"
+                            key={brandingFormData.logoUrl} // Force re-render on URL change
                           />
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => logoInputRef.current?.click()}
-                            disabled={uploadingLogo}
-                            className="text-xs"
-                          >
-                            {uploadingLogo ? (
-                              <>
-                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                Uploading...
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="w-3 h-3 mr-1" />
-                                Replace
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={handleLogoRemove}
-                            disabled={uploadingLogo}
-                            className="text-xs"
-                          >
-                            <X className="w-3 h-3 mr-1" />
-                            Remove
-                          </Button>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground">System Logo Preview</p>
+                            <p className="text-xs text-muted-foreground mt-1 break-all">
+                              {brandingFormData.logoUrl.length > 60 
+                                ? `${brandingFormData.logoUrl.substring(0, 60)}...` 
+                                : brandingFormData.logoUrl}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              This logo appears in navigation, headers, login page, and platform interface
+                            </p>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                            <input
+                              ref={logoInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleLogoUpload(file);
+                                // Reset input so same file can be selected again
+                                if (logoInputRef.current) {
+                                  logoInputRef.current.value = '';
+                                }
+                              }}
+                              className="hidden"
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => logoInputRef.current?.click()}
+                              disabled={uploadingLogo}
+                              className="w-full sm:w-auto"
+                            >
+                              {uploadingLogo ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  Replace Logo
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={handleLogoRemove}
+                              disabled={uploadingLogo}
+                              className="w-full sm:w-auto"
+                            >
+                              <X className="w-4 h-4 mr-2" />
+                              Remove Logo
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-border rounded-lg p-6 sm:p-8 text-center bg-muted/30">
-                      <ImageIcon className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 text-muted-foreground" />
-                      <p className="text-sm font-medium text-foreground mb-1">No logo uploaded</p>
-                      <p className="text-xs text-muted-foreground mb-4">
-                        System will use the default "LR" icon when no logo is set
-                      </p>
-                      <input
-                        ref={logoInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleLogoUpload(file);
-                        }}
-                        className="hidden"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => logoInputRef.current?.click()}
-                        disabled={uploadingLogo}
-                        className="w-full sm:w-auto"
-                      >
-                        {uploadingLogo ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4 mr-2" />
-                            Upload Logo
-                          </>
-                        )}
-                      </Button>
-                      <p className="text-xs text-muted-foreground mt-2">Recommended: PNG or SVG, max 5MB</p>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="border-2 border-dashed border-border rounded-lg p-6 sm:p-8 text-center bg-muted/30">
+                        <ImageIcon className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 text-muted-foreground" />
+                        <p className="text-sm font-medium text-foreground mb-1">No logo uploaded</p>
+                        <p className="text-xs text-muted-foreground mb-4">
+                          Upload a system logo file or enter a logo URL above. System will use the default "LR" icon when no logo is set.
+                        </p>
+                        <input
+                          ref={logoInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleLogoUpload(file);
+                            // Reset input so same file can be selected again
+                            if (logoInputRef.current) {
+                              logoInputRef.current.value = '';
+                            }
+                          }}
+                          className="hidden"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => logoInputRef.current?.click()}
+                          disabled={uploadingLogo}
+                          className="w-full sm:w-auto"
+                        >
+                          {uploadingLogo ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mr-2" />
+                              Upload System Logo File
+                            </>
+                          )}
+                        </Button>
+                        <p className="text-xs text-muted-foreground mt-2">Recommended: PNG, JPG, or SVG, max 5MB</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Favicon Upload */}
@@ -965,6 +1115,164 @@ export default function SystemConfig() {
                 <CardDescription className="text-sm">Set up your company's contact information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 sm:space-y-6">
+                {/* Company Logo - Added here for visibility */}
+                <div className="space-y-4 pb-4 border-b border-border">
+                  <div className="space-y-2">
+                    <Label className="text-base font-semibold">Company Logo</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Upload your company logo. This logo is displayed ONLY on the About Us page, separate from the system/platform logo.
+                    </p>
+                  </div>
+                  
+                  {/* Company Logo URL Input (Manual Entry) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="companyLogoUrl" className="text-sm font-medium">Company Logo URL</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="companyLogoUrl"
+                        type="url"
+                        value={brandingFormData.companyLogoUrl || ""}
+                        onChange={(e) => updateBrandingField("companyLogoUrl", e.target.value)}
+                        placeholder="https://example.com/company-logo.png or https://yourdomain.com/images/company-logo.svg"
+                        className="flex-1"
+                      />
+                      {brandingFormData.companyLogoUrl && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => updateBrandingField("companyLogoUrl", undefined)}
+                          title="Clear company logo URL"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Enter a direct URL to your company logo image, or upload a file below. This logo is ONLY displayed on the About Us page.
+                    </p>
+                  </div>
+
+                  {/* Company Logo Upload (File) */}
+                  <div className="space-y-2">
+                    <Label>Upload Company Logo File</Label>
+                    {brandingFormData.companyLogoUrl && typeof brandingFormData.companyLogoUrl === 'string' && brandingFormData.companyLogoUrl.trim() !== "" ? (
+                      <div className="relative border border-border rounded-lg overflow-hidden bg-muted/50">
+                        <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                          <img
+                            src={`${brandingFormData.companyLogoUrl}${brandingFormData.companyLogoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
+                            alt="Company logo preview"
+                            className="h-20 w-auto max-w-[200px] object-contain rounded border border-border bg-background p-2"
+                            onError={(e) => {
+                              console.error("Company logo image failed to load:", brandingFormData.companyLogoUrl);
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                            key={brandingFormData.companyLogoUrl} // Force re-render on URL change
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground">Company Logo Preview</p>
+                            <p className="text-xs text-muted-foreground mt-1 break-all">
+                              {brandingFormData.companyLogoUrl.length > 60 
+                                ? `${brandingFormData.companyLogoUrl.substring(0, 60)}...` 
+                                : brandingFormData.companyLogoUrl}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              This logo appears ONLY on the About Us page
+                            </p>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                            <input
+                              ref={companyLogoInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleCompanyLogoUpload(file);
+                                if (companyLogoInputRef.current) {
+                                  companyLogoInputRef.current.value = '';
+                                }
+                              }}
+                              className="hidden"
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => companyLogoInputRef.current?.click()}
+                              disabled={uploadingCompanyLogo}
+                              className="w-full sm:w-auto"
+                            >
+                              {uploadingCompanyLogo ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  Replace Company Logo
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => updateBrandingField("companyLogoUrl", undefined)}
+                              disabled={uploadingCompanyLogo}
+                              className="w-full sm:w-auto"
+                            >
+                              <X className="w-4 h-4 mr-2" />
+                              Remove Company Logo
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-border rounded-lg p-6 sm:p-8 text-center bg-muted/30">
+                        <ImageIcon className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 text-muted-foreground" />
+                        <p className="text-sm font-medium text-foreground mb-1">No company logo uploaded</p>
+                        <p className="text-xs text-muted-foreground mb-4">
+                          Upload a company logo file or enter a logo URL above. This logo appears ONLY on the About Us page.
+                        </p>
+                        <input
+                          ref={companyLogoInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleCompanyLogoUpload(file);
+                            if (companyLogoInputRef.current) {
+                              companyLogoInputRef.current.value = '';
+                            }
+                          }}
+                          className="hidden"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => companyLogoInputRef.current?.click()}
+                          disabled={uploadingCompanyLogo}
+                          className="w-full sm:w-auto"
+                        >
+                          {uploadingCompanyLogo ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mr-2" />
+                              Upload Company Logo File
+                            </>
+                          )}
+                        </Button>
+                        <p className="text-xs text-muted-foreground mt-2">Recommended: PNG, JPG, or SVG, max 5MB</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="companyName">Company Name</Label>
@@ -1014,6 +1322,20 @@ export default function SystemConfig() {
                       onChange={(e) => updateBrandingField("companyCountry", e.target.value)}
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="companyDescription">Company Description</Label>
+                  <Textarea
+                    id="companyDescription"
+                    value={brandingFormData.companyDescription || ""}
+                    onChange={(e) => updateBrandingField("companyDescription", e.target.value)}
+                    placeholder="Enter a brief description about your company..."
+                    rows={4}
+                    className="resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This description will be displayed in the footer and about pages.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -1075,12 +1397,12 @@ export default function SystemConfig() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="socialTwitter">Twitter</Label>
+                    <Label htmlFor="socialTwitter">X (Twitter)</Label>
                     <Input
                       id="socialTwitter"
                       value={brandingFormData.socialTwitter || ""}
                       onChange={(e) => updateBrandingField("socialTwitter", e.target.value)}
-                      placeholder="https://twitter.com/yourhandle"
+                      placeholder="https://x.com/yourhandle"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1093,12 +1415,12 @@ export default function SystemConfig() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="socialLinkedin">LinkedIn</Label>
+                    <Label htmlFor="socialTiktok">TikTok</Label>
                     <Input
-                      id="socialLinkedin"
-                      value={brandingFormData.socialLinkedin || ""}
-                      onChange={(e) => updateBrandingField("socialLinkedin", e.target.value)}
-                      placeholder="https://linkedin.com/company/yourcompany"
+                      id="socialTiktok"
+                      value={brandingFormData.socialTiktok || ""}
+                      onChange={(e) => updateBrandingField("socialTiktok", e.target.value)}
+                      placeholder="https://tiktok.com/@yourhandle"
                     />
                   </div>
                 </div>

@@ -16,7 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiRequest } from "@/lib/queryClient";
-import { User, Lock, Bell, Eye, EyeOff, LogOut, Settings as SettingsIcon, Info } from "lucide-react";
+import { User, Lock, Bell, Eye, EyeOff, LogOut, Settings as SettingsIcon, Info, HelpCircle, Mail, Phone, Globe, ExternalLink } from "lucide-react";
+import { useBranding } from "@/hooks/use-branding";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
@@ -28,6 +29,7 @@ export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const { branding } = useBranding();
 
   // Profile media handling hook
   const {
@@ -772,6 +774,118 @@ export default function Settings() {
               </CardContent>
             </Card>
             )}
+
+            {/* Support & Help */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <HelpCircle className="w-5 h-5 mr-2 text-accent" />
+                  Support & Help
+                </CardTitle>
+                <CardDescription>
+                  Get help and contact information
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* About Link */}
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => setLocation("/about")}
+                >
+                  <Info className="w-4 h-4 mr-2" />
+                  About {branding.companyName || branding.name || "LockerRoom"}
+                </Button>
+
+                {/* Contact Information */}
+                {(branding.contactEmail || branding.contactPhone || branding.websiteUrl) && (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-sm font-medium text-foreground">Contact Us</p>
+                    <div className="space-y-2">
+                      {branding.contactEmail && (
+                        <a
+                          href={`mailto:${branding.contactEmail}`}
+                          className="flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Mail className="w-4 h-4 mr-2" />
+                          {branding.contactEmail}
+                        </a>
+                      )}
+                      {branding.contactPhone && (
+                        <a
+                          href={`tel:${branding.contactPhone}`}
+                          className="flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Phone className="w-4 h-4 mr-2" />
+                          {branding.contactPhone}
+                        </a>
+                      )}
+                      {branding.websiteUrl && (
+                        <a
+                          href={branding.websiteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Globe className="w-4 h-4 mr-2" />
+                          Visit Website
+                          <ExternalLink className="w-3 h-3 ml-1" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Social Media Links */}
+                {(branding.socialFacebook || branding.socialTwitter || branding.socialInstagram || branding.socialTiktok) && (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-sm font-medium text-foreground">Follow Us</p>
+                    <div className="flex flex-wrap gap-2">
+                      {branding.socialFacebook && (
+                        <a
+                          href={branding.socialFacebook}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Facebook
+                        </a>
+                      )}
+                      {branding.socialTwitter && (
+                        <a
+                          href={branding.socialTwitter}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          X
+                        </a>
+                      )}
+                      {branding.socialInstagram && (
+                        <a
+                          href={branding.socialInstagram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Instagram
+                        </a>
+                      )}
+                      {branding.socialTiktok && (
+                        <a
+                          href={branding.socialTiktok}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          TikTok
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Logout */}
             <Card>

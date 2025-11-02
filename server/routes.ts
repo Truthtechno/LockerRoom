@@ -4944,11 +4944,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log('✅ Successfully deleted logo file:', logoPath);
           } else {
             console.log('⚠️ Logo file does not exist at path:', logoPath);
-            // Try alternative paths in case of path mismatch
+            // Try alternative paths in case of path mismatch (support old and new naming)
             const alternativePaths = [
               path.join(process.cwd(), 'uploads', 'branding', 'logo.png'),
               path.join(process.cwd(), 'uploads', 'branding', 'logo.jpg'),
               path.join(process.cwd(), 'uploads', 'branding', 'logo.svg'),
+              path.join(process.cwd(), 'uploads', 'branding', 'system-logo.png'),
+              path.join(process.cwd(), 'uploads', 'branding', 'system-logo.jpg'),
+              path.join(process.cwd(), 'uploads', 'branding', 'system-logo.svg'),
             ];
             
             for (const altPath of alternativePaths) {
@@ -4977,32 +4980,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // CRITICAL: Delete favicon file if faviconUrl is being cleared
+      console.log('🔍 Checking if favicon should be deleted:');
+      console.log('   faviconUrl in req.body:', 'faviconUrl' in req.body);
+      console.log('   req.body.faviconUrl value:', req.body.faviconUrl);
+      console.log('   req.body.faviconUrl type:', typeof req.body.faviconUrl);
+      console.log('   existingBranding?.faviconUrl:', existingBranding?.faviconUrl);
+      
+      // CRITICAL: faviconUrl can be null (explicitly cleared) or undefined (not in body)
+      // null means "clear this field", undefined means "don't change this field"
       const isFaviconBeingCleared = 'faviconUrl' in req.body && (
+        req.body.faviconUrl === null ||  // Explicitly cleared (sent as null)
         req.body.faviconUrl === undefined || 
-        req.body.faviconUrl === null || 
         req.body.faviconUrl === '' ||
         (typeof req.body.faviconUrl === 'string' && req.body.faviconUrl.trim() === '')
       );
       
+      console.log('   isFaviconBeingCleared:', isFaviconBeingCleared);
+      
       if (existingBranding?.faviconUrl && isFaviconBeingCleared) {
+        // Extract filename from URL path
         const faviconUrl = existingBranding.faviconUrl;
-        const faviconPath = faviconUrl.startsWith('/') 
-          ? path.join(process.cwd(), faviconUrl.substring(1))
-          : path.join(process.cwd(), faviconUrl);
         
-        console.log('🗑️ Attempting to delete favicon file:', faviconPath);
-        console.log('🗑️ Original faviconUrl:', faviconUrl);
+        // Handle both absolute paths and relative paths
+        // faviconUrl might be like: /uploads/branding/favicon.ico or /uploads/branding/favicon.png
+        let faviconPath: string;
         
+        if (faviconUrl.startsWith('/uploads/')) {
+          // Relative path from project root
+          faviconPath = path.join(process.cwd(), faviconUrl.substring(1)); // Remove leading slash
+        } else if (faviconUrl.startsWith('uploads/')) {
+          // No leading slash
+          faviconPath = path.join(process.cwd(), faviconUrl);
+        } else if (path.isAbsolute(faviconUrl)) {
+          // Absolute path
+          faviconPath = faviconUrl;
+        } else {
+          // Assume it's relative to project root
+          faviconPath = path.join(process.cwd(), faviconUrl);
+        }
+        
+        console.log('🗑️ Attempting to delete favicon file:');
+        console.log('   Original faviconUrl:', faviconUrl);
+        console.log('   Resolved path:', faviconPath);
+        console.log('   Current working directory:', process.cwd());
+        
+        // Check if file exists before trying to delete
         try {
-          await fs.unlink(faviconPath);
-          console.log('✅ Successfully deleted favicon file:', faviconPath);
+          const fileExists = await fs.access(faviconPath).then(() => true).catch(() => false);
+          console.log('   File exists check result:', fileExists);
+          
+          if (fileExists) {
+            await fs.unlink(faviconPath);
+            console.log('✅ Successfully deleted favicon file:', faviconPath);
+          } else {
+            console.log('⚠️ Favicon file does not exist at path:', faviconPath);
+            // Try alternative paths in case of path mismatch
+            const alternativePaths = [
+              path.join(process.cwd(), 'uploads', 'branding', 'favicon.ico'),
+              path.join(process.cwd(), 'uploads', 'branding', 'favicon.png'),
+              path.join(process.cwd(), 'uploads', 'branding', 'favicon.svg'),
+              path.join(process.cwd(), 'uploads', 'branding', 'favicon.jpg'),
+            ];
+            
+            for (const altPath of alternativePaths) {
+              const altExists = await fs.access(altPath).then(() => true).catch(() => false);
+              if (altExists) {
+                console.log('   Found favicon at alternative path, deleting:', altPath);
+                await fs.unlink(altPath);
+                console.log('✅ Deleted favicon from alternative path:', altPath);
+                break;
+              }
+            }
+          }
         } catch (error: any) {
+          // File might not exist, log but don't fail
           if (error.code === 'ENOENT') {
             console.log('⚠️ Favicon file does not exist (already deleted?):', faviconPath);
           } else {
             console.error('❌ Could not delete favicon file:', faviconPath, error.message);
+            console.error('   Error code:', error.code);
           }
         }
+      } else {
+        console.log('⚠️ Favicon deletion skipped:');
+        console.log('   - existingBranding?.faviconUrl:', existingBranding?.faviconUrl);
+        console.log('   - isFaviconBeingCleared:', isFaviconBeingCleared);
       }
       
       // Ensure we have all required fields and validate the data
@@ -5019,10 +5081,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // CRITICAL: Normalize null values to undefined for JSON response
       // This ensures frontend receives undefined (not null) which is easier to check
+      // Use explicit null/undefined check to properly handle cleared fields
       const normalizedBranding = {
         ...branding,
-        logoUrl: branding.logoUrl || undefined,
-        faviconUrl: branding.faviconUrl || undefined,
+        logoUrl: (branding.logoUrl === null || branding.logoUrl === undefined || branding.logoUrl === '') 
+          ? undefined 
+          : branding.logoUrl,
+        faviconUrl: (branding.faviconUrl === null || branding.faviconUrl === undefined || branding.faviconUrl === '') 
+          ? undefined 
+          : branding.faviconUrl,
       };
       
       console.log('✅ PUT /api/admin/system-config/branding - Returning normalized branding:', JSON.stringify(normalizedBranding, null, 2));
@@ -5055,10 +5122,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No file provided" });
       }
 
-      const { type } = req.body; // 'logo' or 'favicon'
-      if (!type || !['logo', 'favicon'].includes(type)) {
+      const { type } = req.body; // 'logo' (system), 'company-logo', or 'favicon'
+      const validTypes = ['logo', 'favicon', 'company-logo'];
+      if (!type || !validTypes.includes(type)) {
         console.error('❌ Invalid type:', type);
-        return res.status(400).json({ error: "Invalid type. Must be 'logo' or 'favicon'" });
+        return res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
       }
 
       const fs = await import('fs/promises');
@@ -5076,11 +5144,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
          req.file.mimetype.includes('ico') ? '.ico' : 
          req.file.mimetype.includes('jpeg') || req.file.mimetype.includes('jpg') ? '.jpg' : '.png');
 
-      // Use consistent filenames: logo.png, favicon.ico
-      const filename = type === 'favicon' 
-        ? `favicon${originalExt === '.ico' ? '.ico' : '.png'}` 
-        : `logo${originalExt}`;
+      // Use DIFFERENT filenames for system logo vs company logo to prevent conflicts
+      let filename: string;
+      if (type === 'favicon') {
+        filename = `favicon${originalExt === '.ico' ? '.ico' : '.png'}`;
+      } else if (type === 'company-logo') {
+        // Company logo gets its own unique filename
+        filename = `company-logo${originalExt}`;
+      } else {
+        // System/platform logo
+        filename = `system-logo${originalExt}`;
+      }
+      
       const filePath = path.join(brandingDir, filename);
+      
+      console.log('💾 Upload type:', type, '→ Saving as:', filename);
 
       console.log('💾 Saving file:', { filename, filePath, size: req.file.size });
 
