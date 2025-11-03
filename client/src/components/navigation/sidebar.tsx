@@ -252,117 +252,115 @@ export default function Sidebar() {
   return (
     <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
       <div className="flex min-h-0 flex-1 flex-col bg-card border-r border-border">
-        <div className="flex flex-1 flex-col pt-5 pb-4 overflow-y-auto">
-          {/* Logo */}
-          <div className="flex items-center flex-shrink-0 px-4">
-            {logoUrl ? (
-              <img
-                src={`${logoUrl}${logoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
-                alt={`${platformName} logo`}
-                className="h-10 w-auto max-w-[120px] object-contain"
-                onError={(e) => {
-                  // Fallback to default if image fails to load or is removed
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) fallback.style.display = 'flex';
-                }}
-              />
-            ) : null}
-            {!logoUrl && (
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">LR</span>
-              </div>
-            )}
-            <span className="ml-3 text-xl font-bold text-foreground">
-              {platformName}
-            </span>
-          </div>
-
-          {/* Navigation */}
-          <nav className="mt-8 flex-1 px-4 space-y-2">
-            {navigation.map((item) => {
-              const showBadge = item.name === "Notifications" && unreadCount && unreadCount.count > 0;
-              
-              // Render dropdown for Student Content
-              if ((item as any).isDropdown && (item as any).dropdownItems) {
-                return (
-                  <DropdownMenu key={item.name}>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
-                          item.active
-                            ? "bg-accent text-accent-foreground"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                        }`}
-                        data-testid={`nav-${item.name.toLowerCase()}`}
-                      >
-                        <item.icon className="w-5 h-5 mr-3" />
-                        <span className="flex-1 text-left">{item.name}</span>
-                        <ChevronDown className="w-4 h-4 ml-2" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
-                      {(item as any).dropdownItems.map((dropdownItem: any) => {
-                        const isItemActive = location === dropdownItem.href;
-                        return (
-                          <Link key={dropdownItem.name} href={dropdownItem.href}>
-                            <DropdownMenuItem
-                              className={`cursor-pointer ${
-                                isItemActive ? "bg-accent text-accent-foreground" : ""
-                              }`}
-                            >
-                              <dropdownItem.icon className="w-4 h-4 mr-2" />
-                              {dropdownItem.name}
-                            </DropdownMenuItem>
-                          </Link>
-                        );
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                );
-              }
-              
-              // Render regular navigation item
-              return (
-                <Link key={item.name} href={item.href}>
-                  <a
-                    className={`group flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
-                      item.active
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                    data-testid={`nav-${item.name.toLowerCase()}`}
-                  >
-                    <item.icon className="w-5 h-5 mr-3" />
-                    <span className="flex-1">{item.name}</span>
-                    {showBadge && (
-                      <Badge className="ml-2 bg-red-500 text-white text-xs min-w-[1.25rem] h-5 flex items-center justify-center px-1.5">
-                        {unreadCount.count > 99 ? "99+" : unreadCount.count}
-                      </Badge>
-                    )}
-                  </a>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Theme Toggle and Logout */}
-          <div className="px-4 py-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">Theme</span>
-              <ThemeToggle />
+        {/* Logo - Fixed at top */}
+        <div className="flex items-center flex-shrink-0 px-4 pt-5 pb-4">
+          {logoUrl ? (
+            <img
+              src={`${logoUrl}${logoUrl.includes('?') ? '&' : '?'}_=${Date.now()}`}
+              alt={`${platformName} logo`}
+              className="h-10 w-auto max-w-[120px] object-contain"
+              onError={(e) => {
+                // Fallback to default if image fails to load or is removed
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const fallback = target.nextElementSibling as HTMLElement;
+                if (fallback) fallback.style.display = 'flex';
+              }}
+            />
+          ) : null}
+          {!logoUrl && (
+            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <span className="text-primary-foreground font-bold text-lg">LR</span>
             </div>
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              className="w-full justify-start"
-              data-testid="button-logout"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
+          )}
+          <span className="ml-3 text-xl font-bold text-foreground">
+            {platformName}
+          </span>
+        </div>
+
+        {/* Navigation - Scrollable */}
+        <nav className="flex-1 px-4 space-y-2 overflow-y-auto scrollbar-hide">
+          {navigation.map((item) => {
+            const showBadge = item.name === "Notifications" && unreadCount && unreadCount.count > 0;
+            
+            // Render dropdown for Student Content
+            if ((item as any).isDropdown && (item as any).dropdownItems) {
+              return (
+                <DropdownMenu key={item.name}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                        item.active
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                      data-testid={`nav-${item.name.toLowerCase()}`}
+                    >
+                      <item.icon className="w-5 h-5 mr-3" />
+                      <span className="flex-1 text-left">{item.name}</span>
+                      <ChevronDown className="w-4 h-4 ml-2" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    {(item as any).dropdownItems.map((dropdownItem: any) => {
+                      const isItemActive = location === dropdownItem.href;
+                      return (
+                        <Link key={dropdownItem.name} href={dropdownItem.href}>
+                          <DropdownMenuItem
+                            className={`cursor-pointer ${
+                              isItemActive ? "bg-accent text-accent-foreground" : ""
+                            }`}
+                          >
+                            <dropdownItem.icon className="w-4 h-4 mr-2" />
+                            {dropdownItem.name}
+                          </DropdownMenuItem>
+                        </Link>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            }
+            
+            // Render regular navigation item
+            return (
+              <Link key={item.name} href={item.href}>
+                <a
+                  className={`group flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
+                    item.active
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                  data-testid={`nav-${item.name.toLowerCase()}`}
+                >
+                  <item.icon className="w-5 h-5 mr-3" />
+                  <span className="flex-1">{item.name}</span>
+                  {showBadge && (
+                    <Badge className="ml-2 bg-red-500 text-white text-xs min-w-[1.25rem] h-5 flex items-center justify-center px-1.5">
+                      {unreadCount.count > 99 ? "99+" : unreadCount.count}
+                    </Badge>
+                  )}
+                </a>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Theme Toggle and Logout - Fixed at bottom (above user profile) */}
+        <div className="flex-shrink-0 px-4 py-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">Theme</span>
+            <ThemeToggle />
           </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="w-full justify-start"
+            data-testid="button-logout"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Logout
+          </Button>
         </div>
 
         {/* User Profile */}

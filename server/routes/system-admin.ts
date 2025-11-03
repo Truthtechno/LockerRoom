@@ -1,7 +1,7 @@
 import { Express } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { db } from '../db';
-import { users, schools, schoolAdmins, systemAdmins, students, subscriptions, schoolSettings, schoolApplications, posts, studentFollowers, banners } from '../../shared/schema';
+import { users, schools, schoolAdmins, systemAdmins, students, subscriptions, schoolSettings, schoolApplications, posts, studentFollowers, banners, schoolPaymentRecords } from '../../shared/schema';
 import { eq, sql, and } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import { AuthStorage } from '../auth-storage';
@@ -72,7 +72,8 @@ export function registerSystemAdminRoutes(app: Express) {
     requireRole('system_admin'),
     async (req, res) => {
       try {
-        const { name, address, contactEmail, contactPhone, paymentAmount, paymentFrequency } = req.body;
+        const { name, address, contactEmail, contactPhone, paymentAmount, paymentFrequency, maxStudents } = req.body;
+        const auth = (req as any).auth;
         
         // Validation
         if (!name) {
@@ -93,22 +94,38 @@ export function registerSystemAdminRoutes(app: Express) {
           });
         }
 
-        if (!paymentFrequency || !['monthly', 'annual'].includes(paymentFrequency)) {
+        if (!paymentFrequency || !['monthly', 'annual', 'one-time'].includes(paymentFrequency)) {
           return res.status(400).json({ 
             error: { 
               code: 'validation_error', 
-              message: 'Payment frequency must be monthly or annual' 
+              message: 'Payment frequency must be monthly, annual, or one-time' 
+            } 
+          });
+        }
+
+        // Validate maxStudents
+        const studentLimit = maxStudents ? parseInt(maxStudents, 10) : 10; // Default to 10
+        if (isNaN(studentLimit) || studentLimit < 1 || studentLimit > 10000) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Student limit must be between 1 and 10,000' 
             } 
           });
         }
 
         // Calculate expiration date based on frequency
         const now = new Date();
-        const expirationDate = new Date(now);
+        let expirationDate: Date | null = null;
         if (paymentFrequency === 'monthly') {
+          expirationDate = new Date(now);
           expirationDate.setMonth(expirationDate.getMonth() + 1);
         } else if (paymentFrequency === 'annual') {
+          expirationDate = new Date(now);
           expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        } else if (paymentFrequency === 'one-time') {
+          // One-time payments don't have an expiration date
+          expirationDate = null;
         }
 
         // Create school with payment information
@@ -122,7 +139,21 @@ export function registerSystemAdminRoutes(app: Express) {
           subscriptionExpiresAt: expirationDate,
           isActive: true,
           lastPaymentDate: now,
+          maxStudents: studentLimit,
         }).returning();
+
+        // Create initial payment record
+        await db.insert(schoolPaymentRecords).values({
+          schoolId: school.id,
+          paymentAmount: paymentAmount.toString(),
+          paymentFrequency: paymentFrequency,
+          paymentType: 'initial',
+          studentLimitAfter: studentLimit,
+          recordedBy: auth.id,
+          recordedAt: now,
+          subscriptionExpiresAt: expirationDate,
+          notes: 'Initial payment - School creation',
+        });
 
         console.log(`🏫 School created: ${school.name} (ID: ${school.id}) - Payment: $${paymentAmount} ${paymentFrequency}`);
 
@@ -139,6 +170,7 @@ export function registerSystemAdminRoutes(app: Express) {
             subscriptionExpiresAt: school.subscriptionExpiresAt,
             isActive: school.isActive,
             lastPaymentDate: school.lastPaymentDate,
+            maxStudents: school.maxStudents,
             createdAt: school.createdAt
           }
         });
@@ -611,14 +643,15 @@ export function registerSystemAdminRoutes(app: Express) {
     }
   );
 
-  // Renew School Subscription
-  app.post('/api/system-admin/schools/:schoolId/renew',
+  // Record Payment (separate from renewal)
+  app.post('/api/system-admin/schools/:schoolId/payments',
     requireAuth,
     requireRole('system_admin'),
     async (req, res) => {
       try {
         const { schoolId } = req.params;
-        const { paymentAmount, paymentFrequency } = req.body;
+        const { paymentAmount, paymentFrequency, paymentType, studentLimitBefore, studentLimitAfter, oldFrequency, newFrequency, notes } = req.body;
+        const auth = (req as any).auth;
         
         // Check if school exists
         const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
@@ -641,41 +674,213 @@ export function registerSystemAdminRoutes(app: Express) {
           });
         }
 
-        if (!paymentFrequency || !['monthly', 'annual'].includes(paymentFrequency)) {
+        if (!paymentFrequency || !['monthly', 'annual', 'one-time'].includes(paymentFrequency)) {
           return res.status(400).json({ 
             error: { 
               code: 'validation_error', 
-              message: 'Payment frequency must be monthly or annual' 
+              message: 'Payment frequency must be monthly, annual, or one-time' 
             } 
           });
         }
 
-        // Calculate new expiration date
-        const now = new Date();
-        const expirationDate = new Date(now);
-        
-        // If subscription hasn't expired yet, extend from current expiration date
-        // Otherwise, start from now
-        const baseDate = (school.subscriptionExpiresAt && new Date(school.subscriptionExpiresAt) > now) 
-          ? new Date(school.subscriptionExpiresAt)
-          : now;
+        if (!paymentType || !['initial', 'renewal', 'student_limit_increase', 'student_limit_decrease', 'frequency_change'].includes(paymentType)) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Valid payment type is required' 
+            } 
+          });
+        }
 
+        // Create payment record
+        const now = new Date();
+        const [paymentRecord] = await db.insert(schoolPaymentRecords).values({
+          schoolId: schoolId,
+          paymentAmount: paymentAmount.toString(),
+          paymentFrequency: paymentFrequency,
+          paymentType: paymentType,
+          studentLimitBefore: studentLimitBefore ? parseInt(studentLimitBefore, 10) : null,
+          studentLimitAfter: studentLimitAfter ? parseInt(studentLimitAfter, 10) : null,
+          oldFrequency: oldFrequency || null,
+          newFrequency: newFrequency || null,
+          notes: notes || null,
+          recordedBy: auth.id,
+          recordedAt: now,
+        }).returning();
+
+        // If this is a limit change, update school's maxStudents
+        if (paymentType === 'student_limit_increase' || paymentType === 'student_limit_decrease') {
+          if (studentLimitAfter) {
+            // Check current enrollment doesn't exceed new limit
+            const studentCountResult = await db
+              .select({ count: sql<number>`count(*)::int` })
+              .from(students)
+              .where(eq(students.schoolId, schoolId));
+            
+            const currentStudentCount = studentCountResult[0]?.count || 0;
+            if (currentStudentCount > studentLimitAfter) {
+              return res.status(400).json({ 
+                error: { 
+                  code: 'validation_error', 
+                  message: `Cannot decrease limit below current enrollment (${currentStudentCount} students)` 
+                } 
+              });
+            }
+
+            await db.update(schools)
+              .set({ 
+                maxStudents: studentLimitAfter,
+                updatedAt: now,
+              })
+              .where(eq(schools.id, schoolId));
+          }
+        }
+
+        // If this is a frequency change, update school's payment frequency
+        if (paymentType === 'frequency_change' && newFrequency) {
+          await db.update(schools)
+            .set({ 
+              paymentFrequency: newFrequency,
+              paymentAmount: paymentAmount.toString(),
+              updatedAt: now,
+            })
+            .where(eq(schools.id, schoolId));
+        }
+
+        res.json({
+          success: true,
+          paymentRecord: {
+            id: paymentRecord.id,
+            schoolId: paymentRecord.schoolId,
+            paymentAmount: paymentRecord.paymentAmount,
+            paymentFrequency: paymentRecord.paymentFrequency,
+            paymentType: paymentRecord.paymentType,
+            recordedAt: paymentRecord.recordedAt,
+          }
+        });
+      } catch (error) {
+        console.error('❌ Error recording payment:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to record payment' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Get Payment History
+  app.get('/api/system-admin/schools/:schoolId/payments',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { schoolId } = req.params;
+        
+        // Check if school exists
+        const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
+        if (!school) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'school_not_found', 
+              message: 'School not found' 
+            } 
+          });
+        }
+
+        const paymentHistory = await db
+          .select({
+            id: schoolPaymentRecords.id,
+            paymentAmount: schoolPaymentRecords.paymentAmount,
+            paymentFrequency: schoolPaymentRecords.paymentFrequency,
+            paymentType: schoolPaymentRecords.paymentType,
+            studentLimitBefore: schoolPaymentRecords.studentLimitBefore,
+            studentLimitAfter: schoolPaymentRecords.studentLimitAfter,
+            oldFrequency: schoolPaymentRecords.oldFrequency,
+            newFrequency: schoolPaymentRecords.newFrequency,
+            notes: schoolPaymentRecords.notes,
+            recordedBy: schoolPaymentRecords.recordedBy,
+            recordedAt: schoolPaymentRecords.recordedAt,
+            subscriptionExpiresAt: schoolPaymentRecords.subscriptionExpiresAt,
+          })
+          .from(schoolPaymentRecords)
+          .where(eq(schoolPaymentRecords.schoolId, schoolId))
+          .orderBy(sql`${schoolPaymentRecords.recordedAt} DESC`);
+
+        // Get recorded by user names
+        const paymentHistoryWithUsers = await Promise.all(
+          paymentHistory.map(async (payment) => {
+            if (payment.recordedBy) {
+              const [user] = await db.select({ name: users.name }).from(users).where(eq(users.id, payment.recordedBy)).limit(1);
+              return { ...payment, recordedByName: user?.name || 'Unknown' };
+            }
+            return { ...payment, recordedByName: 'System' };
+          })
+        );
+
+        res.json({
+          success: true,
+          payments: paymentHistoryWithUsers,
+        });
+      } catch (error) {
+        console.error('❌ Error fetching payment history:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to fetch payment history' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Renew Subscription (separated from payment recording)
+  app.post('/api/system-admin/schools/:schoolId/renew',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { schoolId } = req.params;
+        const { renewalDate } = req.body;
+        
+        // Check if school exists
+        const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
+        if (!school) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'school_not_found', 
+              message: 'School not found' 
+            } 
+          });
+        }
+
+        // Calculate new expiration date from renewal date (not from existing expiration)
+        const now = new Date();
+        const renewalDateTime = renewalDate ? new Date(renewalDate) : now;
+        const expirationDate = new Date(renewalDateTime);
+        
+        const paymentFrequency = school.paymentFrequency || 'monthly';
         if (paymentFrequency === 'monthly') {
-          expirationDate.setTime(baseDate.getTime());
           expirationDate.setMonth(expirationDate.getMonth() + 1);
         } else if (paymentFrequency === 'annual') {
-          expirationDate.setTime(baseDate.getTime());
           expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        } else if (paymentFrequency === 'one-time') {
+          // One-time payments don't renew - they have no expiration
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Cannot renew one-time payment subscriptions. One-time payments do not expire.' 
+            } 
+          });
         }
 
         // Update school subscription
         const [updatedSchool] = await db.update(schools)
           .set({
-            paymentAmount: paymentAmount.toString(),
-            paymentFrequency: paymentFrequency,
             subscriptionExpiresAt: expirationDate,
             isActive: true,
-            lastPaymentDate: now,
+            lastPaymentDate: renewalDateTime,
             updatedAt: now,
           })
           .where(eq(schools.id, schoolId))
@@ -706,7 +911,7 @@ export function registerSystemAdminRoutes(app: Express) {
             .where(eq(users.id, studentUser.id));
         }
 
-        console.log(`✅ School subscription renewed: ${updatedSchool.name} (ID: ${schoolId}) - Payment: $${paymentAmount} ${paymentFrequency}`);
+        console.log(`✅ School subscription renewed: ${updatedSchool.name} (ID: ${schoolId}) - Expires: ${expirationDate.toISOString()}`);
 
         res.json({
           success: true,
@@ -726,6 +931,228 @@ export function registerSystemAdminRoutes(app: Express) {
           error: { 
             code: 'server_error', 
             message: 'Failed to renew school subscription' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Get School Details
+  app.get('/api/system-admin/schools/:schoolId',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { schoolId } = req.params;
+        
+        // Get school
+        const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
+        if (!school) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'school_not_found', 
+              message: 'School not found' 
+            } 
+          });
+        }
+
+        // Get student count
+        const studentCountResult = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(students)
+          .where(eq(students.schoolId, schoolId));
+        const studentCount = studentCountResult[0]?.count || 0;
+
+        // Get admin count
+        const adminCountResult = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schoolAdmins)
+          .where(eq(schoolAdmins.schoolId, schoolId));
+        const adminCount = adminCountResult[0]?.count || 0;
+
+        // Get post count
+        const postCountResult = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(posts)
+          .innerJoin(students, eq(posts.studentId, students.id))
+          .where(eq(students.schoolId, schoolId));
+        const postCount = postCountResult[0]?.count || 0;
+
+        res.json({
+          success: true,
+          school: {
+            ...school,
+            studentCount,
+            adminCount,
+            postCount,
+          }
+        });
+      } catch (error) {
+        console.error('❌ Error fetching school details:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to fetch school details' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Update School Information
+  app.put('/api/system-admin/schools/:schoolId',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { schoolId } = req.params;
+        const { name, address, contactEmail, contactPhone } = req.body;
+        
+        // Check if school exists
+        const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
+        if (!school) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'school_not_found', 
+              message: 'School not found' 
+            } 
+          });
+        }
+
+        // Update only allowed fields
+        const updateData: any = {
+          updatedAt: new Date(),
+        };
+        
+        if (name !== undefined) updateData.name = name;
+        if (address !== undefined) updateData.address = address || null;
+        if (contactEmail !== undefined) updateData.contactEmail = contactEmail || null;
+        if (contactPhone !== undefined) updateData.contactPhone = contactPhone || null;
+
+        const [updatedSchool] = await db.update(schools)
+          .set(updateData)
+          .where(eq(schools.id, schoolId))
+          .returning();
+
+        res.json({
+          success: true,
+          school: updatedSchool,
+        });
+      } catch (error) {
+        console.error('❌ Error updating school:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to update school' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Get School Admins
+  app.get('/api/system-admin/schools/:schoolId/admins',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { schoolId } = req.params;
+        
+        const admins = await db
+          .select({
+            adminId: schoolAdmins.id,
+            userId: users.id,
+            name: users.name,
+            email: users.email,
+            createdAt: users.createdAt,
+          })
+          .from(schoolAdmins)
+          .innerJoin(users, eq(users.linkedId, schoolAdmins.id))
+          .where(eq(schoolAdmins.schoolId, schoolId))
+          .orderBy(sql`${users.name} ASC`);
+
+        res.json({
+          success: true,
+          admins,
+        });
+      } catch (error) {
+        console.error('❌ Error fetching school admins:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to fetch school admins' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Get School Students
+  app.get('/api/system-admin/schools/:schoolId/students',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { schoolId } = req.params;
+        const { search, sortBy = 'name', sortOrder = 'asc' } = req.query;
+        
+        let query = db
+          .select({
+            studentId: students.id,
+            userId: users.id,
+            name: users.name,
+            email: users.email,
+            phone: students.phone,
+            sport: students.sport,
+            position: students.position,
+            roleNumber: students.roleNumber,
+            gender: students.gender,
+            bio: students.bio,
+            profilePicUrl: students.profilePicUrl,
+            createdAt: users.createdAt,
+          })
+          .from(students)
+          .innerJoin(users, eq(users.linkedId, students.id))
+          .where(eq(students.schoolId, schoolId));
+
+        // Add search filter if provided
+        if (search && typeof search === 'string') {
+          query = query.where(
+            sql`${users.name} ILIKE ${`%${search}%`} OR ${users.email} ILIKE ${`%${search}%`}`
+          ) as any;
+        }
+
+        // Add sorting
+        const orderBy = sortOrder === 'desc' ? sql`${users.name} DESC` : sql`${users.name} ASC`;
+        const studentsList = await query.orderBy(orderBy);
+
+        // Debug: Log first student to verify roleNumber is being returned
+        if (studentsList.length > 0) {
+          console.log('📊 Sample student data from query:', JSON.stringify(studentsList[0], null, 2));
+          console.log('📊 roleNumber value:', studentsList[0].roleNumber);
+          console.log('📊 roleNumber type:', typeof studentsList[0].roleNumber);
+          console.log('📊 roleNumber === null?', studentsList[0].roleNumber === null);
+          console.log('📊 roleNumber === undefined?', studentsList[0].roleNumber === undefined);
+        }
+
+        // Ensure roleNumber is explicitly included in response
+        const normalizedStudents = studentsList.map(student => ({
+          ...student,
+          roleNumber: student.roleNumber || null, // Explicitly set to null if falsy
+        }));
+
+        console.log('📊 First normalized student:', JSON.stringify(normalizedStudents[0] || {}, null, 2));
+
+        res.json({
+          success: true,
+          students: normalizedStudents,
+        });
+      } catch (error) {
+        console.error('❌ Error fetching school students:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to fetch school students' 
           } 
         });
       }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,21 @@ export default function AddStudent() {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpCopied, setOtpCopied] = useState(false);
   const [studentData, setStudentData] = useState<any>(null);
+
+  // Fetch enrollment status
+  const { data: enrollmentStatus } = useQuery({
+    queryKey: ["/api/school-admin/enrollment-status"],
+    queryFn: async () => {
+      const response = await fetch('/api/school-admin/enrollment-status', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch enrollment status');
+      return response.json();
+    },
+    enabled: !!user?.schoolId,
+  });
 
   const form = useForm<AddStudentFormData>({
     resolver: zodResolver(addStudentFormSchema),
@@ -127,6 +142,17 @@ export default function AddStudent() {
   });
 
   const onSubmit = (data: AddStudentFormData) => {
+    // Check enrollment limit before submitting
+    if (enrollmentStatus?.enrollmentStatus && !enrollmentStatus.enrollmentStatus.canEnroll) {
+      toast({
+        title: "Enrollment Limit Reached",
+        description: enrollmentStatus.enrollmentStatus.warningLevel === 'at_limit' 
+          ? `You've reached your student limit (${enrollmentStatus.enrollmentStatus.currentCount}/${enrollmentStatus.enrollmentStatus.maxStudents}). Please contact system admin to increase capacity.`
+          : "Cannot enroll new students at this time.",
+        variant: "destructive",
+      });
+      return;
+    }
     addStudentMutation.mutate(data);
   };
 
@@ -211,6 +237,55 @@ export default function AddStudent() {
           </CardHeader>
           
           <CardContent>
+            {/* Enrollment Status Alert */}
+            {enrollmentStatus?.enrollmentStatus && (
+              <div className={`mb-6 p-4 rounded-lg border ${
+                enrollmentStatus.enrollmentStatus.warningLevel === 'at_limit'
+                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                  : enrollmentStatus.enrollmentStatus.warningLevel === 'approaching'
+                  ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                  : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className={`w-5 h-5 mt-0.5 ${
+                    enrollmentStatus.enrollmentStatus.warningLevel === 'at_limit'
+                      ? 'text-red-600 dark:text-red-400'
+                      : enrollmentStatus.enrollmentStatus.warningLevel === 'approaching'
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-blue-600 dark:text-blue-400'
+                  }`} />
+                  <div className="flex-1">
+                    <p className={`font-medium ${
+                      enrollmentStatus.enrollmentStatus.warningLevel === 'at_limit'
+                        ? 'text-red-800 dark:text-red-200'
+                        : enrollmentStatus.enrollmentStatus.warningLevel === 'approaching'
+                        ? 'text-yellow-800 dark:text-yellow-200'
+                        : 'text-blue-800 dark:text-blue-200'
+                    }`}>
+                      {enrollmentStatus.enrollmentStatus.warningLevel === 'at_limit'
+                        ? 'Enrollment Limit Reached'
+                        : enrollmentStatus.enrollmentStatus.warningLevel === 'approaching'
+                        ? 'Approaching Enrollment Limit'
+                        : 'Enrollment Status'}
+                    </p>
+                    <p className={`text-sm mt-1 ${
+                      enrollmentStatus.enrollmentStatus.warningLevel === 'at_limit'
+                        ? 'text-red-700 dark:text-red-300'
+                        : enrollmentStatus.enrollmentStatus.warningLevel === 'approaching'
+                        ? 'text-yellow-700 dark:text-yellow-300'
+                        : 'text-blue-700 dark:text-blue-300'
+                    }`}>
+                      {enrollmentStatus.enrollmentStatus.warningLevel === 'at_limit'
+                        ? `You've reached your student limit (${enrollmentStatus.enrollmentStatus.currentCount}/${enrollmentStatus.enrollmentStatus.maxStudents}). Cannot enroll new students. Please contact system admin to increase capacity.`
+                        : enrollmentStatus.enrollmentStatus.warningLevel === 'approaching'
+                        ? `You're approaching your student limit (${enrollmentStatus.enrollmentStatus.currentCount}/${enrollmentStatus.enrollmentStatus.maxStudents}). ${enrollmentStatus.enrollmentStatus.availableSlots} slot(s) remaining.`
+                        : `Current enrollment: ${enrollmentStatus.enrollmentStatus.currentCount}/${enrollmentStatus.enrollmentStatus.maxStudents} students (${enrollmentStatus.enrollmentStatus.availableSlots} slots available)`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
@@ -280,7 +355,7 @@ export default function AddStudent() {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={addStudentMutation.isPending}
+                    disabled={addStudentMutation.isPending || (enrollmentStatus?.enrollmentStatus && !enrollmentStatus.enrollmentStatus.canEnroll)}
                     className="gold-gradient text-accent-foreground min-w-32"
                     data-testid="button-submit"
                   >

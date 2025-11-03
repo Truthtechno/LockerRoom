@@ -20,6 +20,77 @@ cloudinary.config({
 });
 
 export function registerSchoolAdminRoutes(app: Express) {
+  // Get Enrollment Status
+  app.get('/api/school-admin/enrollment-status',
+    requireAuth,
+    requireRole('school_admin'),
+    async (req, res) => {
+      try {
+        const caller = (req as any).auth;
+        const schoolId = caller.schoolId;
+  
+        if (!schoolId) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'missing_school_id', 
+              message: 'You are not linked to a school.' 
+            } 
+          });
+        }
+
+        // Get school
+        const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
+        if (!school) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'school_not_found', 
+              message: 'School not found' 
+            } 
+          });
+        }
+
+        // Get current student count
+        const studentCountResult = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(students)
+          .where(eq(students.schoolId, schoolId));
+        
+        const currentCount = studentCountResult[0]?.count || 0;
+        const maxStudents = school.maxStudents || 10;
+        const availableSlots = maxStudents - currentCount;
+        const utilizationPercentage = maxStudents > 0 ? (currentCount / maxStudents) * 100 : 0;
+        
+        // Determine warning level
+        let warningLevel: 'none' | 'approaching' | 'at_limit' = 'none';
+        if (utilizationPercentage >= 100) {
+          warningLevel = 'at_limit';
+        } else if (utilizationPercentage >= 80) {
+          warningLevel = 'approaching';
+        }
+
+        res.json({
+          success: true,
+          enrollmentStatus: {
+            currentCount,
+            maxStudents,
+            availableSlots,
+            utilizationPercentage: Math.round(utilizationPercentage * 100) / 100,
+            warningLevel,
+            canEnroll: currentCount < maxStudents,
+          }
+        });
+      } catch (error) {
+        console.error('❌ Error fetching enrollment status:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to fetch enrollment status' 
+          } 
+        });
+      }
+    }
+  );
+
   // Create School Announcement
   app.post('/api/schools/:schoolId/announcements',
     requireAuth,
@@ -152,6 +223,24 @@ export function registerSchoolAdminRoutes(app: Express) {
         }
 
         console.log('✅ School validation passed:', school.name, 'ID:', schoolId);
+  
+        // Check enrollment limit
+        const studentCountResult = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(students)
+          .where(eq(students.schoolId, schoolId));
+        
+        const currentStudentCount = studentCountResult[0]?.count || 0;
+        const maxStudents = school.maxStudents || 10;
+        
+        if (currentStudentCount >= maxStudents) {
+          return res.status(403).json({ 
+            error: { 
+              code: 'enrollment_limit_reached', 
+              message: `Student enrollment limit reached (${currentStudentCount}/${maxStudents}). Please contact system admin to increase capacity.` 
+            } 
+          });
+        }
   
         const { name, email, phone, sport, position, bio, grade, gender, dateOfBirth, guardianContact, roleNumber } = req.body;
         

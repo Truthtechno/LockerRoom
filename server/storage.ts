@@ -92,7 +92,9 @@ import {
   xenWatchReviews,
   xenWatchFeedback,
   // Notifications
-  notifications
+  notifications,
+  // School Payment Records
+  schoolPaymentRecords
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -1167,13 +1169,46 @@ export class MemStorage implements IStorage {
     const premiumSchools = Array.from(this.schools.values()).filter(school => school.subscriptionPlan === "premium").length;
     const standardSchools = Array.from(this.schools.values()).filter(school => school.subscriptionPlan === "standard").length;
     
-    const monthlyRevenue = (premiumSchools * 150) + (standardSchools * 75);
+    // Calculate monthly revenue from actual payment records (last 30 days)
+    let monthlyRevenue = 0;
+    if (isDbConnected) {
+      try {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const recentPayments = await db
+          .select({
+            paymentAmount: schoolPaymentRecords.paymentAmount,
+            paymentFrequency: schoolPaymentRecords.paymentFrequency,
+          })
+          .from(schoolPaymentRecords)
+          .where(sql`${schoolPaymentRecords.recordedAt} >= ${thirtyDaysAgo}`);
+        
+        // Calculate MRR from recent payments
+        for (const payment of recentPayments) {
+          const amount = parseFloat(payment.paymentAmount?.toString() || "0");
+          if (payment.paymentFrequency === "monthly") {
+            monthlyRevenue += amount;
+          } else if (payment.paymentFrequency === "annual") {
+            monthlyRevenue += amount / 12; // Convert annual to monthly
+          } else if (payment.paymentFrequency === "one-time") {
+            // One-time payments don't contribute to monthly recurring revenue
+            // But we can include them as one-time revenue if needed
+          }
+        }
+      } catch (error) {
+        console.error("Error calculating monthly revenue from payment records:", error);
+        // Fallback to old calculation
+        monthlyRevenue = (premiumSchools * 150) + (standardSchools * 75);
+      }
+    } else {
+      // Fallback for in-memory storage
+      monthlyRevenue = (premiumSchools * 150) + (standardSchools * 75);
+    }
 
     return {
       totalSchools: schools,
       activeStudents: students,
       contentUploads: posts,
-      monthlyRevenue,
+      monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
       premiumSchools,
       standardSchools,
     };
@@ -5683,7 +5718,52 @@ export class PostgresStorage implements IStorage {
     
     const totalEngagement = Number(totalLikes[0]?.count || 0) + Number(totalComments[0]?.count || 0) + Number(totalViews[0]?.count || 0) + Number(totalSaves[0]?.count || 0);
     
-    // Get revenue
+    // Get revenue from payment records within the period
+    let periodRevenue = 0;
+    let previousPeriodRevenue = 0;
+    
+    try {
+      // Current period revenue
+      const periodPayments = await db
+        .select({
+          paymentAmount: schoolPaymentRecords.paymentAmount,
+          paymentFrequency: schoolPaymentRecords.paymentFrequency,
+        })
+        .from(schoolPaymentRecords)
+        .where(sql`${schoolPaymentRecords.recordedAt} >= ${startDate}`);
+      
+      for (const payment of periodPayments) {
+        const amount = parseFloat(payment.paymentAmount?.toString() || "0");
+        // Include all payments in the period (actual cash received)
+        periodRevenue += amount;
+      }
+      
+      // Previous period revenue for comparison
+      const previousPeriodPayments = await db
+        .select({
+          paymentAmount: schoolPaymentRecords.paymentAmount,
+          paymentFrequency: schoolPaymentRecords.paymentFrequency,
+        })
+        .from(schoolPaymentRecords)
+        .where(
+          and(
+            sql`${schoolPaymentRecords.recordedAt} >= ${previousStartDate}`,
+            sql`${schoolPaymentRecords.recordedAt} < ${startDate}`
+          )
+        );
+      
+      for (const payment of previousPeriodPayments) {
+        const amount = parseFloat(payment.paymentAmount?.toString() || "0");
+        previousPeriodRevenue += amount;
+      }
+    } catch (error) {
+      console.error("Error calculating revenue from payment records:", error);
+      // Fallback to system stats
+      const systemStats = await this.getSystemStats();
+      periodRevenue = systemStats.monthlyRevenue;
+    }
+    
+    // Also get system stats for other metrics
     const systemStats = await this.getSystemStats();
     
     // Get period data for comparison
@@ -5745,11 +5825,10 @@ export class PostgresStorage implements IStorage {
     const prevPeriodEngagement = Number(previousPeriodEngagement.rows[0]?.engagement || 0);
     const engagementGrowth = prevPeriodEngagement > 0 ? ((currentPeriodEngagement - prevPeriodEngagement) / prevPeriodEngagement) * 100 : 0;
     
-    // Calculate revenue growth
-    const currentRevenue = systemStats.monthlyRevenue;
-    // Get previous period revenue (approximate - would need historical data)
-    const previousPeriodRevenue = currentRevenue; // Placeholder - would need to calculate from historical data
-    const revenueGrowth = 0; // Would need historical revenue data to calculate
+    // Calculate revenue growth from payment records
+    const revenueGrowth = previousPeriodRevenue > 0 
+      ? ((periodRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100 
+      : periodRevenue > 0 ? 100 : 0;
     
     // Get active users (users who have created posts or engaged in the last 30 days)
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -5815,11 +5894,11 @@ export class PostgresStorage implements IStorage {
         schools: Number(totalSchools[0]?.count || 0),
         posts: Number(totalPosts[0]?.count || 0),
         engagement: totalEngagement,
-        revenue: systemStats.monthlyRevenue
+        revenue: Math.round(periodRevenue * 100) / 100
       },
       trends: {
         userGrowth: userGrowth,
-        revenueGrowth: revenueGrowth, // Would need historical data for accurate calculation
+        revenueGrowth: Math.round(revenueGrowth * 100) / 100,
         engagementGrowth: engagementGrowth
       },
       periodComparison: {
@@ -6098,61 +6177,150 @@ export class PostgresStorage implements IStorage {
         )
       );
     
-    // Calculate current MRR and ARR based on actual payment amounts
+    // Calculate current MRR and ARR based on latest payment records
     let mrr = 0;
     let monthlyCount = 0;
     let annualCount = 0;
+    let oneTimeCount = 0;
     let monthlyRevenue = 0;
     let annualRevenue = 0;
+    let oneTimeRevenue = 0;
     
+    // For each active school, get the most recent RECURRING payment record to calculate MRR
+    // MRR should be based on recurring subscriptions (initial/renewal), not one-time payments
     for (const school of allSchools) {
-      const paymentAmount = parseFloat(school.paymentAmount?.toString() || "0");
-      if (school.paymentFrequency === "monthly") {
-        monthlyCount++;
-        monthlyRevenue += paymentAmount;
-        mrr += paymentAmount;
-      } else if (school.paymentFrequency === "annual") {
-        annualCount++;
-        annualRevenue += paymentAmount;
-        mrr += paymentAmount / 12; // Convert annual to monthly
+      try {
+        // Get the most recent RECURRING payment (initial or renewal) for this school
+        // This determines the active subscription for MRR calculation
+        const latestRecurringPayment = await db
+          .select({
+            paymentAmount: schoolPaymentRecords.paymentAmount,
+            paymentFrequency: schoolPaymentRecords.paymentFrequency,
+            paymentType: schoolPaymentRecords.paymentType,
+          })
+          .from(schoolPaymentRecords)
+          .where(
+            and(
+              eq(schoolPaymentRecords.schoolId, school.id),
+              sql`${schoolPaymentRecords.paymentFrequency} != 'one-time'`,
+              sql`(${schoolPaymentRecords.paymentType} = 'initial' OR ${schoolPaymentRecords.paymentType} = 'renewal')`
+            )
+          )
+          .orderBy(desc(schoolPaymentRecords.recordedAt))
+          .limit(1);
+        
+        // Also get all one-time payments for this school (for one-time revenue tracking)
+        const oneTimePayments = await db
+          .select({
+            paymentAmount: schoolPaymentRecords.paymentAmount,
+          })
+          .from(schoolPaymentRecords)
+          .where(
+            and(
+              eq(schoolPaymentRecords.schoolId, school.id),
+              sql`${schoolPaymentRecords.paymentFrequency} = 'one-time'`
+            )
+          );
+        
+        // Calculate one-time revenue for this school
+        for (const otp of oneTimePayments) {
+          const amount = parseFloat(otp.paymentAmount?.toString() || "0");
+          oneTimeRevenue += amount;
+        }
+        if (oneTimePayments.length > 0) {
+          oneTimeCount++;
+        }
+        
+        if (latestRecurringPayment.length > 0) {
+          // Use the recurring payment for MRR calculation
+          const payment = latestRecurringPayment[0];
+          const paymentAmount = parseFloat(payment.paymentAmount?.toString() || "0");
+          
+          if (payment.paymentFrequency === "monthly") {
+            monthlyCount++;
+            monthlyRevenue += paymentAmount;
+            mrr += paymentAmount;
+          } else if (payment.paymentFrequency === "annual") {
+            annualCount++;
+            annualRevenue += paymentAmount;
+            mrr += paymentAmount / 12; // Convert annual to monthly
+          }
+        } else {
+          // Fallback to school's paymentAmount/frequency if no recurring payment records exist
+          // This handles schools created before payment records were implemented
+          const paymentAmount = parseFloat(school.paymentAmount?.toString() || "0");
+          if (school.paymentFrequency === "monthly") {
+            monthlyCount++;
+            monthlyRevenue += paymentAmount;
+            mrr += paymentAmount;
+          } else if (school.paymentFrequency === "annual") {
+            annualCount++;
+            annualRevenue += paymentAmount;
+            mrr += paymentAmount / 12;
+          }
+        }
+      } catch (error) {
+        console.error(`Error getting payment records for school ${school.id}:`, error);
+        // Fallback to school's paymentAmount
+        const paymentAmount = parseFloat(school.paymentAmount?.toString() || "0");
+        if (school.paymentFrequency === "monthly") {
+          monthlyCount++;
+          monthlyRevenue += paymentAmount;
+          mrr += paymentAmount;
+        } else if (school.paymentFrequency === "annual") {
+          annualCount++;
+          annualRevenue += paymentAmount;
+          mrr += paymentAmount / 12;
+        }
       }
     }
     
     const arr = mrr * 12;
     
-    // Get revenue trends over time (monthly for last 12 months)
+    // Get revenue trends over time (monthly for last 12 months) from payment records
     const trends: any[] = [];
     for (let i = 11; i >= 0; i--) {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
       
-      // Get schools that were active at this month end
-      const monthSchools = await db
-        .select()
-        .from(schools)
+      // Get actual payments recorded during this month
+      const monthPayments = await db
+        .select({
+          paymentAmount: schoolPaymentRecords.paymentAmount,
+          paymentFrequency: schoolPaymentRecords.paymentFrequency,
+        })
+        .from(schoolPaymentRecords)
         .where(
           and(
-            sql`${schools.createdAt} <= ${monthEnd}`,
-            or(
-              sql`${schools.subscriptionExpiresAt} IS NULL`,
-              sql`${schools.subscriptionExpiresAt} > ${monthEnd}`
-            ),
-            sql`${schools.isActive} = true`
+            sql`${schoolPaymentRecords.recordedAt} >= ${monthDate}`,
+            sql`${schoolPaymentRecords.recordedAt} <= ${monthEnd}`
           )
         );
       
+      // Calculate MRR based on payments recorded in this month
+      // For monthly payments: add full amount
+      // For annual payments: add amount/12
+      // For one-time payments: add full amount (one-time revenue)
+      let monthRevenue = 0;
       let monthMrr = 0;
-      for (const school of monthSchools) {
-        const paymentAmount = parseFloat(school.paymentAmount?.toString() || "0");
-        if (school.paymentFrequency === "monthly") {
-          monthMrr += paymentAmount;
-        } else if (school.paymentFrequency === "annual") {
-          monthMrr += paymentAmount / 12;
+      
+      for (const payment of monthPayments) {
+        const amount = parseFloat(payment.paymentAmount?.toString() || "0");
+        monthRevenue += amount; // Total revenue recorded this month
+        
+        if (payment.paymentFrequency === "monthly") {
+          monthMrr += amount;
+        } else if (payment.paymentFrequency === "annual") {
+          monthMrr += amount / 12; // Convert annual to monthly
+        } else if (payment.paymentFrequency === "one-time") {
+          // One-time payments don't contribute to MRR
+          // But we include them in total revenue
         }
       }
       
       trends.push({
         month: monthDate.toISOString().substring(0, 7),
+        revenue: Math.round(monthRevenue * 100) / 100, // Actual payments received
         mrr: Math.round(monthMrr * 100) / 100,
         arr: Math.round(monthMrr * 12 * 100) / 100
       });
@@ -6192,7 +6360,8 @@ export class PostgresStorage implements IStorage {
       arr: Math.round(arr * 100) / 100,
       byFrequency: {
         monthly: { count: monthlyCount, revenue: Math.round(monthlyRevenue * 100) / 100 },
-        annual: { count: annualCount, revenue: Math.round(annualRevenue * 100) / 100 }
+        annual: { count: annualCount, revenue: Math.round(annualRevenue * 100) / 100 },
+        "one-time": { count: oneTimeCount, revenue: Math.round(oneTimeRevenue * 100) / 100 }
       },
       // Keep byPlan for backward compatibility but use frequency data
       byPlan: {

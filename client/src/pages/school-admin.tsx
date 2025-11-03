@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AnnouncementModal } from "@/components/ui/announcement-modal";
 import { AnnouncementManagement } from "@/components/admin/announcement-management";
 import { DashboardBanner } from "@/components/ui/dashboard-banner";
+import { StudentLimitCard } from "@/components/school/student-limit-card";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
@@ -459,6 +460,12 @@ export default function SchoolAdmin() {
           <TabsContent value="overview" className="space-y-8">
             {/* Dashboard Banners */}
             <DashboardBanner />
+            
+            {/* Student Enrollment Limit Card */}
+            <div className="mb-8">
+              <StudentLimitCard />
+            </div>
+            
             {/* Advanced KPI Cards */}
             {statsLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">

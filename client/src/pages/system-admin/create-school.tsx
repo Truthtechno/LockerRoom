@@ -22,11 +22,15 @@ const createSchoolSchema = z.object({
   address: z.string().optional().refine((val) => !val || val.length <= 500, "Address must be less than 500 characters"),
   contactEmail: z.string().email("Valid email is required").max(255, "Email must be less than 255 characters"),
   contactPhone: z.string().optional().refine((val) => !val || /^[\+]?[1-9][\d]{0,15}$/.test(val), "Invalid phone number format"),
+  maxStudents: z.string().min(1, "Student limit is required").refine((val) => {
+    const num = parseInt(val, 10);
+    return !isNaN(num) && num >= 1 && num <= 10000;
+  }, "Student limit must be between 1 and 10,000"),
   paymentAmount: z.string().min(1, "Payment amount is required").refine((val) => {
     const num = parseFloat(val);
     return !isNaN(num) && num > 0;
   }, "Payment amount must be a positive number"),
-  paymentFrequency: z.enum(["monthly", "annual"], {
+  paymentFrequency: z.enum(["monthly", "annual", "one-time"], {
     required_error: "Payment frequency is required",
   }),
 });
@@ -48,6 +52,7 @@ export default function CreateSchool() {
       address: "",
       contactEmail: "",
       contactPhone: "",
+      maxStudents: "10",
       paymentAmount: "",
       paymentFrequency: "monthly",
     },
@@ -215,6 +220,32 @@ export default function CreateSchool() {
                   )}
                 </div>
 
+                {/* Student Limit */}
+                <div className="border-t pt-6 mt-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Student Limit</h3>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="maxStudents">Maximum Students *</Label>
+                    <Input
+                      id="maxStudents"
+                      type="number"
+                      min="1"
+                      max="10000"
+                      {...form.register("maxStudents")}
+                      placeholder="10"
+                      disabled={createSchoolMutation.isPending}
+                    />
+                    {form.formState.errors.maxStudents && (
+                      <p className="text-sm text-destructive">
+                        {form.formState.errors.maxStudents.message}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Set the maximum number of students this school can enroll. Payment is based on this capacity.
+                    </p>
+                  </div>
+                </div>
+
                 {/* Payment Information */}
                 <div className="border-t pt-6 mt-6">
                   <h3 className="text-lg font-semibold text-foreground mb-4">Payment Information</h3>
@@ -247,7 +278,7 @@ export default function CreateSchool() {
                       <Label htmlFor="paymentFrequency">Payment Frequency *</Label>
                       <Select
                         value={form.watch("paymentFrequency")}
-                        onValueChange={(value) => form.setValue("paymentFrequency", value as "monthly" | "annual")}
+                        onValueChange={(value) => form.setValue("paymentFrequency", value as "monthly" | "annual" | "one-time")}
                         disabled={createSchoolMutation.isPending}
                       >
                         <SelectTrigger>
@@ -256,6 +287,7 @@ export default function CreateSchool() {
                         <SelectContent>
                           <SelectItem value="monthly">Monthly</SelectItem>
                           <SelectItem value="annual">Annual</SelectItem>
+                          <SelectItem value="one-time">One-Time</SelectItem>
                         </SelectContent>
                       </Select>
                       {form.formState.errors.paymentFrequency && (
@@ -335,7 +367,16 @@ export default function CreateSchool() {
                     <p><span className="font-medium">Payment Amount:</span> ${parseFloat(createdSchool.paymentAmount).toFixed(2)}</p>
                   )}
                   {createdSchool?.paymentFrequency && (
-                    <p><span className="font-medium">Payment Frequency:</span> {createdSchool.paymentFrequency === "annual" ? "Annual" : "Monthly"}</p>
+                    <p>
+                      <span className="font-medium">Payment Frequency:</span> {
+                        createdSchool.paymentFrequency === "annual" ? "Annual" :
+                        createdSchool.paymentFrequency === "one-time" ? "One-Time" :
+                        "Monthly"
+                      }
+                    </p>
+                  )}
+                  {createdSchool?.maxStudents && (
+                    <p><span className="font-medium">Student Limit:</span> {createdSchool.maxStudents} students</p>
                   )}
                   {createdSchool?.subscriptionExpiresAt && (
                     <p><span className="font-medium">Expires:</span> {new Date(createdSchool.subscriptionExpiresAt).toLocaleDateString()}</p>

@@ -95,12 +95,13 @@ type RevenueAnalytics = {
   byFrequency?: {
     monthly: { count: number; revenue: number };
     annual: { count: number; revenue: number };
+    "one-time"?: { count: number; revenue: number };
   };
   byPlan: {
     premium: { count: number; revenue: number };
     standard: { count: number; revenue: number };
   };
-  trends: Array<{ month: string; mrr: number; arr: number }>;
+  trends: Array<{ month: string; revenue?: number; mrr: number; arr: number }>;
   churnRisk: Array<{
     schoolId: string;
     name: string;
@@ -217,18 +218,25 @@ export default function PlatformAnalytics() {
     enabled: !!user,
   });
 
-  // Fetch revenue analytics
+  // Fetch revenue analytics - refresh frequently to show latest payment records
   const { data: revenueAnalytics, isLoading: revenueLoading, isError: revenueError } = useQuery<RevenueAnalytics>({
     queryKey: ["/api/system/analytics/revenue"],
     queryFn: async () => {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/system/analytics/revenue?period=year`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await fetch(`/api/system/analytics/revenue?period=year&_t=${Date.now()}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store' // Ensure fresh data
       });
       if (!response.ok) throw new Error("Failed to fetch revenue analytics");
-      return response.json();
+      const data = await response.json();
+      console.log('📊 Revenue Analytics Data:', data); // Debug log
+      return data;
     },
     enabled: !!user,
+    staleTime: 0, // Always consider data stale
+    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // Fetch content analytics
@@ -293,7 +301,8 @@ export default function PlatformAnalytics() {
   const formatRevenueData = () => {
     if (!revenueAnalytics?.trends) return [];
     return revenueAnalytics.trends.map(item => ({
-      month: item.month.substring(5), // Get month only
+      month: item.month.substring(5), // Get month only (e.g., "2025-09" -> "09")
+      revenue: item.revenue || 0, // Actual payments received
       mrr: item.mrr,
       arr: item.arr
     }));
@@ -802,9 +811,15 @@ export default function PlatformAnalytics() {
                             <span className="text-sm">Annual ({revenueAnalytics.byFrequency.annual.count || 0})</span>
                             <span className="font-bold">${((revenueAnalytics.byFrequency.annual.revenue || 0) / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo</span>
                           </div>
+                          {revenueAnalytics.byFrequency?.["one-time"] && revenueAnalytics.byFrequency["one-time"].count > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-sm">One-Time ({revenueAnalytics.byFrequency["one-time"].count})</span>
+                              <span className="font-bold">${(revenueAnalytics.byFrequency["one-time"].revenue || 0).toLocaleString()}</span>
+                            </div>
+                          )}
                           <div className="pt-2 border-t">
                             <div className="flex justify-between font-semibold">
-                              <span className="text-sm">Total Active</span>
+                              <span className="text-sm">Total Active (Recurring)</span>
                               <span className="text-sm">{(revenueAnalytics.byFrequency.monthly.count + revenueAnalytics.byFrequency.annual.count)} schools</span>
                             </div>
                           </div>
@@ -829,7 +844,7 @@ export default function PlatformAnalytics() {
               <Card>
                 <CardHeader>
                   <CardTitle>Revenue Trends (12 Months)</CardTitle>
-                  <CardDescription>MRR and ARR over time</CardDescription>
+                  <CardDescription>Actual payments received, MRR, and ARR over time</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={350}>
@@ -839,6 +854,7 @@ export default function PlatformAnalytics() {
                       <YAxis />
                       <Tooltip formatter={(value: any) => `$${value.toLocaleString()}`} />
                       <Legend />
+                      <Area type="monotone" dataKey="revenue" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} name="Actual Payments" />
                       <Area type="monotone" dataKey="mrr" stroke="#10b981" fill="#10b981" fillOpacity={0.6} name="MRR" />
                       <Area type="monotone" dataKey="arr" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} name="ARR" />
                     </AreaChart>

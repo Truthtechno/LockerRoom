@@ -296,6 +296,24 @@ export const paymentTransactions = pgTable("payment_transactions", {
   updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
 });
 
+// School Payment Records - Audit trail for school payments
+export const schoolPaymentRecords = pgTable("school_payment_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  schoolId: varchar("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  paymentAmount: decimal("payment_amount", { precision: 10, scale: 2 }).notNull(),
+  paymentFrequency: text("payment_frequency").notNull(), // 'monthly', 'annual'
+  paymentType: text("payment_type").notNull(), // 'initial', 'renewal', 'student_limit_increase', 'student_limit_decrease', 'frequency_change'
+  studentLimitBefore: integer("student_limit_before"),
+  studentLimitAfter: integer("student_limit_after"),
+  oldFrequency: text("old_frequency"),
+  newFrequency: text("new_frequency"),
+  notes: text("notes"),
+  recordedBy: varchar("recorded_by").references(() => users.id),
+  recordedAt: timestamp("recorded_at").default(sql`now()`).notNull(),
+  subscriptionExpiresAt: timestamp("subscription_expires_at"),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
 export const adminRoles = pgTable("admin_roles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
