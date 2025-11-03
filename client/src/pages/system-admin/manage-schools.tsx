@@ -12,6 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2 } from "lucide-react";
 import { 
   Building2, 
   DollarSign, 
@@ -25,7 +28,10 @@ import {
   Mail,
   Phone,
   Filter,
-  Search
+  Search,
+  Ban,
+  Trash2,
+  Power
 } from "lucide-react";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
@@ -76,6 +82,7 @@ export default function ManageSchools() {
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "expired" | "expiring">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const renewForm = useForm<RenewSubscriptionFormData>({
     resolver: zodResolver(renewSubscriptionSchema),
@@ -238,6 +245,114 @@ export default function ManageSchools() {
     });
   };
 
+  const handleDisableSchool = async (schoolId: string, schoolName: string) => {
+    setActionLoading(schoolId);
+    try {
+      const response = await fetch(`/api/system-admin/schools/${schoolId}/disable`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to disable school');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "School Disabled",
+        description: result.message || `"${schoolName}" has been disabled. School admins and students will see a deactivated message when logging in.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to disable school",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleEnableSchool = async (schoolId: string, schoolName: string) => {
+    setActionLoading(schoolId);
+    try {
+      const response = await fetch(`/api/system-admin/schools/${schoolId}/enable`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to enable school');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "School Enabled",
+        description: result.message || `"${schoolName}" has been enabled. School admins and students can now log in again.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to enable school",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteSchool = async (schoolId: string, schoolName: string) => {
+    setActionLoading(schoolId);
+    try {
+      const response = await fetch(`/api/system-admin/schools/${schoolId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to delete school');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "School Deleted",
+        description: result.message || `"${schoolName}" has been permanently deleted.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete school",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
@@ -321,7 +436,7 @@ export default function ManageSchools() {
                         <TableHead>Expires</TableHead>
                         <TableHead>Last Payment</TableHead>
                         <TableHead>Stats</TableHead>
-                        <TableHead>Actions</TableHead>
+                        <TableHead className="w-[200px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -376,14 +491,89 @@ export default function ManageSchools() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Button
-                                size="sm"
-                                onClick={() => handleRenewClick(school)}
-                                variant="outline"
-                              >
-                                <RefreshCw className="w-4 h-4 mr-1" />
-                                Renew
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleRenewClick(school)}
+                                  variant="outline"
+                                >
+                                  <RefreshCw className="w-4 h-4 mr-1" />
+                                  Renew
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      disabled={actionLoading === school.id}
+                                    >
+                                      {actionLoading === school.id ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        "..."
+                                      )}
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    {school.isActive ?? true ? (
+                                      <DropdownMenuItem
+                                        onClick={() => handleDisableSchool(school.id, school.name)}
+                                        className="text-yellow-600 focus:text-yellow-600"
+                                      >
+                                        <Ban className="w-4 h-4 mr-2" />
+                                        Disable School
+                                      </DropdownMenuItem>
+                                    ) : (
+                                      <DropdownMenuItem
+                                        onClick={() => handleEnableSchool(school.id, school.name)}
+                                        className="text-green-600 focus:text-green-600"
+                                      >
+                                        <Power className="w-4 h-4 mr-2" />
+                                        Enable School
+                                      </DropdownMenuItem>
+                                    )}
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <DropdownMenuItem
+                                          onSelect={(e) => e.preventDefault()}
+                                          className="text-red-600 focus:text-red-600"
+                                        >
+                                          <Trash2 className="w-4 h-4 mr-2" />
+                                          Delete School
+                                        </DropdownMenuItem>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle className="flex items-center">
+                                            <AlertTriangle className="w-5 h-5 mr-2 text-red-500" />
+                                            Delete School Permanently
+                                          </AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            This action cannot be undone. This will permanently delete:
+                                            <ul className="mt-2 ml-4 list-disc">
+                                              <li>School "{school.name}"</li>
+                                              <li>All school admin accounts</li>
+                                              <li>All student accounts</li>
+                                              <li>All posts and content</li>
+                                            </ul>
+                                            <p className="mt-2 font-medium">If matters are resolved, the school accounts will have to be created from scratch again.</p>
+                                            <p className="mt-2">Are you absolutely sure you want to proceed?</p>
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => handleDeleteSchool(school.id, school.name)}
+                                            className="bg-red-600 hover:bg-red-700"
+                                          >
+                                            Delete Permanently
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );

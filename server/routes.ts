@@ -465,7 +465,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fallback to regular password verification
       console.log('🔐 Attempting regular password verification for:', email);
-      const result = await authStorage.verifyPassword(email, password);
+      let result;
+      try {
+        result = await authStorage.verifyPassword(email, password);
+      } catch (error: any) {
+        // Check for disabled school error
+        if (error.message === 'SCHOOL_DEACTIVATED') {
+          console.log('🔐 Login blocked: School is deactivated for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "school_deactivated", 
+              message: "Your school account has been deactivated. Please contact Customer Support for assistance." 
+            } 
+          });
+        }
+        // Re-throw other errors
+        throw error;
+      }
       
       if (!result) {
         // Check if account exists and is frozen
@@ -5619,6 +5635,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get analytics stats error:', error);
       res.status(500).json({ message: "Failed to fetch analytics stats" });
+    }
+  });
+
+  // System health & alerts
+  app.get("/api/system/health", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const health = await storage.getSystemHealth();
+      res.json(health);
+    } catch (error) {
+      console.error('Get system health error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch system health" } });
+    }
+  });
+
+  app.get("/api/system/alerts", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const period = (req.query.period as string) || 'month';
+      const alerts = await storage.getSystemAlerts(period);
+      res.json({ alerts });
+    } catch (error) {
+      console.error('Get system alerts error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch system alerts" } });
     }
   });
 

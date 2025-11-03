@@ -196,6 +196,8 @@ export interface IStorage {
   // Stats operations
   getSchoolStats(schoolId: string, period?: string): Promise<any>;
   getSystemStats(): Promise<any>;
+  getSystemHealth(): Promise<{ uptimeSeconds: number; dbConnected: boolean; cloudinaryConfigured: boolean; apiRequests30d: number; timestamp: string }>;
+  getSystemAlerts(period?: string): Promise<Array<{ id: string; type: string; title: string; message: string; severity: 'info'|'warning'|'error'|'success'; createdAt: string }>>;
   getSchoolRecentActivity(schoolId: string, limit?: number): Promise<any[]>;
   getSchoolTopPerformers(schoolId: string, limit?: number): Promise<any[]>;
   getSchoolEngagementTrends(schoolId: string, period?: string): Promise<any[]>;
@@ -1175,6 +1177,24 @@ export class MemStorage implements IStorage {
       premiumSchools,
       standardSchools,
     };
+  }
+
+  async getSystemHealth(): Promise<{ uptimeSeconds: number; dbConnected: boolean; cloudinaryConfigured: boolean; apiRequests30d: number; timestamp: string }> {
+    const uptimeSeconds = Math.floor(process.uptime());
+    const cloudinaryConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+    // Approximate requests from analytics logs in memory
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const apiRequests30d = Array.from(this.analyticsLogs.values()).filter(l => l.timestamp >= thirtyDaysAgo).length;
+    return { uptimeSeconds, dbConnected: true, cloudinaryConfigured, apiRequests30d, timestamp: new Date().toISOString() };
+  }
+
+  async getSystemAlerts(period: string = 'month'): Promise<Array<{ id: string; type: string; title: string; message: string; severity: 'info'|'warning'|'error'|'success'; createdAt: string }>> {
+    const alerts: Array<{ id: string; type: string; title: string; message: string; severity: 'info'|'warning'|'error'|'success'; createdAt: string }> = [];
+    const now = new Date();
+    // Simple sample alerts for in-memory mode
+    alerts.push({ id: 'mem-1', type: 'system', title: 'System Online', message: 'All services operational', severity: 'success', createdAt: now.toISOString() });
+    return alerts;
   }
 
   async getSchoolRecentActivity(schoolId: string, limit: number = 5): Promise<any[]> {
@@ -3337,6 +3357,90 @@ export class PostgresStorage implements IStorage {
       monthlyRevenue: Math.round(monthlyRevenue * 100) / 100, // Round to 2 decimal places
       activeSchools,
     };
+  }
+
+  async getSystemHealth(): Promise<{ uptimeSeconds: number; dbConnected: boolean; cloudinaryConfigured: boolean; apiRequests30d: number; timestamp: string }> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    const uptimeSeconds = Math.floor(process.uptime());
+    const cloudinaryConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    let apiRequests30d = 0;
+    try {
+      const result = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(analyticsLogs)
+        .where(sql`${analyticsLogs.timestamp} >= ${thirtyDaysAgo}`);
+      apiRequests30d = Number(result[0]?.count || 0);
+    } catch {
+      apiRequests30d = 0;
+    }
+    return { uptimeSeconds, dbConnected: true, cloudinaryConfigured, apiRequests30d, timestamp: new Date().toISOString() };
+  }
+
+  async getSystemAlerts(period: string = 'month'): Promise<Array<{ id: string; type: string; title: string; message: string; severity: 'info'|'warning'|'error'|'success'; createdAt: string }>> {
+    if (!isDbConnected) return [];
+    const alerts: Array<{ id: string; type: string; title: string; message: string; severity: 'info'|'warning'|'error'|'success'; createdAt: string }> = [];
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    // Expiring subscriptions soon
+    try {
+      const expiring = await db
+        .select({ id: schools.id, name: schools.name, subscriptionExpiresAt: schools.subscriptionExpiresAt })
+        .from(schools)
+        .where(and(
+          eq(schools.isActive, true),
+          sql`${schools.subscriptionExpiresAt} IS NOT NULL`,
+          sql`${schools.subscriptionExpiresAt} > ${now}`,
+          sql`${schools.subscriptionExpiresAt} <= ${thirtyDaysFromNow}`
+        ));
+      for (const s of expiring) {
+        alerts.push({
+          id: `expiring-${s.id}`,
+          type: 'subscription',
+          title: 'Subscription Renewing Soon',
+          message: `${s.name} subscription renews on ${new Date(s.subscriptionExpiresAt as any).toLocaleDateString()}`,
+          severity: 'warning',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } catch {}
+
+    // Low engagement (no posts in selected period)
+    try {
+      const periodStart = period === 'week' ? new Date(now.getTime() - 7*24*60*60*1000)
+                        : period === 'day' ? new Date(now.getTime() - 24*60*60*1000)
+                        : period === 'year' ? new Date(now.getFullYear()-1, now.getMonth(), now.getDate())
+                        : new Date(now.getFullYear(), now.getMonth()-1, now.getDate());
+      const lowEngagement = await db.execute(sql`
+        SELECT s.id, s.name
+        FROM schools s
+        WHERE s.is_active = true
+        AND s.id NOT IN (
+          SELECT DISTINCT st.school_id
+          FROM students st
+          INNER JOIN posts p ON st.id = p.student_id
+          WHERE p.created_at >= ${periodStart}
+        )
+        LIMIT 10
+      `);
+      for (const row of lowEngagement.rows) {
+        alerts.push({
+          id: `low-${row.id}`,
+          type: 'engagement',
+          title: 'Low Engagement',
+          message: `${row.name} has no new posts this ${period}.`,
+          severity: 'info',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } catch {}
+
+    if (alerts.length === 0) {
+      alerts.push({ id: 'ok', type: 'system', title: 'All Good', message: 'No alerts at the moment.', severity: 'success', createdAt: new Date().toISOString() });
+    }
+    return alerts;
   }
 
   async getSchoolRecentActivity(schoolId: string, limit: number = 5): Promise<any[]> {

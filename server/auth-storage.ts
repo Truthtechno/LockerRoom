@@ -10,6 +10,7 @@ import {
   systemAdmins,
   scoutProfiles,
   admins,
+  schools,
   type User,
   type UserProfile,
   type InsertUser,
@@ -173,6 +174,18 @@ export class AuthStorage {
     
     // Use schoolId from profile if user is school_admin, otherwise use users.schoolId
     const finalSchoolId = user.role === 'school_admin' ? user.schoolIdFromProfile : user.schoolId;
+    
+    // Check if school is disabled (for school_admin and student roles)
+    if ((user.role === 'school_admin' || user.role === 'student') && finalSchoolId) {
+      const [school] = await db.select({ isActive: schools.isActive, name: schools.name })
+        .from(schools)
+        .where(eq(schools.id, finalSchoolId));
+      
+      if (school && !school.isActive) {
+        console.log(`🔐 Login blocked: School "${school.name}" (ID: ${finalSchoolId}) is disabled for user:`, user.id, 'email:', email);
+        throw new Error('SCHOOL_DEACTIVATED'); // Special error code for disabled school
+      }
+    }
     
     const userWithSchoolId = {
       ...user,

@@ -531,6 +531,86 @@ export function registerSystemAdminRoutes(app: Express) {
     }
   );
 
+  // Enable School Account
+  app.put('/api/system-admin/schools/:schoolId/enable',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { schoolId } = req.params;
+        
+        console.log(`✅ Enabling school account: ${schoolId}`);
+        
+        // Check if school exists
+        const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
+        if (!school) {
+          console.log(`❌ School not found: ${schoolId}`);
+          return res.status(404).json({ 
+            error: { 
+              code: 'school_not_found', 
+              message: 'School not found' 
+            } 
+          });
+        }
+
+        // Update school status to enabled
+        await db.update(schools)
+          .set({ 
+            isActive: true,
+            updatedAt: new Date(),
+          })
+          .where(eq(schools.id, schoolId));
+
+        // Re-enable all school admin accounts for this school
+        const schoolAdminUsers = await db
+          .select({ id: users.id })
+          .from(users)
+          .innerJoin(schoolAdmins, eq(users.linkedId, schoolAdmins.id))
+          .where(eq(schoolAdmins.schoolId, schoolId));
+
+        for (const adminUser of schoolAdminUsers) {
+          await db.update(users)
+            .set({ emailVerified: true }) // Re-enable login by verifying email
+            .where(eq(users.id, adminUser.id));
+        }
+
+        // Re-enable all student accounts for this school
+        const studentUsers = await db
+          .select({ id: users.id })
+          .from(users)
+          .innerJoin(students, eq(users.linkedId, students.id))
+          .where(eq(students.schoolId, schoolId));
+
+        for (const studentUser of studentUsers) {
+          await db.update(users)
+            .set({ emailVerified: true }) // Re-enable login by verifying email
+            .where(eq(users.id, studentUser.id));
+        }
+
+        console.log(`✅ School enabled: ${school.name} (ID: ${schoolId})`);
+        console.log(`   - Enabled ${schoolAdminUsers.length} school admin accounts`);
+        console.log(`   - Enabled ${studentUsers.length} student accounts`);
+
+        res.json({
+          success: true,
+          message: `School "${school.name}" has been enabled`,
+          enabledAccounts: {
+            schoolAdmins: schoolAdminUsers.length,
+            students: studentUsers.length
+          }
+        });
+      } catch (error) {
+        console.error('❌ Error enabling school:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to enable school' 
+          } 
+        });
+      }
+    }
+  );
+
   // Renew School Subscription
   app.post('/api/system-admin/schools/:schoolId/renew',
     requireAuth,
