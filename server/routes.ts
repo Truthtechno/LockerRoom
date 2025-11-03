@@ -5741,6 +5741,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Platform analytics export endpoints
+  app.get("/api/system/analytics/export/users", requireAuth, requireRole(['system_admin']), async (req, res) => {
+    try {
+      const options = {
+        period: req.query.period as string || 'all',
+        role: req.query.role as string,
+        dateFrom: req.query.dateFrom as string,
+        dateTo: req.query.dateTo as string,
+        includeInactive: req.query.includeInactive !== 'false',
+      };
+      const data = await storage.getExportUsers(options);
+      res.json(data);
+    } catch (error) {
+      console.error('Export users error:', error);
+      res.status(500).json({ error: { message: "Failed to export users data" } });
+    }
+  });
+
+  app.get("/api/system/analytics/export/schools", requireAuth, requireRole(['system_admin']), async (req, res) => {
+    try {
+      const options = {
+        period: req.query.period as string || 'all',
+        status: req.query.status as string || 'all',
+        frequency: req.query.frequency as string || 'all',
+      };
+      const data = await storage.getExportSchools(options);
+      res.json(data);
+    } catch (error) {
+      console.error('Export schools error:', error);
+      res.status(500).json({ error: { message: "Failed to export schools data" } });
+    }
+  });
+
+  app.get("/api/system/analytics/export/posts", requireAuth, requireRole(['system_admin']), async (req, res) => {
+    try {
+      const options = {
+        period: req.query.period as string || 'all',
+        schoolId: req.query.schoolId as string,
+        studentId: req.query.studentId as string,
+        type: req.query.type as string || 'all',
+      };
+      const data = await storage.getExportPosts(options);
+      res.json(data);
+    } catch (error) {
+      console.error('Export posts error:', error);
+      res.status(500).json({ error: { message: "Failed to export posts data" } });
+    }
+  });
+
+  app.get("/api/system/analytics/export/engagement", requireAuth, requireRole(['system_admin']), async (req, res) => {
+    try {
+      const options = {
+        period: req.query.period as string || 'all',
+        type: req.query.type as string || 'all',
+        schoolId: req.query.schoolId as string,
+        postId: req.query.postId as string,
+      };
+      const data = await storage.getExportEngagement(options);
+      res.json(data);
+    } catch (error) {
+      console.error('Export engagement error:', error);
+      res.status(500).json({ error: { message: "Failed to export engagement data" } });
+    }
+  });
+
+  app.get("/api/system/analytics/export/revenue", requireAuth, requireRole(['system_admin']), async (req, res) => {
+    try {
+      const options = {
+        period: req.query.period as string || 'all',
+        schoolId: req.query.schoolId as string,
+        type: req.query.type as string,
+      };
+      const data = await storage.getExportRevenue(options);
+      res.json(data);
+    } catch (error) {
+      console.error('Export revenue error:', error);
+      res.status(500).json({ error: { message: "Failed to export revenue data" } });
+    }
+  });
+
+  app.get("/api/system/analytics/export/xen-watch", requireAuth, requireRole(['system_admin']), async (req, res) => {
+    try {
+      const options = {
+        period: req.query.period as string || 'all',
+        status: req.query.status as string,
+      };
+      const data = await storage.getExportXenWatch(options);
+      res.json(data);
+    } catch (error) {
+      console.error('Export Xen Watch error:', error);
+      res.status(500).json({ error: { message: "Failed to export Xen Watch data" } });
+    }
+  });
+
   // Student analytics endpoints
   app.get("/api/students/:studentId/analytics", async (req, res) => {
     try {

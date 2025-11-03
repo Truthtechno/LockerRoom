@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,8 @@ import {
   Eye,
   MessageCircle,
   Heart,
-  Bookmark
+  Bookmark,
+  Download
 } from "lucide-react";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
@@ -26,6 +27,8 @@ import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { exportCurrentTab, exportAllCategories } from "@/lib/export-service";
 
 type PlatformOverview = {
   totals: {
@@ -97,11 +100,16 @@ type RevenueAnalytics = {
     annual: { count: number; revenue: number };
     "one-time"?: { count: number; revenue: number };
   };
+  xenWatch?: {
+    totalRevenue: number;
+    last30Days: number;
+    totalSubmissions: number;
+  };
   byPlan: {
     premium: { count: number; revenue: number };
     standard: { count: number; revenue: number };
   };
-  trends: Array<{ month: string; revenue?: number; mrr: number; arr: number }>;
+  trends: Array<{ month: string; revenue?: number; xenWatchRevenue?: number; mrr: number; arr: number }>;
   churnRisk: Array<{
     schoolId: string;
     name: string;
@@ -170,9 +178,19 @@ const COLORS = ['#FFD700', '#FFA500', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'
 export default function PlatformAnalytics() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [period, setPeriod] = useState<string>("month");
   const [growthMetric, setGrowthMetric] = useState<string>("users");
   const [growthPeriod, setGrowthPeriod] = useState<string>("6months");
+  const [exporting, setExporting] = useState<string | null>(null);
+
+  // Force refetch revenue analytics when component mounts to get latest Xen Watch data
+  useEffect(() => {
+    if (user) {
+      queryClient.invalidateQueries({ queryKey: ["/api/system/analytics/revenue"] });
+    }
+  }, [user, queryClient]);
 
   // Fetch platform overview
   const { data: overview, isLoading: overviewLoading, isError: overviewError } = useQuery<PlatformOverview>({
@@ -227,15 +245,18 @@ export default function PlatformAnalytics() {
         headers: { 'Authorization': `Bearer ${token}` },
         cache: 'no-store' // Ensure fresh data
       });
-      if (!response.ok) throw new Error("Failed to fetch revenue analytics");
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Revenue Analytics API Error:', errorText);
+        throw new Error("Failed to fetch revenue analytics");
+      }
       const data = await response.json();
-      console.log('📊 Revenue Analytics Data:', data); // Debug log
       return data;
     },
     enabled: !!user,
     staleTime: 0, // Always consider data stale
     refetchInterval: 30000, // Refresh every 30 seconds
-    refetchOnMount: true,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
 
@@ -302,7 +323,8 @@ export default function PlatformAnalytics() {
     if (!revenueAnalytics?.trends) return [];
     return revenueAnalytics.trends.map(item => ({
       month: item.month.substring(5), // Get month only (e.g., "2025-09" -> "09")
-      revenue: item.revenue || 0, // Actual payments received
+      revenue: item.revenue || 0, // Total actual payments received (Schools + Xen Watch)
+      xenWatchRevenue: item.xenWatchRevenue || 0, // Xen Watch revenue only
       mrr: item.mrr,
       arr: item.arr
     }));
@@ -399,6 +421,33 @@ export default function PlatformAnalytics() {
                   </SelectContent>
                 </Select>
                 
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setExporting('all');
+                    try {
+                      await exportAllCategories(period, { includeCharts: true });
+                      toast({
+                        title: "Export Successful! 🎉",
+                        description: "All platform analytics exported to Excel",
+                      });
+                    } catch (error) {
+                      toast({
+                        title: "Export Failed",
+                        description: error instanceof Error ? error.message : "Failed to export data",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setExporting(null);
+                    }
+                  }}
+                  disabled={exporting !== null}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exporting === 'all' ? 'Exporting...' : 'Export All'}
+                </Button>
+                
                 <div className="flex items-center space-x-2 bg-muted px-4 py-2.5 rounded-lg border border-border/50">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-sm font-medium text-foreground">Live Data</span>
@@ -457,14 +506,14 @@ export default function PlatformAnalytics() {
 
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold">Monthly Revenue</CardTitle>
+                <CardTitle className="text-sm font-semibold">Total Revenue</CardTitle>
                 <div className="h-9 w-9 rounded-lg bg-green-600/10 flex items-center justify-center">
                   <DollarSign className="h-4 w-4 text-green-600" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-1">${revenueAnalytics?.mrr.toLocaleString() || 0}</div>
-                <p className="text-xs text-muted-foreground">MRR</p>
+                <div className="text-3xl font-bold mb-1">${(overview?.totals.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <p className="text-xs text-muted-foreground">This {period} (Schools + Xen Watch)</p>
               </CardContent>
             </Card>
 
@@ -493,6 +542,37 @@ export default function PlatformAnalytics() {
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
+              {/* Export Button */}
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setExporting('overview');
+                    try {
+                      // Export overview combines multiple data sources
+                      await exportAllCategories(period, { includeCharts: true });
+                      toast({
+                        title: "Export Successful! 🎉",
+                        description: "Overview analytics exported to Excel",
+                      });
+                    } catch (error) {
+                      toast({
+                        title: "Export Failed",
+                        description: error instanceof Error ? error.message : "Failed to export data",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setExporting(null);
+                    }
+                  }}
+                  disabled={exporting !== null}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exporting === 'overview' ? 'Exporting...' : 'Export Excel'}
+                </Button>
+              </div>
+
               {/* Growth Trends Chart */}
               <Card>
                 <CardHeader>
@@ -641,6 +721,36 @@ export default function PlatformAnalytics() {
             </TabsContent>
 
             <TabsContent value="users" className="space-y-6">
+              {/* Export Button */}
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setExporting('users');
+                    try {
+                      await exportCurrentTab('users', period, '/api/system/analytics/export/users');
+                      toast({
+                        title: "Export Successful! 🎉",
+                        description: "Users data exported to Excel",
+                      });
+                    } catch (error) {
+                      toast({
+                        title: "Export Failed",
+                        description: error instanceof Error ? error.message : "Failed to export users data",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setExporting(null);
+                    }
+                  }}
+                  disabled={exporting !== null}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exporting === 'users' ? 'Exporting...' : 'Export Excel'}
+                </Button>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
@@ -703,6 +813,36 @@ export default function PlatformAnalytics() {
             </TabsContent>
 
             <TabsContent value="schools" className="space-y-6">
+              {/* Export Button */}
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setExporting('schools');
+                    try {
+                      await exportCurrentTab('schools', period, '/api/system/analytics/export/schools');
+                      toast({
+                        title: "Export Successful! 🎉",
+                        description: "Schools data exported to Excel",
+                      });
+                    } catch (error) {
+                      toast({
+                        title: "Export Failed",
+                        description: error instanceof Error ? error.message : "Failed to export schools data",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setExporting(null);
+                    }
+                  }}
+                  disabled={exporting !== null}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exporting === 'schools' ? 'Exporting...' : 'Export Excel'}
+                </Button>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
@@ -769,6 +909,42 @@ export default function PlatformAnalytics() {
             </TabsContent>
 
             <TabsContent value="revenue" className="space-y-6">
+              {/* Export Button */}
+              <div className="flex justify-end mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setExporting('revenue');
+                    try {
+                      await exportCurrentTab('revenue', 'year', '/api/system/analytics/export/revenue');
+                      toast({
+                        title: "Export Successful! 🎉",
+                        description: "Revenue data exported to Excel",
+                      });
+                    } catch (error) {
+                      toast({
+                        title: "Export Failed",
+                        description: error instanceof Error ? error.message : "Failed to export revenue data",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setExporting(null);
+                    }
+                  }}
+                  disabled={exporting !== null}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exporting === 'revenue' ? 'Exporting...' : 'Export Excel'}
+                </Button>
+              </div>
+
+              {revenueError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <p className="text-red-800 dark:text-red-200">Error loading revenue analytics. Please refresh the page.</p>
+                </div>
+              )}
+              {!revenueLoading && !revenueError && revenueAnalytics && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card>
                   <CardHeader>
@@ -840,30 +1016,119 @@ export default function PlatformAnalytics() {
                   </CardContent>
                 </Card>
               </div>
+              )}
+              
+              {revenueLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+                </div>
+              )}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Revenue Trends (12 Months)</CardTitle>
-                  <CardDescription>Actual payments received, MRR, and ARR over time</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <AreaChart data={formatRevenueData()}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip formatter={(value: any) => `$${value.toLocaleString()}`} />
-                      <Legend />
-                      <Area type="monotone" dataKey="revenue" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} name="Actual Payments" />
-                      <Area type="monotone" dataKey="mrr" stroke="#10b981" fill="#10b981" fillOpacity={0.6} name="MRR" />
-                      <Area type="monotone" dataKey="arr" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} name="ARR" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+              {!revenueLoading && !revenueError && revenueAnalytics && (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Revenue Trends (12 Months)</CardTitle>
+                      <CardDescription>Total payments received (Schools + Xen Watch), MRR and ARR over time</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={350}>
+                        <AreaChart data={formatRevenueData()}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip formatter={(value: any) => `$${value.toLocaleString()}`} />
+                          <Legend />
+                          <Area type="monotone" dataKey="revenue" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} name="Total Revenue" />
+                          <Area type="monotone" dataKey="xenWatchRevenue" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} name="Xen Watch" />
+                          <Area type="monotone" dataKey="mrr" stroke="#10b981" fill="#10b981" fillOpacity={0.6} name="MRR" />
+                          <Area type="monotone" dataKey="arr" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} name="ARR" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Xen Watch Revenue Tracker */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Xen Watch Revenue Tracker</CardTitle>
+                      <CardDescription>Xen Watch submission revenue and performance metrics</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <p className="text-sm text-muted-foreground mb-1">Total Revenue</p>
+                          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                            ${typeof revenueAnalytics?.xenWatch?.totalRevenue === 'number' 
+                              ? revenueAnalytics.xenWatch.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : '0.00'}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <p className="text-sm text-muted-foreground mb-1">Last 30 Days</p>
+                          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                            ${typeof revenueAnalytics?.xenWatch?.last30Days === 'number'
+                              ? revenueAnalytics.xenWatch.last30Days.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : '0.00'}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <p className="text-sm text-muted-foreground mb-1">Total Submissions</p>
+                          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                            {typeof revenueAnalytics?.xenWatch?.totalSubmissions === 'number'
+                              ? revenueAnalytics.xenWatch.totalSubmissions
+                              : 0}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={formatRevenueData()}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip formatter={(value: any) => `$${typeof value === 'number' ? value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}`} />
+                          <Legend />
+                          <Bar dataKey="xenWatchRevenue" fill="#8b5cf6" name="Xen Watch Revenue" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="engagement" className="space-y-6">
+              {/* Export Button */}
+              <div className="flex justify-end mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setExporting('engagement');
+                    try {
+                      await exportCurrentTab('engagement', period, '/api/system/analytics/export/engagement');
+                      toast({
+                        title: "Export Successful! 🎉",
+                        description: "Engagement data exported to Excel",
+                      });
+                    } catch (error) {
+                      toast({
+                        title: "Export Failed",
+                        description: error instanceof Error ? error.message : "Failed to export engagement data",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setExporting(null);
+                    }
+                  }}
+                  disabled={exporting !== null}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  {exporting === 'engagement' ? 'Exporting...' : 'Export Excel'}
+                </Button>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="pb-3">

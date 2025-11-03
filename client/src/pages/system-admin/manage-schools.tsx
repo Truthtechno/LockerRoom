@@ -46,6 +46,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import * as XLSX from 'xlsx';
 
 const renewSubscriptionSchema = z.object({
   renewalDate: z.string().optional(),
@@ -590,6 +591,304 @@ export default function ManageSchools() {
     }
   };
 
+  // Export admins to Excel
+  const handleExportAdmins = () => {
+    if (!adminsData?.admins || adminsData.admins.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No admins to export",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Filter admins based on search query
+    const filtered = adminsData.admins.filter((admin: any) => 
+      !adminSearchQuery || 
+      admin.name.toLowerCase().includes(adminSearchQuery.toLowerCase()) ||
+      admin.email.toLowerCase().includes(adminSearchQuery.toLowerCase())
+    );
+
+    if (filtered.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No admins match your search criteria",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Prepare data for export
+    const exportData = filtered.map((admin: any) => ({
+      'Name': admin.name || 'N/A',
+      'Email': admin.email || 'N/A',
+      'Created Date': formatDate(admin.createdAt)
+    }));
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'School Admins');
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 30 }, // Name
+      { wch: 35 }, // Email
+      { wch: 15 }  // Created Date
+    ];
+
+    // Enable autofilter (filters in Excel)
+    if (ws['!ref']) {
+      ws['!autofilter'] = { ref: ws['!ref'] };
+    }
+
+    // Style header row
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = {
+          font: { bold: true, sz: 12 },
+          fill: { fgColor: { rgb: "4472C4" } },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: {
+            top: { style: "thin" },
+            bottom: { style: "thin" },
+            left: { style: "thin" },
+            right: { style: "thin" }
+          }
+        };
+      }
+    }
+
+    // Format filename
+    const schoolName = selectedSchool?.name?.replace(/[^a-z0-9]/gi, '_') || 'school';
+    const filename = `${schoolName}_admins_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Export file
+    XLSX.writeFile(wb, filename);
+
+    toast({
+      title: "Export Successful! 🎉",
+      description: `${filtered.length} admin record(s) exported to Excel`,
+    });
+  };
+
+  // Export students to Excel
+  const handleExportStudents = () => {
+    if (!studentsData?.students || studentsData.students.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No students to export",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Filter students based on search query
+    const filtered = studentsData.students.filter((student: any) => 
+      !studentSearchQuery || 
+      student.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+      student.email.toLowerCase().includes(studentSearchQuery.toLowerCase())
+    );
+
+    if (filtered.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No students match your search criteria",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Prepare data for export
+    const exportData = filtered.map((student: any) => ({
+      'Name': student.name || 'N/A',
+      'Email': student.email || 'N/A',
+      'Position': student.position || 'N/A',
+      'Number': (student.roleNumber || student.role_number)?.toString() || 'N/A',
+      'Sport': student.sport || 'N/A',
+      'Created Date': formatDate(student.createdAt)
+    }));
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'School Students');
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 25 }, // Name
+      { wch: 30 }, // Email
+      { wch: 15 }, // Position
+      { wch: 10 }, // Number
+      { wch: 15 }, // Sport
+      { wch: 15 }  // Created Date
+    ];
+
+    // Enable autofilter (filters in Excel)
+    if (ws['!ref']) {
+      ws['!autofilter'] = { ref: ws['!ref'] };
+    }
+
+    // Style header row
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = {
+          font: { bold: true, sz: 12 },
+          fill: { fgColor: { rgb: "4472C4" } },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: {
+            top: { style: "thin" },
+            bottom: { style: "thin" },
+            left: { style: "thin" },
+            right: { style: "thin" }
+          }
+        };
+      }
+    }
+
+    // Format filename
+    const schoolName = selectedSchool?.name?.replace(/[^a-z0-9]/gi, '_') || 'school';
+    const filename = `${schoolName}_students_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Export file
+    XLSX.writeFile(wb, filename);
+
+    toast({
+      title: "Export Successful! 🎉",
+      description: `${filtered.length} student record(s) exported to Excel`,
+    });
+  };
+
+  // Export payments to Excel
+  const handleExportPayments = () => {
+    if (!paymentHistoryData?.payments || paymentHistoryData.payments.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No payment records to export",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Compute filtered and sorted payments
+    let filtered = paymentHistoryData.payments;
+    
+    // Apply search filter
+    if (paymentSearchQuery) {
+      const query = paymentSearchQuery.toLowerCase();
+      filtered = filtered.filter((p: any) => 
+        formatCurrency(p.paymentAmount).toLowerCase().includes(query) ||
+        p.paymentType.replace(/_/g, ' ').toLowerCase().includes(query) ||
+        formatPaymentFrequency(p.paymentFrequency).toLowerCase().includes(query) ||
+        (p.recordedByName || 'System').toLowerCase().includes(query) ||
+        (p.notes || '').toLowerCase().includes(query) ||
+        formatDate(p.recordedAt).toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply type filter
+    if (paymentFilterType !== "all") {
+      filtered = filtered.filter((p: any) => p.paymentType === paymentFilterType);
+    }
+    
+    // Apply frequency filter
+    if (paymentFilterFrequency !== "all") {
+      filtered = filtered.filter((p: any) => p.paymentFrequency === paymentFilterFrequency);
+    }
+    
+    // Apply sorting
+    filtered = [...filtered].sort((a: any, b: any) => {
+      let comparison = 0;
+      if (paymentSortBy === "date") {
+        const dateA = new Date(a.recordedAt).getTime();
+        const dateB = new Date(b.recordedAt).getTime();
+        comparison = dateA - dateB;
+      } else if (paymentSortBy === "amount") {
+        const amountA = parseFloat(a.paymentAmount || 0);
+        const amountB = parseFloat(b.paymentAmount || 0);
+        comparison = amountA - amountB;
+      } else if (paymentSortBy === "type") {
+        comparison = a.paymentType.localeCompare(b.paymentType);
+      }
+      
+      return paymentSortOrder === "asc" ? comparison : -comparison;
+    });
+    
+    if (filtered.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No payment records match your filters",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Prepare data for export
+    const exportData = filtered.map((p: any) => ({
+      'Date': formatDate(p.recordedAt),
+      'Amount': parseFloat(p.paymentAmount || 0).toFixed(2),
+      'Type': p.paymentType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+      'Frequency': formatPaymentFrequency(p.paymentFrequency),
+      'Recorded By': p.recordedByName || 'System',
+      'Notes': p.notes || ''
+    }));
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Payment History');
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 15 }, // Date
+      { wch: 15 }, // Amount
+      { wch: 25 }, // Type
+      { wch: 15 }, // Frequency
+      { wch: 20 }, // Recorded By
+      { wch: 40 }  // Notes
+    ];
+
+    // Enable autofilter (filters in Excel)
+    if (ws['!ref']) {
+      ws['!autofilter'] = { ref: ws['!ref'] };
+    }
+
+    // Style header row
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (ws[cellAddress]) {
+        ws[cellAddress].s = {
+          font: { bold: true, sz: 12 },
+          fill: { fgColor: { rgb: "4472C4" } },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: {
+            top: { style: "thin" },
+            bottom: { style: "thin" },
+            left: { style: "thin" },
+            right: { style: "thin" }
+          }
+        };
+      }
+    }
+
+    // Format filename
+    const schoolName = selectedSchool?.name?.replace(/[^a-z0-9]/gi, '_') || 'school';
+    const filename = `${schoolName}_payments_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Export file
+    XLSX.writeFile(wb, filename);
+
+    toast({
+      title: "Export Successful! 🎉",
+      description: `${filtered.length} payment record(s) exported to Excel`,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
@@ -1113,9 +1412,15 @@ export default function ManageSchools() {
                         onChange={(e) => setAdminSearchQuery(e.target.value)}
                         className="w-full sm:max-w-sm"
                       />
-                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full sm:w-auto"
+                        onClick={handleExportAdmins}
+                        disabled={adminsLoading || !adminsData?.admins || adminsData.admins.length === 0}
+                      >
                         <Download className="w-4 h-4 mr-2" />
-                        Export CSV
+                        Export Excel
                       </Button>
                     </div>
                     {adminsLoading ? (
@@ -1167,9 +1472,15 @@ export default function ManageSchools() {
                         onChange={(e) => setStudentSearchQuery(e.target.value)}
                         className="w-full sm:max-w-sm"
                       />
-                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full sm:w-auto"
+                        onClick={handleExportStudents}
+                        disabled={studentsLoading || !studentsData?.students || studentsData.students.length === 0}
+                      >
                         <Download className="w-4 h-4 mr-2" />
-                        Export CSV
+                        Export Excel
                       </Button>
                     </div>
                     {studentsLoading ? (
@@ -1389,96 +1700,12 @@ export default function ManageSchools() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => {
-                              // Compute filtered and sorted payments
-                              let filtered = paymentHistoryData?.payments || [];
-                              
-                              // Apply search filter
-                              if (paymentSearchQuery) {
-                                const query = paymentSearchQuery.toLowerCase();
-                                filtered = filtered.filter((p: any) => 
-                                  formatCurrency(p.paymentAmount).toLowerCase().includes(query) ||
-                                  p.paymentType.replace(/_/g, ' ').toLowerCase().includes(query) ||
-                                  formatPaymentFrequency(p.paymentFrequency).toLowerCase().includes(query) ||
-                                  (p.recordedByName || 'System').toLowerCase().includes(query) ||
-                                  (p.notes || '').toLowerCase().includes(query) ||
-                                  formatDate(p.recordedAt).toLowerCase().includes(query)
-                                );
-                              }
-                              
-                              // Apply type filter
-                              if (paymentFilterType !== "all") {
-                                filtered = filtered.filter((p: any) => p.paymentType === paymentFilterType);
-                              }
-                              
-                              // Apply frequency filter
-                              if (paymentFilterFrequency !== "all") {
-                                filtered = filtered.filter((p: any) => p.paymentFrequency === paymentFilterFrequency);
-                              }
-                              
-                              // Apply sorting
-                              filtered = [...filtered].sort((a: any, b: any) => {
-                                let comparison = 0;
-                                if (paymentSortBy === "date") {
-                                  const dateA = new Date(a.recordedAt).getTime();
-                                  const dateB = new Date(b.recordedAt).getTime();
-                                  comparison = dateA - dateB;
-                                } else if (paymentSortBy === "amount") {
-                                  const amountA = parseFloat(a.paymentAmount || 0);
-                                  const amountB = parseFloat(b.paymentAmount || 0);
-                                  comparison = amountA - amountB;
-                                } else if (paymentSortBy === "type") {
-                                  comparison = a.paymentType.localeCompare(b.paymentType);
-                                }
-                                
-                                return paymentSortOrder === "asc" ? comparison : -comparison;
-                              });
-                              
-                              if (filtered.length === 0) {
-                                toast({
-                                  title: "No Data",
-                                  description: "No payment records to export",
-                                  variant: "destructive"
-                                });
-                                return;
-                              }
-                              
-                              // Create CSV content
-                              const headers = ['Date', 'Amount', 'Type', 'Frequency', 'Recorded By', 'Notes'];
-                              const rows = filtered.map((p: any) => [
-                                formatDate(p.recordedAt),
-                                formatCurrency(p.paymentAmount).replace('$', ''),
-                                p.paymentType.replace(/_/g, ' '),
-                                formatPaymentFrequency(p.paymentFrequency),
-                                p.recordedByName || 'System',
-                                (p.notes || '').replace(/,/g, ';') // Replace commas in notes
-                              ]);
-                              
-                              const csvContent = [
-                                headers.join(','),
-                                ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-                              ].join('\n');
-                              
-                              // Download CSV
-                              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                              const link = document.createElement('a');
-                              const url = URL.createObjectURL(blob);
-                              link.setAttribute('href', url);
-                              link.setAttribute('download', `payments_${selectedSchool?.name?.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
-                              link.style.visibility = 'hidden';
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
-                              
-                              toast({
-                                title: "Export Successful! 🎉",
-                                description: `${filtered.length} payment record(s) exported to CSV`,
-                              });
-                            }}
+                            onClick={handleExportPayments}
+                            disabled={paymentsLoading || !paymentHistoryData?.payments || paymentHistoryData.payments.length === 0}
                             className="w-full sm:w-auto"
                           >
                             <Download className="w-4 h-4 mr-2" />
-                            Export CSV
+                            Export Excel
                           </Button>
                         </div>
 

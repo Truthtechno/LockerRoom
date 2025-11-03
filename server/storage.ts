@@ -94,7 +94,9 @@ import {
   // Notifications
   notifications,
   // School Payment Records
-  schoolPaymentRecords
+  schoolPaymentRecords,
+  // Payment Transactions (for Xen Watch)
+  paymentTransactions
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -216,6 +218,14 @@ export interface IStorage {
   getPlatformContentAnalytics(period?: string): Promise<any>;
   getPlatformEngagementAnalytics(period?: string, granularity?: string): Promise<any>;
   getPlatformGrowthTrends(metric?: string, period?: string): Promise<any>;
+  
+  // Platform analytics export operations
+  getExportUsers(options?: { period?: string; role?: string; dateFrom?: string; dateTo?: string; includeInactive?: boolean }): Promise<any>;
+  getExportSchools(options?: { period?: string; status?: string; frequency?: string }): Promise<any>;
+  getExportPosts(options?: { period?: string; schoolId?: string; studentId?: string; type?: string }): Promise<any>;
+  getExportEngagement(options?: { period?: string; type?: string; schoolId?: string; postId?: string }): Promise<any>;
+  getExportRevenue(options?: { period?: string; schoolId?: string; type?: string }): Promise<any>;
+  getExportXenWatch(options?: { period?: string; status?: string }): Promise<any>;
   
   // School application operations
   getSchoolApplications(): Promise<SchoolApplication[]>;
@@ -1780,11 +1790,34 @@ export class MemStorage implements IStorage {
     throw new Error('Sample data creation requires PostgreSQL');
   }
 
+  // Platform analytics export operations - MemStorage stubs
+  async getExportUsers(options?: any): Promise<any> {
+    return { users: [], summary: { total: 0, byRole: {}, active: 0, inactive: 0 }, period: options?.period || 'all' };
+  }
+
+  async getExportSchools(options?: any): Promise<any> {
+    return { schools: [], summary: { total: 0, active: 0, byFrequency: {} } };
+  }
+
+  async getExportPosts(options?: any): Promise<any> {
+    return { posts: [], summary: { total: 0, byType: {}, totalEngagement: 0, avgEngagement: 0 } };
+  }
+
+  async getExportEngagement(options?: any): Promise<any> {
+    return { engagement: { likes: [], comments: [], views: [], saves: [] }, summary: { totalLikes: 0, totalComments: 0, totalViews: 0, totalSaves: 0 } };
+  }
+
+  async getExportRevenue(options?: any): Promise<any> {
+    return { payments: [], xenWatchRevenue: [], summary: { totalRevenue: 0, byFrequency: {}, xenWatchTotal: 0, paymentCount: 0, xenWatchCount: 0 } };
+  }
+
+  async getExportXenWatch(options?: any): Promise<any> {
+    return { submissions: [], summary: { total: 0, totalRevenue: 0, byStatus: {} } };
+  }
 }
 
 // Database connection is now handled by ./db.ts
 let isDbConnected = true; // Assume connected since we're using centralized db
-
 
 export class PostgresStorage implements IStorage {
   constructor() {
@@ -5718,12 +5751,12 @@ export class PostgresStorage implements IStorage {
     
     const totalEngagement = Number(totalLikes[0]?.count || 0) + Number(totalComments[0]?.count || 0) + Number(totalViews[0]?.count || 0) + Number(totalSaves[0]?.count || 0);
     
-    // Get revenue from payment records within the period
+    // Get TOTAL revenue from all sources within the period (school payments + Xen Watch)
     let periodRevenue = 0;
     let previousPeriodRevenue = 0;
     
     try {
-      // Current period revenue
+      // 1. School payment records (current period)
       const periodPayments = await db
         .select({
           paymentAmount: schoolPaymentRecords.paymentAmount,
@@ -5734,11 +5767,30 @@ export class PostgresStorage implements IStorage {
       
       for (const payment of periodPayments) {
         const amount = parseFloat(payment.paymentAmount?.toString() || "0");
-        // Include all payments in the period (actual cash received)
+        periodRevenue += amount;
+      }
+      
+      // 2. Xen Watch payments (current period) - from payment_transactions
+      const xenWatchPayments = await db
+        .select({
+          amountCents: paymentTransactions.amountCents,
+        })
+        .from(paymentTransactions)
+        .where(
+          and(
+            sql`${paymentTransactions.type} = 'xen_watch'`,
+            sql`${paymentTransactions.status} = 'completed'`,
+            sql`${paymentTransactions.createdAt} >= ${startDate}`
+          )
+        );
+      
+      for (const payment of xenWatchPayments) {
+        const amount = (payment.amountCents || 0) / 100; // Convert cents to dollars
         periodRevenue += amount;
       }
       
       // Previous period revenue for comparison
+      // School payments
       const previousPeriodPayments = await db
         .select({
           paymentAmount: schoolPaymentRecords.paymentAmount,
@@ -5756,8 +5808,28 @@ export class PostgresStorage implements IStorage {
         const amount = parseFloat(payment.paymentAmount?.toString() || "0");
         previousPeriodRevenue += amount;
       }
+      
+      // Xen Watch payments (previous period)
+      const previousXenWatchPayments = await db
+        .select({
+          amountCents: paymentTransactions.amountCents,
+        })
+        .from(paymentTransactions)
+        .where(
+          and(
+            sql`${paymentTransactions.type} = 'xen_watch'`,
+            sql`${paymentTransactions.status} = 'completed'`,
+            sql`${paymentTransactions.createdAt} >= ${previousStartDate}`,
+            sql`${paymentTransactions.createdAt} < ${startDate}`
+          )
+        );
+      
+      for (const payment of previousXenWatchPayments) {
+        const amount = (payment.amountCents || 0) / 100;
+        previousPeriodRevenue += amount;
+      }
     } catch (error) {
-      console.error("Error calculating revenue from payment records:", error);
+      console.error("Error calculating total revenue from payment records:", error);
       // Fallback to system stats
       const systemStats = await this.getSystemStats();
       periodRevenue = systemStats.monthlyRevenue;
@@ -6283,7 +6355,7 @@ export class PostgresStorage implements IStorage {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
       
-      // Get actual payments recorded during this month
+      // Get school payments recorded during this month
       const monthPayments = await db
         .select({
           paymentAmount: schoolPaymentRecords.paymentAmount,
@@ -6297,13 +6369,27 @@ export class PostgresStorage implements IStorage {
           )
         );
       
-      // Calculate MRR based on payments recorded in this month
-      // For monthly payments: add full amount
-      // For annual payments: add amount/12
-      // For one-time payments: add full amount (one-time revenue)
+      // Get Xen Watch payments recorded during this month
+      const monthXenWatchPayments = await db
+        .select({
+          amountCents: paymentTransactions.amountCents,
+        })
+        .from(paymentTransactions)
+        .where(
+          and(
+            sql`${paymentTransactions.type} = 'xen_watch'`,
+            sql`${paymentTransactions.status} = 'completed'`,
+            sql`${paymentTransactions.createdAt} >= ${monthDate}`,
+            sql`${paymentTransactions.createdAt} <= ${monthEnd}`
+          )
+        );
+      
+      // Calculate MRR and total revenue for this month
       let monthRevenue = 0;
+      let monthXenWatchRevenue = 0;
       let monthMrr = 0;
       
+      // School payments
       for (const payment of monthPayments) {
         const amount = parseFloat(payment.paymentAmount?.toString() || "0");
         monthRevenue += amount; // Total revenue recorded this month
@@ -6314,13 +6400,21 @@ export class PostgresStorage implements IStorage {
           monthMrr += amount / 12; // Convert annual to monthly
         } else if (payment.paymentFrequency === "one-time") {
           // One-time payments don't contribute to MRR
-          // But we include them in total revenue
         }
+      }
+      
+      // Xen Watch payments
+      for (const payment of monthXenWatchPayments) {
+        const amount = (payment.amountCents || 0) / 100;
+        monthXenWatchRevenue += amount;
+        monthRevenue += amount; // Include in total revenue
+        // Xen Watch payments don't contribute to MRR (they're transactional)
       }
       
       trends.push({
         month: monthDate.toISOString().substring(0, 7),
-        revenue: Math.round(monthRevenue * 100) / 100, // Actual payments received
+        revenue: Math.round(monthRevenue * 100) / 100, // Total actual payments received (school + xen watch)
+        xenWatchRevenue: Math.round(monthXenWatchRevenue * 100) / 100, // Xen Watch revenue for this month
         mrr: Math.round(monthMrr * 100) / 100,
         arr: Math.round(monthMrr * 12 * 100) / 100
       });
@@ -6355,6 +6449,51 @@ export class PostgresStorage implements IStorage {
         : parseFloat(school.paymentAmount?.toString() || "0") / 12
     }));
     
+    // Calculate total Xen Watch revenue (all time for context, and last 30 days for current period)
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const xenWatchRevenue30d = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${paymentTransactions.amountCents}) / 100.0, 0)`,
+      })
+      .from(paymentTransactions)
+      .where(
+        and(
+          sql`${paymentTransactions.type} = 'xen_watch'`,
+          sql`${paymentTransactions.status} = 'completed'`,
+          sql`${paymentTransactions.createdAt} >= ${thirtyDaysAgo}`
+        )
+      );
+    
+    const xenWatchTotalRevenue = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${paymentTransactions.amountCents}) / 100.0, 0)`,
+      })
+      .from(paymentTransactions)
+      .where(
+        and(
+          sql`${paymentTransactions.type} = 'xen_watch'`,
+          sql`${paymentTransactions.status} = 'completed'`
+        )
+      );
+    
+    const xenWatchRevenueLast30d = Number(xenWatchRevenue30d[0]?.total || 0);
+    const xenWatchTotal = Number(xenWatchTotalRevenue[0]?.total || 0);
+    
+    // Get Xen Watch submission count
+    const xenWatchCountResult = await db
+      .select({
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(paymentTransactions)
+      .where(
+        and(
+          sql`${paymentTransactions.type} = 'xen_watch'`,
+          sql`${paymentTransactions.status} = 'completed'`
+        )
+      );
+    
+    const xenWatchCount = Number(xenWatchCountResult[0]?.count || 0);
+    
     return {
       mrr: Math.round(mrr * 100) / 100,
       arr: Math.round(arr * 100) / 100,
@@ -6362,6 +6501,11 @@ export class PostgresStorage implements IStorage {
         monthly: { count: monthlyCount, revenue: Math.round(monthlyRevenue * 100) / 100 },
         annual: { count: annualCount, revenue: Math.round(annualRevenue * 100) / 100 },
         "one-time": { count: oneTimeCount, revenue: Math.round(oneTimeRevenue * 100) / 100 }
+      },
+      xenWatch: {
+        totalRevenue: Math.round(xenWatchTotal * 100) / 100,
+        last30Days: Math.round(xenWatchRevenueLast30d * 100) / 100,
+        totalSubmissions: xenWatchCount
       },
       // Keep byPlan for backward compatibility but use frequency data
       byPlan: {
@@ -6735,6 +6879,862 @@ export class PostgresStorage implements IStorage {
         previousPeriod: previousPeriodTotal,
         percentage: percentageChange
       }
+    };
+  }
+
+  // Platform analytics export operations
+  async getExportUsers(options: { period?: string; role?: string; dateFrom?: string; dateTo?: string; includeInactive?: boolean } = {}): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+
+    const { period = 'all', role, dateFrom, dateTo, includeInactive = true } = options;
+    
+    // Calculate date range
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+    
+    if (dateFrom) {
+      startDate = new Date(dateFrom);
+    } else if (period !== 'all') {
+      const now = new Date();
+      switch (period) {
+        case 'day':
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          break;
+      }
+    }
+    
+    if (dateTo) {
+      endDate = new Date(dateTo);
+    }
+
+    // Build query to get all users with role-specific details
+    let query = db
+      .select({
+        userId: users.id,
+        email: users.email,
+        role: users.role,
+        linkedId: users.linkedId,
+        createdAt: users.createdAt,
+      })
+      .from(users);
+
+    // Apply date filter
+    if (startDate) {
+      query = query.where(sql`${users.createdAt} >= ${startDate}`) as any;
+    }
+    if (endDate) {
+      query = query.where(sql`${users.createdAt} <= ${endDate}`) as any;
+    }
+    if (role) {
+      query = query.where(sql`${users.role} = ${role}`) as any;
+    }
+
+    const userRows = await query;
+
+    // Enrich with role-specific data
+    const enrichedUsers = await Promise.all(userRows.map(async (user) => {
+      let roleData: any = {};
+      let schoolName = null;
+      let schoolId = null;
+
+      if (user.role === 'student' && user.linkedId) {
+        const student = await db.select().from(students).where(eq(students.id, user.linkedId)).limit(1);
+        if (student[0]) {
+          roleData = {
+            name: student[0].name,
+            phone: student[0].phone,
+            gender: student[0].gender,
+            dateOfBirth: student[0].dateOfBirth,
+            grade: student[0].grade,
+            guardianContact: student[0].guardianContact,
+            position: student[0].position,
+            sport: student[0].sport,
+            roleNumber: student[0].roleNumber,
+            bio: student[0].bio,
+          };
+          schoolId = student[0].schoolId;
+          if (schoolId) {
+            const school = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, schoolId)).limit(1);
+            schoolName = school[0]?.name || null;
+          }
+        }
+      } else if (user.role === 'school_admin' && user.linkedId) {
+        const admin = await db.select().from(schoolAdmins).where(eq(schoolAdmins.id, user.linkedId)).limit(1);
+        if (admin[0]) {
+          roleData = {
+            name: admin[0].name,
+            phone: admin[0].phone,
+            position: admin[0].position,
+            bio: admin[0].bio,
+          };
+          schoolId = admin[0].schoolId;
+          if (schoolId) {
+            const school = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, schoolId)).limit(1);
+            schoolName = school[0]?.name || null;
+          }
+        }
+      } else if (user.role === 'viewer' && user.linkedId) {
+        const viewer = await db.select().from(viewers).where(eq(viewers.id, user.linkedId)).limit(1);
+        if (viewer[0]) {
+          roleData = {
+            name: viewer[0].name,
+            phone: viewer[0].phone,
+            bio: viewer[0].bio,
+          };
+        }
+      } else if (user.role === 'system_admin' && user.linkedId) {
+        const sysAdmin = await db.select().from(systemAdmins).where(eq(systemAdmins.id, user.linkedId)).limit(1);
+        if (sysAdmin[0]) {
+          roleData = {
+            name: sysAdmin[0].name,
+            phone: sysAdmin[0].phone,
+            bio: sysAdmin[0].bio,
+          };
+        }
+      }
+
+      // Get last active date (from most recent post like, comment, or view)
+      const lastActive = await db.execute(sql`
+        SELECT GREATEST(
+          COALESCE((SELECT MAX(created_at) FROM post_likes WHERE user_id = ${user.userId}), '1970-01-01'),
+          COALESCE((SELECT MAX(created_at) FROM post_comments WHERE user_id = ${user.userId}), '1970-01-01'),
+          COALESCE((SELECT MAX(created_at) FROM post_views WHERE user_id = ${user.userId}), '1970-01-01'),
+          COALESCE((SELECT MAX(created_at) FROM saved_posts WHERE user_id = ${user.userId}), '1970-01-01')
+        ) as last_active
+      `);
+      const lastActiveDate = lastActive.rows[0]?.last_active && lastActive.rows[0].last_active !== '1970-01-01' 
+        ? lastActive.rows[0].last_active 
+        : null;
+
+      return {
+        id: user.userId,
+        name: roleData.name || 'N/A',
+        email: user.email,
+        role: user.role,
+        schoolId: schoolId || null,
+        schoolName: schoolName || null,
+        phone: roleData.phone || null,
+        createdAt: user.createdAt,
+        lastActive: lastActiveDate,
+        ...roleData,
+      };
+    }));
+
+    // Calculate summary
+    const byRole: { [key: string]: number } = {};
+    enrichedUsers.forEach(user => {
+      byRole[user.role] = (byRole[user.role] || 0) + 1;
+    });
+
+    return {
+      users: enrichedUsers,
+      summary: {
+        total: enrichedUsers.length,
+        byRole,
+        active: enrichedUsers.filter(u => u.lastActive).length,
+        inactive: enrichedUsers.filter(u => !u.lastActive).length,
+      },
+      period,
+    };
+  }
+
+  async getExportSchools(options: { period?: string; status?: string; frequency?: string } = {}): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+
+    const { period = 'all', status = 'all', frequency = 'all' } = options;
+
+    let query = db.select().from(schools);
+
+    // Apply date filter
+    if (period !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+      switch (period) {
+        case 'day':
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          break;
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      }
+      query = query.where(sql`${schools.createdAt} >= ${startDate}`) as any;
+    }
+
+    // Apply status filter
+    if (status !== 'all') {
+      if (status === 'active') {
+        query = query.where(sql`${schools.isActive} = true AND (${schools.subscriptionExpiresAt} IS NULL OR ${schools.subscriptionExpiresAt} > NOW())`) as any;
+      } else if (status === 'inactive') {
+        query = query.where(sql`${schools.isActive} = false`) as any;
+      } else if (status === 'expired') {
+        query = query.where(sql`${schools.subscriptionExpiresAt} IS NOT NULL AND ${schools.subscriptionExpiresAt} <= NOW()`) as any;
+      }
+    }
+
+    // Apply frequency filter
+    if (frequency !== 'all') {
+      query = query.where(sql`${schools.paymentFrequency} = ${frequency}`) as any;
+    }
+
+    const schoolRows = await query.orderBy(desc(schools.createdAt));
+
+    // Enrich with counts
+    const enrichedSchools = await Promise.all(schoolRows.map(async (school) => {
+      const [adminCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(schoolAdmins).where(eq(schoolAdmins.schoolId, school.id));
+      const [studentCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(students).where(eq(students.schoolId, school.id));
+      const [postCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(posts)
+        .innerJoin(students, eq(students.id, posts.studentId))
+        .where(eq(students.schoolId, school.id));
+
+      return {
+        id: school.id,
+        name: school.name,
+        address: school.address || null,
+        contactEmail: school.contactEmail || null,
+        contactPhone: school.contactPhone || null,
+        paymentAmount: Number(school.paymentAmount || 0),
+        paymentFrequency: school.paymentFrequency,
+        subscriptionExpiresAt: school.subscriptionExpiresAt?.toISOString() || null,
+        isActive: school.isActive,
+        lastPaymentDate: school.lastPaymentDate?.toISOString() || null,
+        maxStudents: school.maxStudents,
+        studentCount: Number(studentCount?.count || 0),
+        adminCount: Number(adminCount?.count || 0),
+        postCount: Number(postCount?.count || 0),
+        createdAt: school.createdAt.toISOString(),
+      };
+    }));
+
+    // Calculate summary
+    const byFrequency: { [key: string]: number } = {};
+    enrichedSchools.forEach(school => {
+      byFrequency[school.paymentFrequency] = (byFrequency[school.paymentFrequency] || 0) + 1;
+    });
+
+    return {
+      schools: enrichedSchools,
+      summary: {
+        total: enrichedSchools.length,
+        active: enrichedSchools.filter(s => s.isActive).length,
+        byFrequency,
+      },
+    };
+  }
+
+  async getExportPosts(options: { period?: string; schoolId?: string; studentId?: string; type?: string } = {}): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+
+    const { period = 'all', schoolId, studentId, type = 'all' } = options;
+
+    let query = db
+      .select({
+        postId: posts.id,
+        studentId: posts.studentId,
+        mediaType: posts.type,
+        caption: posts.caption,
+        mediaUrl: posts.mediaUrl,
+        createdAt: posts.createdAt,
+      })
+      .from(posts)
+      .innerJoin(students, eq(students.id, posts.studentId));
+
+    // Apply filters
+    if (period !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+      switch (period) {
+        case 'day':
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          break;
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      }
+      query = query.where(sql`${posts.createdAt} >= ${startDate}`) as any;
+    }
+
+    if (schoolId) {
+      query = query.where(sql`${students.schoolId} = ${schoolId}`) as any;
+    }
+    if (studentId) {
+      query = query.where(sql`${posts.studentId} = ${studentId}`) as any;
+    }
+    if (type !== 'all') {
+      query = query.where(sql`${posts.type} = ${type}`) as any;
+    } else {
+      query = query.where(sql`(${posts.type} != 'announcement' OR ${posts.type} IS NULL)`) as any;
+    }
+
+    const postRows = await query.orderBy(desc(posts.createdAt));
+
+    // Enrich with engagement metrics and student/school info
+    const enrichedPosts = await Promise.all(postRows.map(async (post) => {
+      const student = await db.select({
+        id: students.id,
+        name: students.name,
+        schoolId: students.schoolId,
+      }).from(students).where(eq(students.id, post.studentId)).limit(1);
+
+      const studentName = student[0]?.name || 'Unknown';
+      const schoolId = student[0]?.schoolId || null;
+      let schoolName = null;
+
+      if (schoolId) {
+        const school = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, schoolId)).limit(1);
+        schoolName = school[0]?.name || null;
+      }
+
+      // Get engagement counts
+      const [likes] = await db.select({ count: sql<number>`COUNT(*)` }).from(postLikes).where(eq(postLikes.postId, post.postId));
+      const [comments] = await db.select({ count: sql<number>`COUNT(*)` }).from(postComments).where(eq(postComments.postId, post.postId));
+      const [views] = await db.select({ count: sql<number>`COUNT(*)` }).from(postViews).where(eq(postViews.postId, post.postId));
+      const [saves] = await db.select({ count: sql<number>`COUNT(*)` }).from(savedPosts).where(eq(savedPosts.postId, post.postId));
+
+      const likesCount = Number(likes?.count || 0);
+      const commentsCount = Number(comments?.count || 0);
+      const viewsCount = Number(views?.count || 0);
+      const savesCount = Number(saves?.count || 0);
+      const totalEngagement = likesCount + commentsCount + viewsCount + savesCount;
+
+      return {
+        id: post.postId,
+        studentId: post.studentId,
+        studentName,
+        schoolId,
+        schoolName,
+        mediaType: post.mediaType || 'image',
+        caption: post.caption || null,
+        mediaUrl: post.mediaUrl,
+        createdAt: post.createdAt.toISOString(),
+        engagement: {
+          likes: likesCount,
+          comments: commentsCount,
+          views: viewsCount,
+          saves: savesCount,
+          total: totalEngagement,
+        },
+      };
+    }));
+
+    // Calculate summary
+    const byType: { [key: string]: number } = {};
+    enrichedPosts.forEach(post => {
+      const type = post.mediaType || 'image';
+      byType[type] = (byType[type] || 0) + 1;
+    });
+
+    const totalEngagement = enrichedPosts.reduce((sum, post) => sum + post.engagement.total, 0);
+    const avgEngagement = enrichedPosts.length > 0 ? totalEngagement / enrichedPosts.length : 0;
+
+    return {
+      posts: enrichedPosts,
+      summary: {
+        total: enrichedPosts.length,
+        byType,
+        totalEngagement,
+        avgEngagement: Math.round(avgEngagement * 10) / 10,
+      },
+    };
+  }
+
+  async getExportEngagement(options: { period?: string; type?: string; schoolId?: string; postId?: string } = {}): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+
+    const { period = 'all', type = 'all', schoolId, postId } = options;
+
+    // Calculate date range
+    let startDate: Date | null = null;
+    if (period !== 'all') {
+      const now = new Date();
+      switch (period) {
+        case 'day':
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          break;
+      }
+    }
+
+    const engagement: any = {
+      likes: [],
+      comments: [],
+      views: [],
+      saves: [],
+    };
+
+    // Fetch likes
+    if (type === 'all' || type === 'likes') {
+      let likesQuery = db
+        .select({
+          id: postLikes.id,
+          postId: postLikes.postId,
+          userId: postLikes.userId,
+          createdAt: postLikes.createdAt,
+        })
+        .from(postLikes);
+
+      if (startDate) {
+        likesQuery = likesQuery.where(sql`${postLikes.createdAt} >= ${startDate}`) as any;
+      }
+      if (postId) {
+        likesQuery = likesQuery.where(sql`${postLikes.postId} = ${postId}`) as any;
+      }
+
+      const likes = await likesQuery;
+      
+      // Enrich with user and post info
+      for (const like of likes) {
+        const [user] = await db.select({ email: users.email, role: users.role }).from(users).where(eq(users.id, like.userId)).limit(1);
+        const [post] = await db.select({
+          studentId: posts.studentId,
+          type: posts.type,
+        }).from(posts).where(eq(posts.id, like.postId)).limit(1);
+        
+        let studentName = null;
+        let schoolName = null;
+        if (post?.studentId) {
+          const [student] = await db.select({
+            name: students.name,
+            schoolId: students.schoolId,
+          }).from(students).where(eq(students.id, post.studentId)).limit(1);
+          
+          studentName = student?.name || null;
+          if (student?.schoolId) {
+            if (schoolId && student.schoolId !== schoolId) continue;
+            const [school] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, student.schoolId)).limit(1);
+            schoolName = school?.name || null;
+          }
+        }
+        
+        if (schoolId && (!post?.studentId || !studentName)) {
+          const [student] = await db.select({ schoolId: students.schoolId }).from(students).where(eq(students.id, post?.studentId || '')).limit(1);
+          if (!student || student.schoolId !== schoolId) continue;
+        }
+
+        engagement.likes.push({
+          id: like.id,
+          date: like.createdAt.toISOString(),
+          postId: like.postId,
+          user: user?.email || 'Unknown',
+          userRole: user?.role || 'unknown',
+          student: studentName,
+          school: schoolName,
+          postType: post?.type || 'image',
+        });
+      }
+    }
+
+    // Fetch comments
+    if (type === 'all' || type === 'comments') {
+      let commentsQuery = db
+        .select({
+          id: postComments.id,
+          postId: postComments.postId,
+          userId: postComments.userId,
+          content: postComments.content,
+          createdAt: postComments.createdAt,
+        })
+        .from(postComments);
+
+      if (startDate) {
+        commentsQuery = commentsQuery.where(sql`${postComments.createdAt} >= ${startDate}`) as any;
+      }
+      if (postId) {
+        commentsQuery = commentsQuery.where(sql`${postComments.postId} = ${postId}`) as any;
+      }
+
+      const comments = await commentsQuery;
+      
+      for (const comment of comments) {
+        const [user] = await db.select({ email: users.email, role: users.role }).from(users).where(eq(users.id, comment.userId)).limit(1);
+        const [post] = await db.select({
+          studentId: posts.studentId,
+          type: posts.type,
+        }).from(posts).where(eq(posts.id, comment.postId)).limit(1);
+        
+        let studentName = null;
+        let schoolName = null;
+        if (post?.studentId) {
+          const [student] = await db.select({
+            name: students.name,
+            schoolId: students.schoolId,
+          }).from(students).where(eq(students.id, post.studentId)).limit(1);
+          
+          studentName = student?.name || null;
+          if (student?.schoolId) {
+            if (schoolId && student.schoolId !== schoolId) continue;
+            const [school] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, student.schoolId)).limit(1);
+            schoolName = school?.name || null;
+          }
+        }
+        
+        if (schoolId && (!post?.studentId || !studentName)) {
+          const [student] = await db.select({ schoolId: students.schoolId }).from(students).where(eq(students.id, post?.studentId || '')).limit(1);
+          if (!student || student.schoolId !== schoolId) continue;
+        }
+
+        engagement.comments.push({
+          id: comment.id,
+          date: comment.createdAt.toISOString(),
+          postId: comment.postId,
+          user: user?.email || 'Unknown',
+          userRole: user?.role || 'unknown',
+          comment: comment.content,
+          student: studentName,
+          school: schoolName,
+          postType: post?.type || 'image',
+        });
+      }
+    }
+
+    // Fetch views
+    if (type === 'all' || type === 'views') {
+      let viewsQuery = db
+        .select({
+          id: postViews.id,
+          postId: postViews.postId,
+          userId: postViews.userId,
+          createdAt: postViews.createdAt,
+        })
+        .from(postViews);
+
+      if (startDate) {
+        viewsQuery = viewsQuery.where(sql`${postViews.createdAt} >= ${startDate}`) as any;
+      }
+      if (postId) {
+        viewsQuery = viewsQuery.where(sql`${postViews.postId} = ${postId}`) as any;
+      }
+
+      const views = await viewsQuery;
+      
+      for (const view of views) {
+        const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, view.userId)).limit(1);
+        const [post] = await db.select({
+          studentId: posts.studentId,
+          type: posts.type,
+        }).from(posts).where(eq(posts.id, view.postId)).limit(1);
+        
+        let studentName = null;
+        let schoolName = null;
+        if (post?.studentId) {
+          const [student] = await db.select({
+            name: students.name,
+            schoolId: students.schoolId,
+          }).from(students).where(eq(students.id, post.studentId)).limit(1);
+          
+          studentName = student?.name || null;
+          if (student?.schoolId) {
+            if (schoolId && student.schoolId !== schoolId) continue;
+            const [school] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, student.schoolId)).limit(1);
+            schoolName = school?.name || null;
+          }
+        }
+        
+        if (schoolId && (!post?.studentId || !studentName)) {
+          const [student] = await db.select({ schoolId: students.schoolId }).from(students).where(eq(students.id, post?.studentId || '')).limit(1);
+          if (!student || student.schoolId !== schoolId) continue;
+        }
+
+        engagement.views.push({
+          id: view.id,
+          date: view.createdAt.toISOString(),
+          postId: view.postId,
+          user: user?.email || 'Unknown',
+          student: studentName,
+          school: schoolName,
+          postType: post?.type || 'image',
+        });
+      }
+    }
+
+    // Fetch saves
+    if (type === 'all' || type === 'saves') {
+      let savesQuery = db
+        .select({
+          id: savedPosts.id,
+          postId: savedPosts.postId,
+          userId: savedPosts.userId,
+          createdAt: savedPosts.createdAt,
+        })
+        .from(savedPosts);
+
+      if (startDate) {
+        savesQuery = savesQuery.where(sql`${savedPosts.createdAt} >= ${startDate}`) as any;
+      }
+      if (postId) {
+        savesQuery = savesQuery.where(sql`${savedPosts.postId} = ${postId}`) as any;
+      }
+
+      const saves = await savesQuery;
+      
+      for (const save of saves) {
+        const [user] = await db.select({ email: users.email, role: users.role }).from(users).where(eq(users.id, save.userId)).limit(1);
+        const [post] = await db.select({
+          studentId: posts.studentId,
+          type: posts.type,
+        }).from(posts).where(eq(posts.id, save.postId)).limit(1);
+        
+        let studentName = null;
+        let schoolName = null;
+        if (post?.studentId) {
+          const [student] = await db.select({
+            name: students.name,
+            schoolId: students.schoolId,
+          }).from(students).where(eq(students.id, post.studentId)).limit(1);
+          
+          studentName = student?.name || null;
+          if (student?.schoolId) {
+            if (schoolId && student.schoolId !== schoolId) continue;
+            const [school] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, student.schoolId)).limit(1);
+            schoolName = school?.name || null;
+          }
+        }
+        
+        if (schoolId && (!post?.studentId || !studentName)) {
+          const [student] = await db.select({ schoolId: students.schoolId }).from(students).where(eq(students.id, post?.studentId || '')).limit(1);
+          if (!student || student.schoolId !== schoolId) continue;
+        }
+
+        engagement.saves.push({
+          id: save.id,
+          date: save.createdAt.toISOString(),
+          postId: save.postId,
+          user: user?.email || 'Unknown',
+          userRole: user?.role || 'unknown',
+          student: studentName,
+          school: schoolName,
+          postType: post?.type || 'image',
+        });
+      }
+    }
+
+    return {
+      engagement,
+      summary: {
+        totalLikes: engagement.likes.length,
+        totalComments: engagement.comments.length,
+        totalViews: engagement.views.length,
+        totalSaves: engagement.saves.length,
+      },
+    };
+  }
+
+  async getExportRevenue(options: { period?: string; schoolId?: string; type?: string } = {}): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+
+    const { period = 'all', schoolId, type } = options;
+
+    // Calculate date range
+    let startDate: Date | null = null;
+    if (period !== 'all') {
+      const now = new Date();
+      switch (period) {
+        case 'day':
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          break;
+      }
+    }
+
+    // Get school payments
+    let paymentsQuery = db.select().from(schoolPaymentRecords);
+    
+    if (startDate) {
+      paymentsQuery = paymentsQuery.where(sql`${schoolPaymentRecords.recordedAt} >= ${startDate}`) as any;
+    }
+    if (schoolId) {
+      paymentsQuery = paymentsQuery.where(sql`${schoolPaymentRecords.schoolId} = ${schoolId}`) as any;
+    }
+    if (type) {
+      paymentsQuery = paymentsQuery.where(sql`${schoolPaymentRecords.paymentType} = ${type}`) as any;
+    }
+
+    const paymentRows = await paymentsQuery.orderBy(desc(schoolPaymentRecords.recordedAt));
+
+    // Enrich with school info
+    const enrichedPayments = await Promise.all(paymentRows.map(async (payment) => {
+      const [school] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, payment.schoolId)).limit(1);
+      
+      return {
+        id: payment.id,
+        date: payment.recordedAt.toISOString(),
+        schoolId: payment.schoolId,
+        schoolName: school?.name || 'Unknown',
+        amount: Number(payment.paymentAmount || 0),
+        type: payment.paymentType,
+        frequency: payment.paymentFrequency,
+        recordedBy: payment.recordedByName || 'System',
+        notes: payment.notes || null,
+        studentLimitBefore: payment.studentLimitBefore || null,
+        studentLimitAfter: payment.studentLimitAfter || null,
+        oldFrequency: payment.oldFrequency || null,
+        newFrequency: payment.newFrequency || null,
+      };
+    }));
+
+    // Get Xen Watch revenue
+    let xenWatchQuery = db.select().from(paymentTransactions);
+    
+    if (startDate) {
+      xenWatchQuery = xenWatchQuery.where(sql`${paymentTransactions.createdAt} >= ${startDate}`) as any;
+    }
+
+    const xenWatchRows = await xenWatchQuery.orderBy(desc(paymentTransactions.createdAt));
+
+    const xenWatchRevenue = xenWatchRows.map(transaction => ({
+      id: transaction.id,
+      date: transaction.createdAt.toISOString(),
+      amount: Number(transaction.amount || 0),
+      status: transaction.status || 'completed',
+      submissionId: transaction.submissionId || null,
+    }));
+
+    // Calculate summary
+    const totalRevenue = enrichedPayments.reduce((sum, p) => sum + p.amount, 0) + 
+                        xenWatchRevenue.reduce((sum, x) => sum + x.amount, 0);
+    
+    const byFrequency: { [key: string]: { count: number; revenue: number } } = {};
+    enrichedPayments.forEach(payment => {
+      const freq = payment.frequency || 'monthly';
+      if (!byFrequency[freq]) {
+        byFrequency[freq] = { count: 0, revenue: 0 };
+      }
+      byFrequency[freq].count += 1;
+      byFrequency[freq].revenue += payment.amount;
+    });
+
+    return {
+      payments: enrichedPayments,
+      xenWatchRevenue,
+      summary: {
+        totalRevenue,
+        byFrequency,
+        xenWatchTotal: xenWatchRevenue.reduce((sum, x) => sum + x.amount, 0),
+        paymentCount: enrichedPayments.length,
+        xenWatchCount: xenWatchRevenue.length,
+      },
+    };
+  }
+
+  async getExportXenWatch(options: { period?: string; status?: string } = {}): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+
+    const { period = 'all', status } = options;
+
+    // Calculate date range
+    let startDate: Date | null = null;
+    if (period !== 'all') {
+      const now = new Date();
+      switch (period) {
+        case 'day':
+          startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          break;
+      }
+    }
+
+    let query = db.select().from(xenWatchSubmissions);
+    
+    if (startDate) {
+      query = query.where(sql`${xenWatchSubmissions.createdAt} >= ${startDate}`) as any;
+    }
+    if (status) {
+      query = query.where(sql`${xenWatchSubmissions.status} = ${status}`) as any;
+    }
+
+    const submissions = await query.orderBy(desc(xenWatchSubmissions.createdAt));
+
+    // Enrich with student and scout info
+    const enrichedSubmissions = await Promise.all(submissions.map(async (submission) => {
+      const [student] = await db.select({
+        name: students.name,
+        schoolId: students.schoolId,
+      }).from(students).where(eq(students.id, submission.studentId)).limit(1);
+
+      const schoolName = student?.schoolId 
+        ? (await db.select({ name: schools.name }).from(schools).where(eq(schools.id, student.schoolId)).limit(1))[0]?.name || null
+        : null;
+
+      const [scout] = await db.select({ name: scoutProfiles.name }).from(scoutProfiles).where(eq(scoutProfiles.id, submission.scoutId)).limit(1);
+
+      // Get payment if exists
+      const [payment] = await db.select().from(paymentTransactions)
+        .where(eq(paymentTransactions.submissionId, submission.id))
+        .limit(1);
+
+      return {
+        id: submission.id,
+        date: submission.createdAt.toISOString(),
+        studentId: submission.studentId,
+        studentName: student?.name || 'Unknown',
+        schoolId: student?.schoolId || null,
+        schoolName,
+        scoutId: submission.scoutId,
+        scoutName: scout?.name || 'Unknown',
+        amount: payment ? Number(payment.amount || 0) : 0,
+        status: submission.status,
+        paymentId: payment?.id || null,
+      };
+    }));
+
+    return {
+      submissions: enrichedSubmissions,
+      summary: {
+        total: enrichedSubmissions.length,
+        totalRevenue: enrichedSubmissions.reduce((sum, s) => sum + s.amount, 0),
+        byStatus: enrichedSubmissions.reduce((acc, s) => {
+          acc[s.status] = (acc[s.status] || 0) + 1;
+          return acc;
+        }, {} as { [key: string]: number }),
+      },
     };
   }
 }
