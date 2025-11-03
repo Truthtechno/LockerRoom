@@ -207,6 +207,7 @@ export default function Sidebar() {
         { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone, active: location.startsWith("/system-admin/announcements") },
         { name: "Create School", href: "/system-admin/create-school", icon: Building2, active: location.startsWith("/system-admin/create-school") },
         { name: "Create Admin", href: "/system-admin/create-school-admin", icon: UserPlus, active: location.startsWith("/system-admin/create-school-admin") },
+        { name: "Manage Schools", href: "/system-admin/manage-schools", icon: Building2, active: location.startsWith("/system-admin/manage-schools") },
         { name: "Platform Analytics", href: "/admin/platform-analytics", icon: TrendingUp, active: location.startsWith("/admin/platform-analytics") },
         { name: "System Config", href: "/admin/system-config", icon: Settings, active: location.startsWith("/admin/system-config") },
         { name: "Manage Admins", href: "/admin/admin-management", icon: Shield, active: location.startsWith("/admin/admin-management") },

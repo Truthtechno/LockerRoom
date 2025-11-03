@@ -35,8 +35,7 @@ export default function SystemAdmin() {
     activeStudents: number;
     contentUploads: number;
     monthlyRevenue: number;
-    premiumSchools: number;
-    standardSchools: number;
+    activeSchools: number;
   }>({
     queryKey: ["/api/system/stats"],
   });
@@ -558,35 +557,36 @@ export default function SystemAdmin() {
 
             {/* Subscription Overview */}
             <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground mb-4">Subscription Plans</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-4">School Subscriptions</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Premium Schools</p>
-                    <p className="text-sm text-muted-foreground">Advanced features</p>
+                    <p className="font-medium text-foreground">Active Schools</p>
+                    <p className="text-sm text-muted-foreground">Currently active subscriptions</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-foreground">{systemStats?.premiumSchools || 0}</p>
-                    <p className="text-sm text-accent dark:text-accent">$150/month each</p>
+                    <p className="text-lg font-bold text-foreground">{systemStats?.activeSchools || 0}</p>
                   </div>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Standard Schools</p>
-                    <p className="text-sm text-muted-foreground">Basic features</p>
+                    <p className="font-medium text-foreground">Total Schools</p>
+                    <p className="text-sm text-muted-foreground">All registered schools</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-foreground">{systemStats?.standardSchools || 0}</p>
-                    <p className="text-sm text-accent dark:text-accent">$75/month each</p>
+                    <p className="text-lg font-bold text-foreground">{systemStats?.totalSchools || 0}</p>
                   </div>
                 </div>
                 
                 <div className="pt-4 border-t border-border">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-foreground">Total MRR</p>
+                    <p className="font-medium text-foreground">Total Monthly Revenue</p>
                     <p className="text-xl font-bold text-accent dark:text-accent">${(systemStats?.monthlyRevenue || 0).toLocaleString()}</p>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Based on active subscriptions
+                  </p>
                 </div>
               </div>
             </div>

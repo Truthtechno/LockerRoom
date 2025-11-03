@@ -37,6 +37,8 @@ interface AnalyticsData {
     feedback_sent: number;
     avg_rating: number;
     total_scouts: number;
+    total_revenue?: number;
+    avg_submission_value?: number;
   };
   topStudents: Array<{
     student_id: string;
@@ -167,7 +169,7 @@ export default function XenWatchAnalytics() {
       },
       {
         'Metric': 'Total Revenue',
-        'Value': `$${((analytics.totals.paid || 0) * 10).toFixed(2)}`,
+        'Value': `$${(analytics.totals.total_revenue || 0).toFixed(2)}`,
         'Category': 'Revenue'
       },
       {
@@ -177,7 +179,9 @@ export default function XenWatchAnalytics() {
       },
       {
         'Metric': 'Average Submission Value',
-        'Value': '$10.00',
+        'Value': analytics.totals.avg_submission_value 
+          ? `$${Number(analytics.totals.avg_submission_value).toFixed(2)}`
+          : '$0.00',
         'Category': 'Revenue'
       },
       {
@@ -445,7 +449,7 @@ export default function XenWatchAnalytics() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  ${((analytics?.totals.paid || 0) * 10).toFixed(2)}
+                  ${(analytics?.totals.total_revenue || 0).toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   From {analytics?.totals.paid || 0} paid submissions
@@ -614,7 +618,11 @@ export default function XenWatchAnalytics() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold">$10.00</p>
+                      <p className="text-lg font-bold">
+                        ${analytics?.totals.avg_submission_value 
+                          ? Number(analytics.totals.avg_submission_value).toFixed(2)
+                          : '0.00'}
+                      </p>
                     </div>
                   </div>
                   

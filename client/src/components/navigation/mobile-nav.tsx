@@ -200,6 +200,7 @@ export default function MobileNav() {
         { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone },
         { name: "Create School", href: "/system-admin/create-school", icon: Building2 },
         { name: "Create Admin", href: "/system-admin/create-school-admin", icon: UserPlus },
+        { name: "Manage Schools", href: "/system-admin/manage-schools", icon: Building2 },
         { name: "Platform Analytics", href: "/admin/platform-analytics", icon: TrendingUp },
         { name: "System Config", href: "/admin/system-config", icon: Settings },
         { name: "Manage Admins", href: "/admin/admin-management", icon: Shield },

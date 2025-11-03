@@ -26,6 +26,7 @@ import SchoolAdmin from "./pages/school-admin";
 import SystemAdmin from "./pages/system-admin";
 import CreateSchool from "./pages/system-admin/create-school";
 import CreateSchoolAdmin from "./pages/system-admin/create-school-admin";
+import ManageSchools from "./pages/system-admin/manage-schools";
 import PlatformAnalytics from "./pages/admin/platform-analytics";
 import SystemConfig from "./pages/admin/system-config";
 import AdminManagement from "./pages/admin/admin-management";
@@ -190,6 +191,12 @@ function Router() {
       <Route path="/system-admin/create-school-admin">
         <ProtectedRoute requiredRole="system_admin">
           <CreateSchoolAdmin />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/system-admin/manage-schools">
+        <ProtectedRoute requiredRole="system_admin">
+          <ManageSchools />
         </ProtectedRoute>
       </Route>
 

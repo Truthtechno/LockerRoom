@@ -19,6 +19,7 @@ import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { ensureSysAdmin } from "./ensure-sysadmin";
+import { notifyExpiringSubscriptions, deactivateExpiredSubscriptions } from "./utils/notification-helpers";
 
 const app = express();
 
@@ -161,5 +162,26 @@ app.use((req, res, next) => {
   
   server.listen(listenConfig, () => {
     log(`serving on port ${port}`);
+    
+    // Schedule subscription checks
+    // Check every 6 hours for expiring subscriptions and expired subscriptions
+    setInterval(async () => {
+      try {
+        await notifyExpiringSubscriptions();
+        await deactivateExpiredSubscriptions();
+      } catch (error) {
+        console.error('Error in scheduled subscription checks:', error);
+      }
+    }, 6 * 60 * 60 * 1000); // 6 hours
+    
+    // Run immediately on startup (after a short delay to ensure DB is ready)
+    setTimeout(async () => {
+      try {
+        await notifyExpiringSubscriptions();
+        await deactivateExpiredSubscriptions();
+      } catch (error) {
+        console.error('Error in initial subscription checks:', error);
+      }
+    }, 30000); // 30 seconds delay
   });
 })();

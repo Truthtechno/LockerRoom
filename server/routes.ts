@@ -5622,6 +5622,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Platform Analytics Endpoints
+  app.get("/api/system/analytics/overview", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const period = (req.query.period as string) || 'month';
+      const analytics = await storage.getPlatformAnalyticsOverview(period);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get platform analytics overview error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch platform analytics overview" } });
+    }
+  });
+
+  app.get("/api/system/analytics/users", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const period = (req.query.period as string) || 'month';
+      const breakdown = (req.query.breakdown as string) || 'role';
+      const analytics = await storage.getPlatformUserAnalytics(period, breakdown);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get platform user analytics error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch platform user analytics" } });
+    }
+  });
+
+  app.get("/api/system/analytics/schools", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const period = (req.query.period as string) || 'month';
+      const analytics = await storage.getPlatformSchoolAnalytics(period);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get platform school analytics error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch platform school analytics" } });
+    }
+  });
+
+  app.get("/api/system/analytics/revenue", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const period = (req.query.period as string) || 'year';
+      const analytics = await storage.getPlatformRevenueAnalytics(period);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get platform revenue analytics error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch platform revenue analytics" } });
+    }
+  });
+
+  app.get("/api/system/analytics/content", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const period = (req.query.period as string) || 'month';
+      const analytics = await storage.getPlatformContentAnalytics(period);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get platform content analytics error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch platform content analytics" } });
+    }
+  });
+
+  app.get("/api/system/analytics/engagement", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const period = (req.query.period as string) || 'month';
+      const granularity = (req.query.granularity as string) || 'day';
+      const analytics = await storage.getPlatformEngagementAnalytics(period, granularity);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get platform engagement analytics error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch platform engagement analytics" } });
+    }
+  });
+
+  app.get("/api/system/analytics/growth", requireAuth, requireRole('system_admin'), async (req, res) => {
+    try {
+      const metric = (req.query.metric as string) || 'users';
+      const period = (req.query.period as string) || '6months';
+      const analytics = await storage.getPlatformGrowthTrends(metric, period);
+      res.json(analytics);
+    } catch (error) {
+      console.error('Get platform growth trends error:', error);
+      res.status(500).json({ error: { message: "Failed to fetch platform growth trends" } });
+    }
+  });
+
   // Student analytics endpoints
   app.get("/api/students/:studentId/analytics", async (req, res) => {
     try {

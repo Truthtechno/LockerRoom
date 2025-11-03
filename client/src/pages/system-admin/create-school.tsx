@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { Building2, Check, Plus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
@@ -21,6 +22,13 @@ const createSchoolSchema = z.object({
   address: z.string().optional().refine((val) => !val || val.length <= 500, "Address must be less than 500 characters"),
   contactEmail: z.string().email("Valid email is required").max(255, "Email must be less than 255 characters"),
   contactPhone: z.string().optional().refine((val) => !val || /^[\+]?[1-9][\d]{0,15}$/.test(val), "Invalid phone number format"),
+  paymentAmount: z.string().min(1, "Payment amount is required").refine((val) => {
+    const num = parseFloat(val);
+    return !isNaN(num) && num > 0;
+  }, "Payment amount must be a positive number"),
+  paymentFrequency: z.enum(["monthly", "annual"], {
+    required_error: "Payment frequency is required",
+  }),
 });
 
 type CreateSchoolFormData = z.infer<typeof createSchoolSchema>;
@@ -40,6 +48,8 @@ export default function CreateSchool() {
       address: "",
       contactEmail: "",
       contactPhone: "",
+      paymentAmount: "",
+      paymentFrequency: "monthly",
     },
   });
 
@@ -205,6 +215,61 @@ export default function CreateSchool() {
                   )}
                 </div>
 
+                {/* Payment Information */}
+                <div className="border-t pt-6 mt-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Payment Information</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Payment Amount */}
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentAmount">Payment Amount ($) *</Label>
+                      <Input
+                        id="paymentAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...form.register("paymentAmount")}
+                        placeholder="0.00"
+                        disabled={createSchoolMutation.isPending}
+                      />
+                      {form.formState.errors.paymentAmount && (
+                        <p className="text-sm text-destructive">
+                          {form.formState.errors.paymentAmount.message}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Enter the amount the school has paid
+                      </p>
+                    </div>
+
+                    {/* Payment Frequency */}
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentFrequency">Payment Frequency *</Label>
+                      <Select
+                        value={form.watch("paymentFrequency")}
+                        onValueChange={(value) => form.setValue("paymentFrequency", value as "monthly" | "annual")}
+                        disabled={createSchoolMutation.isPending}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select frequency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                          <SelectItem value="annual">Annual</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {form.formState.errors.paymentFrequency && (
+                        <p className="text-sm text-destructive">
+                          {form.formState.errors.paymentFrequency.message}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Subscription renewal period
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Submit Button */}
                 <div className="flex space-x-3 pt-4">
                   <Button
@@ -266,6 +331,15 @@ export default function CreateSchool() {
                   {createdSchool?.contactPhone && (
                     <p><span className="font-medium">Contact Phone:</span> {createdSchool.contactPhone}</p>
                   )}
+                  {createdSchool?.paymentAmount && (
+                    <p><span className="font-medium">Payment Amount:</span> ${parseFloat(createdSchool.paymentAmount).toFixed(2)}</p>
+                  )}
+                  {createdSchool?.paymentFrequency && (
+                    <p><span className="font-medium">Payment Frequency:</span> {createdSchool.paymentFrequency === "annual" ? "Annual" : "Monthly"}</p>
+                  )}
+                  {createdSchool?.subscriptionExpiresAt && (
+                    <p><span className="font-medium">Expires:</span> {new Date(createdSchool.subscriptionExpiresAt).toLocaleDateString()}</p>
+                  )}
                 </div>
               </div>
 
@@ -279,6 +353,7 @@ export default function CreateSchool() {
                     <li>• Create a School Admin account for this school</li>
                     <li>• School Admin can then add students</li>
                     <li>• Students will receive OTP for first login</li>
+                    <li>• Remember to renew subscription before it expires</li>
                   </ul>
                 </div>
               </div>

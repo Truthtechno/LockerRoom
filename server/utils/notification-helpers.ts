@@ -1,7 +1,7 @@
 import { storage } from '../storage';
 import { db } from '../db';
-import { students, users, notifications, submissions, submissionReviews, submissionFinalFeedback } from '@shared/schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { students, users, notifications, submissions, submissionReviews, submissionFinalFeedback, schools, schoolAdmins } from '@shared/schema';
+import { eq, and, inArray, sql, lt, gte, lte } from 'drizzle-orm';
 
 /**
  * Helper function to create notifications for all followers when a student posts
@@ -382,6 +382,186 @@ export async function notifyStudentOfSubmission(submissionId: string, studentId:
     console.log(`✅ Notification created for student ${studentId}`);
   } catch (error: any) {
     console.error('❌ Error in notifyStudentOfSubmission:', error?.message || error);
+  }
+}
+
+/**
+ * Notify system admin and school admins about expiring subscriptions
+ * Called when a subscription is within the warning period (1 week for monthly, 1 month for annual)
+ */
+export async function notifyExpiringSubscriptions(): Promise<void> {
+  try {
+    console.log('🔔 Checking for expiring subscriptions...');
+    
+    const now = new Date();
+    const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const oneMonthFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    
+    // Get schools with expiring subscriptions
+    const expiringSchools = await db
+      .select()
+      .from(schools)
+      .where(
+        and(
+          eq(schools.isActive, true),
+          sql`${schools.subscriptionExpiresAt} IS NOT NULL`,
+          sql`${schools.subscriptionExpiresAt} > ${now}`,
+          sql`(
+            (${schools.paymentFrequency} = 'monthly' AND ${schools.subscriptionExpiresAt} <= ${oneWeekFromNow}) OR
+            (${schools.paymentFrequency} = 'annual' AND ${schools.subscriptionExpiresAt} <= ${oneMonthFromNow})
+          )`
+        )
+      );
+
+    console.log(`📋 Found ${expiringSchools.length} school(s) with expiring subscriptions`);
+
+    // Get all system admins
+    const systemAdminUsers = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(systemAdmins, eq(users.linkedId, systemAdmins.id))
+      .where(eq(users.role, 'system_admin'));
+
+    let notificationCount = 0;
+
+    for (const school of expiringSchools) {
+      const expiresAt = school.subscriptionExpiresAt ? new Date(school.subscriptionExpiresAt) : null;
+      if (!expiresAt) continue;
+
+      const daysUntilExpiry = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+      // Notify system admins
+      for (const admin of systemAdminUsers) {
+        try {
+          await storage.createNotification({
+            userId: admin.userId,
+            type: 'subscription_expiring',
+            title: 'School Subscription Expiring',
+            message: `${school.name}'s ${school.paymentFrequency} subscription expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}. Please renew to avoid service interruption.`,
+            entityType: 'school',
+            entityId: school.id,
+            metadata: JSON.stringify({
+              schoolId: school.id,
+              schoolName: school.name,
+              expiresAt: expiresAt.toISOString(),
+              daysUntilExpiry,
+              paymentAmount: school.paymentAmount,
+              paymentFrequency: school.paymentFrequency,
+            }),
+          });
+          notificationCount++;
+        } catch (error) {
+          console.error(`Error creating notification for system admin ${admin.userId}:`, error);
+        }
+      }
+
+      // Notify school admins
+      const schoolAdminUsers = await db
+        .select({ userId: users.id })
+        .from(users)
+        .innerJoin(schoolAdmins, eq(users.linkedId, schoolAdmins.id))
+        .where(eq(schoolAdmins.schoolId, school.id));
+
+      for (const admin of schoolAdminUsers) {
+        try {
+          await storage.createNotification({
+            userId: admin.userId,
+            type: 'subscription_expiring',
+            title: 'Subscription Expiring Soon',
+            message: `Your school's ${school.paymentFrequency} subscription expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}. Please contact your administrator to renew.`,
+            entityType: 'school',
+            entityId: school.id,
+            metadata: JSON.stringify({
+              schoolId: school.id,
+              schoolName: school.name,
+              expiresAt: expiresAt.toISOString(),
+              daysUntilExpiry,
+              paymentAmount: school.paymentAmount,
+              paymentFrequency: school.paymentFrequency,
+            }),
+          });
+          notificationCount++;
+        } catch (error) {
+          console.error(`Error creating notification for school admin ${admin.userId}:`, error);
+        }
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for expiring subscriptions`);
+  } catch (error: any) {
+    console.error('❌ Error in notifyExpiringSubscriptions:', error?.message || error);
+  }
+}
+
+/**
+ * Auto-deactivate expired subscriptions
+ * This should be run periodically to deactivate schools with expired subscriptions
+ */
+export async function deactivateExpiredSubscriptions(): Promise<void> {
+  try {
+    console.log('🔄 Checking for expired subscriptions...');
+    
+    const now = new Date();
+    
+    // Get schools with expired subscriptions that are still active
+    const expiredSchools = await db
+      .select()
+      .from(schools)
+      .where(
+        and(
+          eq(schools.isActive, true),
+          sql`${schools.subscriptionExpiresAt} IS NOT NULL`,
+          sql`${schools.subscriptionExpiresAt} <= ${now}`
+        )
+      );
+
+    console.log(`📋 Found ${expiredSchools.length} school(s) with expired subscriptions`);
+
+    for (const school of expiredSchools) {
+      try {
+        // Deactivate school
+        await db.update(schools)
+          .set({
+            isActive: false,
+            updatedAt: now,
+          })
+          .where(eq(schools.id, school.id));
+
+        // Disable school admin accounts
+        const schoolAdminUsers = await db
+          .select({ id: users.id })
+          .from(users)
+          .innerJoin(schoolAdmins, eq(users.linkedId, schoolAdmins.id))
+          .where(eq(schoolAdmins.schoolId, school.id));
+
+        for (const adminUser of schoolAdminUsers) {
+          await db.update(users)
+            .set({ emailVerified: false })
+            .where(eq(users.id, adminUser.id));
+        }
+
+        // Disable student accounts
+        const studentUsers = await db
+          .select({ id: users.id })
+          .from(users)
+          .innerJoin(students, eq(users.linkedId, students.id))
+          .where(eq(students.schoolId, school.id));
+
+        for (const studentUser of studentUsers) {
+          await db.update(users)
+            .set({ emailVerified: false })
+            .where(eq(users.id, studentUser.id));
+        }
+
+        console.log(`✅ Deactivated school: ${school.name} (ID: ${school.id})`);
+      } catch (error) {
+        console.error(`Error deactivating school ${school.id}:`, error);
+      }
+    }
+
+    console.log(`✅ Completed deactivation check`);
+  } catch (error: any) {
+    console.error('❌ Error in deactivateExpiredSubscriptions:', error?.message || error);
   }
 }
 

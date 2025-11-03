@@ -58,10 +58,16 @@ export const schools = pgTable("schools", {
   address: text("address"),
   contactEmail: text("contact_email"),
   contactPhone: text("contact_phone"),
-  subscriptionPlan: text("subscription_plan").notNull().default("standard"), // standard, premium
+  // Subscription fields
+  paymentAmount: decimal("payment_amount", { precision: 10, scale: 2 }).notNull().default("0.00"), // Amount paid
+  paymentFrequency: text("payment_frequency").notNull().default("monthly"), // monthly, annual
+  subscriptionExpiresAt: timestamp("subscription_expires_at"), // When subscription expires
+  isActive: boolean("is_active").notNull().default(true), // Active status (false if expired/not renewed)
+  lastPaymentDate: timestamp("last_payment_date"), // When last payment was recorded
   maxStudents: integer("max_students").notNull().default(100),
   profilePicUrl: text("profile_pic_url"), // Cloudinary URL for school profile picture
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
 });
 
 export const students = pgTable("students", {

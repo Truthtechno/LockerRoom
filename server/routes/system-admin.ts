@@ -72,7 +72,7 @@ export function registerSystemAdminRoutes(app: Express) {
     requireRole('system_admin'),
     async (req, res) => {
       try {
-        const { name, address, contactEmail, contactPhone } = req.body;
+        const { name, address, contactEmail, contactPhone, paymentAmount, paymentFrequency } = req.body;
         
         // Validation
         if (!name) {
@@ -84,15 +84,47 @@ export function registerSystemAdminRoutes(app: Express) {
           });
         }
 
-        // Create school
+        if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Valid payment amount is required' 
+            } 
+          });
+        }
+
+        if (!paymentFrequency || !['monthly', 'annual'].includes(paymentFrequency)) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Payment frequency must be monthly or annual' 
+            } 
+          });
+        }
+
+        // Calculate expiration date based on frequency
+        const now = new Date();
+        const expirationDate = new Date(now);
+        if (paymentFrequency === 'monthly') {
+          expirationDate.setMonth(expirationDate.getMonth() + 1);
+        } else if (paymentFrequency === 'annual') {
+          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        }
+
+        // Create school with payment information
         const [school] = await db.insert(schools).values({
           name,
           address: address || null,
           contactEmail: contactEmail || null,
           contactPhone: contactPhone || null,
+          paymentAmount: paymentAmount.toString(),
+          paymentFrequency: paymentFrequency,
+          subscriptionExpiresAt: expirationDate,
+          isActive: true,
+          lastPaymentDate: now,
         }).returning();
 
-        console.log(`🏫 School created: ${school.name} (ID: ${school.id})`);
+        console.log(`🏫 School created: ${school.name} (ID: ${school.id}) - Payment: $${paymentAmount} ${paymentFrequency}`);
 
         res.json({
           success: true,
@@ -102,6 +134,11 @@ export function registerSystemAdminRoutes(app: Express) {
             address: school.address,
             contactEmail: school.contactEmail,
             contactPhone: school.contactPhone,
+            paymentAmount: school.paymentAmount,
+            paymentFrequency: school.paymentFrequency,
+            subscriptionExpiresAt: school.subscriptionExpiresAt,
+            isActive: school.isActive,
+            lastPaymentDate: school.lastPaymentDate,
             createdAt: school.createdAt
           }
         });
@@ -275,7 +312,9 @@ export function registerSystemAdminRoutes(app: Express) {
           LEFT JOIN students st ON s.id = st.school_id
           LEFT JOIN posts p ON st.id = p.student_id
           GROUP BY s.id, s.name, s.address, s.contact_email, s.contact_phone, 
-                   s.subscription_plan, s.max_students, s.profile_pic_url, s.created_at
+                   s.payment_amount, s.payment_frequency, s.subscription_expires_at,
+                   s.is_active, s.last_payment_date, s.max_students, s.profile_pic_url,
+                   s.created_at, s.updated_at
           ORDER BY s.created_at DESC
         `);
         
@@ -437,10 +476,8 @@ export function registerSystemAdminRoutes(app: Express) {
         // Update school status to disabled
         await db.update(schools)
           .set({ 
-            // Add a status field to schools table if it doesn't exist
-            // For now, we'll use a custom field or add it to the schema
-            // This is a placeholder - you may need to add a status field to the schools table
-            subscriptionPlan: 'disabled' // Using subscriptionPlan as a workaround
+            isActive: false,
+            updatedAt: new Date(),
           })
           .where(eq(schools.id, schoolId));
 
@@ -488,6 +525,127 @@ export function registerSystemAdminRoutes(app: Express) {
           error: { 
             code: 'server_error', 
             message: 'Failed to disable school' 
+          } 
+        });
+      }
+    }
+  );
+
+  // Renew School Subscription
+  app.post('/api/system-admin/schools/:schoolId/renew',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req, res) => {
+      try {
+        const { schoolId } = req.params;
+        const { paymentAmount, paymentFrequency } = req.body;
+        
+        // Check if school exists
+        const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
+        if (!school) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'school_not_found', 
+              message: 'School not found' 
+            } 
+          });
+        }
+
+        // Validation
+        if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Valid payment amount is required' 
+            } 
+          });
+        }
+
+        if (!paymentFrequency || !['monthly', 'annual'].includes(paymentFrequency)) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Payment frequency must be monthly or annual' 
+            } 
+          });
+        }
+
+        // Calculate new expiration date
+        const now = new Date();
+        const expirationDate = new Date(now);
+        
+        // If subscription hasn't expired yet, extend from current expiration date
+        // Otherwise, start from now
+        const baseDate = (school.subscriptionExpiresAt && new Date(school.subscriptionExpiresAt) > now) 
+          ? new Date(school.subscriptionExpiresAt)
+          : now;
+
+        if (paymentFrequency === 'monthly') {
+          expirationDate.setTime(baseDate.getTime());
+          expirationDate.setMonth(expirationDate.getMonth() + 1);
+        } else if (paymentFrequency === 'annual') {
+          expirationDate.setTime(baseDate.getTime());
+          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        }
+
+        // Update school subscription
+        const [updatedSchool] = await db.update(schools)
+          .set({
+            paymentAmount: paymentAmount.toString(),
+            paymentFrequency: paymentFrequency,
+            subscriptionExpiresAt: expirationDate,
+            isActive: true,
+            lastPaymentDate: now,
+            updatedAt: now,
+          })
+          .where(eq(schools.id, schoolId))
+          .returning();
+
+        // Re-enable school admin and student accounts if they were disabled
+        const schoolAdminUsers = await db
+          .select({ id: users.id })
+          .from(users)
+          .innerJoin(schoolAdmins, eq(users.linkedId, schoolAdmins.id))
+          .where(eq(schoolAdmins.schoolId, schoolId));
+
+        for (const adminUser of schoolAdminUsers) {
+          await db.update(users)
+            .set({ emailVerified: true })
+            .where(eq(users.id, adminUser.id));
+        }
+
+        const studentUsers = await db
+          .select({ id: users.id })
+          .from(users)
+          .innerJoin(students, eq(users.linkedId, students.id))
+          .where(eq(students.schoolId, schoolId));
+
+        for (const studentUser of studentUsers) {
+          await db.update(users)
+            .set({ emailVerified: true })
+            .where(eq(users.id, studentUser.id));
+        }
+
+        console.log(`✅ School subscription renewed: ${updatedSchool.name} (ID: ${schoolId}) - Payment: $${paymentAmount} ${paymentFrequency}`);
+
+        res.json({
+          success: true,
+          school: {
+            id: updatedSchool.id,
+            name: updatedSchool.name,
+            paymentAmount: updatedSchool.paymentAmount,
+            paymentFrequency: updatedSchool.paymentFrequency,
+            subscriptionExpiresAt: updatedSchool.subscriptionExpiresAt,
+            isActive: updatedSchool.isActive,
+            lastPaymentDate: updatedSchool.lastPaymentDate,
+          }
+        });
+      } catch (error) {
+        console.error('❌ Error renewing school subscription:', error);
+        res.status(500).json({ 
+          error: { 
+            code: 'server_error', 
+            message: 'Failed to renew school subscription' 
           } 
         });
       }

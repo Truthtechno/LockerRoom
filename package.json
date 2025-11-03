@@ -24,6 +24,7 @@
     "migrate:payment-subscription": "tsx scripts/run-payment-subscription-columns-migration.ts",
     "test:payment": "tsx scripts/test-payment-system.ts",
     "test:payment-e2e": "tsx scripts/test-payment-end-to-end.ts",
+    "test:dynamic-pricing": "tsx scripts/test-dynamic-pricing-revenue.ts",
     "add-branding-columns": "tsx scripts/add-branding-columns-direct.ts",
     "cleanup-old-logo": "tsx scripts/cleanup-old-logo.ts",
     "test:api": "jest --testPathPatterns=tests/api",

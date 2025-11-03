@@ -204,6 +204,15 @@ export interface IStorage {
   getSchoolStudentEngagement(schoolId: string, period?: string): Promise<any>;
   getSchoolSportAnalytics(schoolId: string): Promise<any>;
   
+  // Platform analytics operations
+  getPlatformAnalyticsOverview(period?: string): Promise<any>;
+  getPlatformUserAnalytics(period?: string, breakdown?: string): Promise<any>;
+  getPlatformSchoolAnalytics(period?: string): Promise<any>;
+  getPlatformRevenueAnalytics(period?: string): Promise<any>;
+  getPlatformContentAnalytics(period?: string): Promise<any>;
+  getPlatformEngagementAnalytics(period?: string, granularity?: string): Promise<any>;
+  getPlatformGrowthTrends(metric?: string, period?: string): Promise<any>;
+  
   // School application operations
   getSchoolApplications(): Promise<SchoolApplication[]>;
   getSchoolApplication(id: string): Promise<SchoolApplication | undefined>;
@@ -1487,6 +1496,40 @@ export class MemStorage implements IStorage {
       schoolOnboarded,
       totalEvents: logs.length,
     };
+  }
+
+  // Platform analytics operations (MemStorage stubs)
+  async getPlatformAnalyticsOverview(period?: string): Promise<any> {
+    return {
+      totals: { users: 0, schools: 0, posts: 0, engagement: 0, revenue: 0 },
+      trends: { userGrowth: 0, revenueGrowth: 0, engagementGrowth: 0 },
+      periodComparison: { users: 0, schools: 0, posts: 0, engagement: 0 },
+      activeUsers: { daily: 0, weekly: 0, monthly: 0 }
+    };
+  }
+
+  async getPlatformUserAnalytics(period?: string, breakdown?: string): Promise<any> {
+    return { total: 0, byRole: {}, growth: { period: 0, percentage: 0 }, retention: { daily: 0, weekly: 0, monthly: 0 }, newUsers: [] };
+  }
+
+  async getPlatformSchoolAnalytics(period?: string): Promise<any> {
+    return { total: 0, byPlan: { premium: 0, standard: 0 }, newSchools: [], topSchools: [], atRisk: [] };
+  }
+
+  async getPlatformRevenueAnalytics(period?: string): Promise<any> {
+    return { mrr: 0, arr: 0, byPlan: { premium: { count: 0, revenue: 0 }, standard: { count: 0, revenue: 0 } }, trends: [], churnRisk: [] };
+  }
+
+  async getPlatformContentAnalytics(period?: string): Promise<any> {
+    return { totalPosts: 0, byType: { image: 0, video: 0, announcement: 0 }, trends: [], engagement: { total: 0, averagePerPost: 0, breakdown: {} }, topPosts: [] };
+  }
+
+  async getPlatformEngagementAnalytics(period?: string, granularity?: string): Promise<any> {
+    return { total: { likes: 0, comments: 0, views: 0, saves: 0 }, trends: [], bySchool: [], peakTimes: [] };
+  }
+
+  async getPlatformGrowthTrends(metric?: string, period?: string): Promise<any> {
+    return { data: [], growthRate: 0, comparison: { previousPeriod: 0, percentage: 0 } };
   }
 
   // Student Rating operations
@@ -3269,18 +3312,30 @@ export class PostgresStorage implements IStorage {
       .where(sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`);
     
     const students = allUsers.filter(user => user.role === "student").length;
-    const premiumSchools = allSchools.filter(school => school.subscriptionPlan === "premium").length;
-    const standardSchools = allSchools.filter(school => school.subscriptionPlan === "standard").length;
+    const activeSchools = allSchools.filter(school => school.isActive).length;
     
-    const monthlyRevenue = (premiumSchools * 150) + (standardSchools * 75);
+    // Calculate monthly revenue based on active subscriptions
+    // For annual subscriptions, divide by 12 to get monthly equivalent
+    const now = new Date();
+    let monthlyRevenue = 0;
+    
+    for (const school of allSchools) {
+      if (school.isActive && school.subscriptionExpiresAt && new Date(school.subscriptionExpiresAt) > now) {
+        const paymentAmount = parseFloat(school.paymentAmount?.toString() || "0");
+        if (school.paymentFrequency === "monthly") {
+          monthlyRevenue += paymentAmount;
+        } else if (school.paymentFrequency === "annual") {
+          monthlyRevenue += paymentAmount / 12;
+        }
+      }
+    }
 
     return {
       totalSchools: allSchools.length,
       activeStudents: students,
       contentUploads: allPosts.length,
-      monthlyRevenue,
-      premiumSchools,
-      standardSchools,
+      monthlyRevenue: Math.round(monthlyRevenue * 100) / 100, // Round to 2 decimal places
+      activeSchools,
     };
   }
 
@@ -4806,14 +4861,66 @@ export class PostgresStorage implements IStorage {
         LIMIT 10
       `);
 
+      // Calculate revenue from actual payment transactions
+      let revenueStats = { 
+        total_paid_submissions: 0, 
+        total_revenue: 0, 
+        avg_submission_value: 0 
+      };
+      
+      try {
+        // Get revenue from completed payment transactions for xen_watch type
+        const revenueResult = await db.execute(sql`
+          SELECT 
+            COUNT(*) as total_paid_submissions,
+            COALESCE(SUM(amount_cents) / 100.0, 0) as total_revenue,
+            COALESCE(AVG(amount_cents / 100.0), 0) as avg_submission_value
+          FROM payment_transactions
+          WHERE type = 'xen_watch' 
+            AND status = 'completed'
+        `);
+        
+        if (revenueResult.rows && revenueResult.rows[0]) {
+          revenueStats = {
+            total_paid_submissions: parseInt(revenueResult.rows[0].total_paid_submissions || '0'),
+            total_revenue: parseFloat(revenueResult.rows[0].total_revenue || '0'),
+            avg_submission_value: parseFloat(revenueResult.rows[0].avg_submission_value || '0')
+          };
+        }
+      } catch (revenueError) {
+        console.log('Error calculating revenue from payment_transactions:', revenueError);
+        // Fallback: try legacy xen_watch_submissions table
+        try {
+          const legacyRevenueResult = await db.execute(sql`
+            SELECT 
+              COUNT(*) as total_paid_submissions,
+              COALESCE(SUM(amount_cents) / 100.0, 0) as total_revenue,
+              COALESCE(AVG(amount_cents / 100.0), 0) as avg_submission_value
+            FROM xen_watch_submissions
+            WHERE status IN ('paid', 'reviewed', 'feedback_sent') AND paid_at IS NOT NULL
+          `);
+          if (legacyRevenueResult.rows?.[0]) {
+            revenueStats = {
+              total_paid_submissions: parseInt(legacyRevenueResult.rows[0].total_paid_submissions || '0'),
+              total_revenue: parseFloat(legacyRevenueResult.rows[0].total_revenue || '0'),
+              avg_submission_value: parseFloat(legacyRevenueResult.rows[0].avg_submission_value || '0')
+            };
+          }
+        } catch (legacyError) {
+          console.log('Legacy revenue table not found or accessible, using default values');
+        }
+      }
+
       return {
         totals: {
           total_submissions: parseInt(totals.rows?.[0]?.total_submissions || '0'),
-          paid: parseInt(totals.rows?.[0]?.finalized || '0'), // Map finalized to paid for compatibility
+          paid: revenueStats.total_paid_submissions, // Use actual paid count from transactions
           reviewed: parseInt(totals.rows?.[0]?.in_review || '0'),
           feedback_sent: parseInt(totals.rows?.[0]?.finalized || '0'), // Map finalized to feedback_sent
           avg_rating: parseFloat(totals.rows?.[0]?.avg_rating || '0'),
-          total_scouts: totalScouts
+          total_scouts: totalScouts,
+          total_revenue: revenueStats.total_revenue, // Add actual revenue
+          avg_submission_value: revenueStats.avg_submission_value // Add average submission value
         },
         topStudents: (topStudents.rows || []).map(row => ({
           student_id: row.student_id,
@@ -4838,7 +4945,9 @@ export class PostgresStorage implements IStorage {
           reviewed: 0,
           feedback_sent: 0,
           avg_rating: 0,
-          total_scouts: 0
+          total_scouts: 0,
+          total_revenue: 0,
+          avg_submission_value: 0
         },
         topStudents: [],
         topSchools: []
@@ -4911,30 +5020,30 @@ export class PostgresStorage implements IStorage {
         FROM submissions s
       `);
 
-      // Get revenue analytics - calculate based on actual submission data ($10 per submission)
-      let revenueStats = { total_paid_submissions: 0, total_revenue: 0, avg_submission_value: 10.00 };
+      // Get revenue analytics - calculate based on actual payment transactions
+      let revenueStats = { total_paid_submissions: 0, total_revenue: 0, avg_submission_value: 0 };
       
-      // Calculate revenue based on all submissions (since each submission is worth $10)
       try {
+        // Get revenue from completed payment transactions for xen_watch type
         const revenueResult = await db.execute(sql`
           SELECT 
-            COUNT(*) as total_submissions,
-            COUNT(*) * 10.0 as total_revenue
-          FROM submissions
+            COUNT(*) as total_paid_submissions,
+            COALESCE(SUM(amount_cents) / 100.0, 0) as total_revenue,
+            COALESCE(AVG(amount_cents / 100.0), 0) as avg_submission_value
+          FROM payment_transactions
+          WHERE type = 'xen_watch' 
+            AND status = 'completed'
         `);
         
         if (revenueResult.rows && revenueResult.rows[0]) {
-          const totalSubmissions = parseInt(revenueResult.rows[0].total_submissions || '0');
-          const totalRevenue = parseFloat(revenueResult.rows[0].total_revenue || '0');
-          
           revenueStats = {
-            total_paid_submissions: totalSubmissions,
-            total_revenue: totalRevenue,
-            avg_submission_value: 10.00
+            total_paid_submissions: parseInt(revenueResult.rows[0].total_paid_submissions || '0'),
+            total_revenue: parseFloat(revenueResult.rows[0].total_revenue || '0'),
+            avg_submission_value: parseFloat(revenueResult.rows[0].avg_submission_value || '0')
           };
         }
       } catch (revenueError) {
-        console.log('Error calculating revenue from submissions table:', revenueError);
+        console.log('Error calculating revenue from payment_transactions:', revenueError);
         
         // Fallback: try legacy xen_watch_submissions table
         try {
@@ -4942,11 +5051,17 @@ export class PostgresStorage implements IStorage {
             SELECT 
               COUNT(*) as total_paid_submissions,
               COALESCE(SUM(amount_cents) / 100.0, 0) as total_revenue,
-              COALESCE(AVG(amount_cents / 100.0), 10.0) as avg_submission_value
+              COALESCE(AVG(amount_cents / 100.0), 0) as avg_submission_value
             FROM xen_watch_submissions
             WHERE status IN ('paid', 'reviewed', 'feedback_sent') AND paid_at IS NOT NULL
           `);
-          revenueStats = legacyRevenueResult.rows?.[0] || revenueStats;
+          if (legacyRevenueResult.rows?.[0]) {
+            revenueStats = {
+              total_paid_submissions: parseInt(legacyRevenueResult.rows[0].total_paid_submissions || '0'),
+              total_revenue: parseFloat(legacyRevenueResult.rows[0].total_revenue || '0'),
+              avg_submission_value: parseFloat(legacyRevenueResult.rows[0].avg_submission_value || '0')
+            };
+          }
         } catch (legacyError) {
           console.log('Legacy revenue table not found or accessible, using default values');
         }
@@ -5414,6 +5529,940 @@ export class PostgresStorage implements IStorage {
       ));
     
     return Number(result[0]?.count || 0);
+  }
+
+  // Platform analytics operations
+  async getPlatformAnalyticsOverview(period: string = 'month'): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const now = new Date();
+    let startDate: Date;
+    let previousStartDate: Date;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        previousStartDate = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        previousStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        previousStartDate = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate());
+        break;
+      case 'year':
+        startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        previousStartDate = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        previousStartDate = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate());
+    }
+
+    // Get totals (avoid COUNT(*) inconsistencies by using row counts where practical)
+    const allUsersRows = await db.select().from(users);
+    const allSchoolRows = await db.select().from(schools);
+    const totalUsers = [{ count: allUsersRows.length }];
+    const totalSchools = [{ count: allSchoolRows.length }];
+    const totalPosts = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(posts)
+      .where(sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`);
+    
+    // Get engagement totals
+    const totalLikes = await db.select({ count: sql<number>`COUNT(*)` }).from(postLikes);
+    const totalComments = await db.select({ count: sql<number>`COUNT(*)` }).from(postComments);
+    const totalViews = await db.select({ count: sql<number>`COUNT(*)` }).from(postViews);
+    const totalSaves = await db.select({ count: sql<number>`COUNT(*)` }).from(savedPosts);
+    
+    const totalEngagement = Number(totalLikes[0]?.count || 0) + Number(totalComments[0]?.count || 0) + Number(totalViews[0]?.count || 0) + Number(totalSaves[0]?.count || 0);
+    
+    // Get revenue
+    const systemStats = await this.getSystemStats();
+    
+    // Get period data for comparison
+    const periodUsers = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(users)
+      .where(sql`${users.createdAt} >= ${startDate}`);
+    
+    const periodSchools = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(schools)
+      .where(sql`${schools.createdAt} >= ${startDate}`);
+    
+    const periodPosts = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(posts)
+      .where(sql`${posts.createdAt} >= ${startDate} AND (${posts.type} != 'announcement' OR ${posts.type} IS NULL)`);
+    
+    // Get previous period for comparison
+    const previousPeriodUsers = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(users)
+      .where(sql`${users.createdAt} >= ${previousStartDate} AND ${users.createdAt} < ${startDate}`);
+    
+    const previousPeriodSchools = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(schools)
+      .where(sql`${schools.createdAt} >= ${previousStartDate} AND ${schools.createdAt} < ${startDate}`);
+    
+    const previousPeriodPosts = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(posts)
+      .where(sql`${posts.createdAt} >= ${previousStartDate} AND ${posts.createdAt} < ${startDate} AND (${posts.type} != 'announcement' OR ${posts.type} IS NULL)`);
+    
+    // Calculate engagement for current and previous period
+    const periodEngagement = await db.execute(sql`
+      SELECT 
+        COUNT(DISTINCT pl.id) + COUNT(DISTINCT pc.id) + COUNT(DISTINCT pv.id) + COUNT(DISTINCT sp.id) as engagement
+      FROM posts p
+      LEFT JOIN post_likes pl ON CAST(p.id AS text) = CAST(pl.post_id AS text) AND pl.created_at >= ${startDate}
+      LEFT JOIN post_comments pc ON CAST(p.id AS text) = CAST(pc.post_id AS text) AND pc.created_at >= ${startDate}
+      LEFT JOIN post_views pv ON CAST(p.id AS text) = CAST(pv.post_id AS text) AND pv.viewed_at >= ${startDate}
+      LEFT JOIN saved_posts sp ON CAST(p.id AS text) = CAST(sp.post_id AS text) AND sp.created_at >= ${startDate}
+      WHERE p.created_at >= ${startDate} AND (p.type != 'announcement' OR p.type IS NULL)
+    `);
+    
+    const previousPeriodEngagement = await db.execute(sql`
+      SELECT 
+        COUNT(DISTINCT pl.id) + COUNT(DISTINCT pc.id) + COUNT(DISTINCT pv.id) + COUNT(DISTINCT sp.id) as engagement
+      FROM posts p
+      LEFT JOIN post_likes pl ON CAST(p.id AS text) = CAST(pl.post_id AS text) AND pl.created_at >= ${previousStartDate} AND pl.created_at < ${startDate}
+      LEFT JOIN post_comments pc ON CAST(p.id AS text) = CAST(pc.post_id AS text) AND pc.created_at >= ${previousStartDate} AND pc.created_at < ${startDate}
+      LEFT JOIN post_views pv ON CAST(p.id AS text) = CAST(pv.post_id AS text) AND pv.viewed_at >= ${previousStartDate} AND pv.viewed_at < ${startDate}
+      LEFT JOIN saved_posts sp ON CAST(p.id AS text) = CAST(sp.post_id AS text) AND sp.created_at >= ${previousStartDate} AND sp.created_at < ${startDate}
+      WHERE p.created_at >= ${previousStartDate} AND p.created_at < ${startDate} AND (p.type != 'announcement' OR p.type IS NULL)
+    `);
+    
+    const currentPeriodEngagement = Number(periodEngagement.rows[0]?.engagement || 0);
+    const prevPeriodEngagement = Number(previousPeriodEngagement.rows[0]?.engagement || 0);
+    const engagementGrowth = prevPeriodEngagement > 0 ? ((currentPeriodEngagement - prevPeriodEngagement) / prevPeriodEngagement) * 100 : 0;
+    
+    // Calculate revenue growth
+    const currentRevenue = systemStats.monthlyRevenue;
+    // Get previous period revenue (approximate - would need historical data)
+    const previousPeriodRevenue = currentRevenue; // Placeholder - would need to calculate from historical data
+    const revenueGrowth = 0; // Would need historical revenue data to calculate
+    
+    // Get active users (users who have created posts or engaged in the last 30 days)
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    // Active users: users who posted, liked, commented, or viewed in the period
+    const activeMonthly = await db.execute(sql`
+      SELECT COUNT(DISTINCT u.id) as count
+      FROM users u
+      WHERE EXISTS (
+        SELECT 1 FROM posts p WHERE p.student_id IN (
+          SELECT id FROM students WHERE CAST(user_id AS text) = u.id
+        ) AND p.created_at >= ${thirtyDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_likes pl WHERE CAST(pl.user_id AS text) = u.id AND pl.created_at >= ${thirtyDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_comments pc WHERE CAST(pc.user_id AS text) = u.id AND pc.created_at >= ${thirtyDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_views pv WHERE CAST(pv.user_id AS text) = u.id AND pv.viewed_at >= ${thirtyDaysAgo}
+      )
+    `);
+    
+    const activeWeekly = await db.execute(sql`
+      SELECT COUNT(DISTINCT u.id) as count
+      FROM users u
+      WHERE EXISTS (
+        SELECT 1 FROM posts p WHERE p.student_id IN (
+          SELECT id FROM students WHERE CAST(user_id AS text) = u.id
+        ) AND p.created_at >= ${sevenDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_likes pl WHERE CAST(pl.user_id AS text) = u.id AND pl.created_at >= ${sevenDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_comments pc WHERE CAST(pc.user_id AS text) = u.id AND pc.created_at >= ${sevenDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_views pv WHERE CAST(pv.user_id AS text) = u.id AND pv.viewed_at >= ${sevenDaysAgo}
+      )
+    `);
+    
+    const activeDaily = await db.execute(sql`
+      SELECT COUNT(DISTINCT u.id) as count
+      FROM users u
+      WHERE EXISTS (
+        SELECT 1 FROM posts p WHERE p.student_id IN (
+          SELECT id FROM students WHERE CAST(user_id AS text) = u.id
+        ) AND p.created_at >= ${oneDayAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_likes pl WHERE CAST(pl.user_id AS text) = u.id AND pl.created_at >= ${oneDayAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_comments pc WHERE CAST(pc.user_id AS text) = u.id AND pc.created_at >= ${oneDayAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_views pv WHERE CAST(pv.user_id AS text) = u.id AND pv.viewed_at >= ${oneDayAgo}
+      )
+    `);
+    
+    const periodUserCount = Number(periodUsers[0]?.count || 0);
+    const previousPeriodUserCount = Number(previousPeriodUsers[0]?.count || 0);
+    const userGrowth = previousPeriodUserCount > 0 ? ((periodUserCount - previousPeriodUserCount) / previousPeriodUserCount) * 100 : 0;
+    
+    return {
+      totals: {
+        users: Number(totalUsers[0]?.count || 0),
+        schools: Number(totalSchools[0]?.count || 0),
+        posts: Number(totalPosts[0]?.count || 0),
+        engagement: totalEngagement,
+        revenue: systemStats.monthlyRevenue
+      },
+      trends: {
+        userGrowth: userGrowth,
+        revenueGrowth: revenueGrowth, // Would need historical data for accurate calculation
+        engagementGrowth: engagementGrowth
+      },
+      periodComparison: {
+        users: periodUserCount,
+        schools: Number(periodSchools[0]?.count || 0),
+        posts: Number(periodPosts[0]?.count || 0),
+        engagement: currentPeriodEngagement
+      },
+      activeUsers: {
+        daily: Number(activeDaily.rows[0]?.count || 0),
+        weekly: Number(activeWeekly.rows[0]?.count || 0),
+        monthly: Number(activeMonthly.rows[0]?.count || 0)
+      }
+    };
+  }
+
+  async getPlatformUserAnalytics(period: string = 'month', breakdown: string = 'role'): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const now = new Date();
+    let startDate: Date;
+    let previousStartDate: Date;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        previousStartDate = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        previousStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        previousStartDate = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate());
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        previousStartDate = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate());
+    }
+
+    // Get total users
+    const totalUsers = await db.select({ count: sql<number>`COUNT(*)` }).from(users);
+    
+    // Get users by role
+    const usersByRole = await db.execute(sql`
+      SELECT role, COUNT(*) as count
+      FROM users
+      GROUP BY role
+    `);
+    
+    const byRole: { [key: string]: number } = {};
+    usersByRole.rows.forEach((row: any) => {
+      byRole[row.role] = Number(row.count || 0);
+    });
+    
+    // Get new users in period
+    const newUsersData = await db.execute(sql`
+      SELECT DATE(created_at) as date, COUNT(*) as count
+      FROM users
+      WHERE created_at >= ${startDate}
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+    
+    // Get period growth
+    const periodUsers = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(users)
+      .where(sql`${users.createdAt} >= ${startDate}`);
+    
+    const previousPeriodUsers = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(users)
+      .where(sql`${users.createdAt} >= ${previousStartDate} AND ${users.createdAt} < ${startDate}`);
+    
+    const periodUserCount = Number(periodUsers[0]?.count || 0);
+    const previousPeriodUserCount = Number(previousPeriodUsers[0]?.count || 0);
+    const growthPercentage = previousPeriodUserCount > 0 ? ((periodUserCount - previousPeriodUserCount) / previousPeriodUserCount) * 100 : 0;
+    
+    // Calculate retention (simplified - users active in last 7/30 days)
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    const weeklyActive = await db.execute(sql`
+      SELECT COUNT(DISTINCT u.id) as count
+      FROM users u
+      WHERE EXISTS (
+        SELECT 1 FROM posts p WHERE p.student_id IN (
+          SELECT id FROM students WHERE user_id = u.id
+        ) AND p.created_at >= ${sevenDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_likes pl WHERE pl.user_id = u.id AND pl.created_at >= ${sevenDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_comments pc WHERE pc.user_id = u.id AND pc.created_at >= ${sevenDaysAgo}
+      )
+    `);
+    
+    const monthlyActive = await db.execute(sql`
+      SELECT COUNT(DISTINCT u.id) as count
+      FROM users u
+      WHERE EXISTS (
+        SELECT 1 FROM posts p WHERE p.student_id IN (
+          SELECT id FROM students WHERE user_id = u.id
+        ) AND p.created_at >= ${thirtyDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_likes pl WHERE pl.user_id = u.id AND pl.created_at >= ${thirtyDaysAgo}
+      ) OR EXISTS (
+        SELECT 1 FROM post_comments pc WHERE pc.user_id = u.id AND pc.created_at >= ${thirtyDaysAgo}
+      )
+    `);
+    
+    return {
+      total: Number(totalUsers[0]?.count || 0),
+      byRole,
+      growth: {
+        period: periodUserCount,
+        percentage: growthPercentage
+      },
+      retention: {
+        daily: 0, // Would need more complex tracking
+        weekly: Number(weeklyActive.rows[0]?.count || 0),
+        monthly: Number(monthlyActive.rows[0]?.count || 0)
+      },
+      newUsers: newUsersData.rows.map((row: any) => ({
+        date: row.date,
+        count: Number(row.count || 0)
+      }))
+    };
+  }
+
+  async getPlatformSchoolAnalytics(period: string = 'month'): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const now = new Date();
+    let startDate: Date;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    }
+
+    // Get total schools
+    const totalSchools = await db.select({ count: sql<number>`COUNT(*)` }).from(schools);
+    
+    // Get active schools count
+    const activeSchools = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(schools)
+      .where(
+        and(
+          eq(schools.isActive, true),
+          sql`${schools.subscriptionExpiresAt} IS NOT NULL`,
+          sql`${schools.subscriptionExpiresAt} > ${now}`
+        )
+      );
+    
+    // Get schools by payment frequency
+    const schoolsByFrequency = await db.execute(sql`
+      SELECT payment_frequency, COUNT(*) as count
+      FROM schools
+      WHERE is_active = true
+      GROUP BY payment_frequency
+    `);
+    
+    const byFrequency: { [key: string]: number } = { monthly: 0, annual: 0 };
+    schoolsByFrequency.rows.forEach((row: any) => {
+      if (row.payment_frequency === 'monthly') byFrequency.monthly = Number(row.count || 0);
+      if (row.payment_frequency === 'annual') byFrequency.annual = Number(row.count || 0);
+    });
+    
+    // Keep byPlan for backward compatibility but show all as standard now
+    const byPlan: { [key: string]: number } = { premium: 0, standard: Number(activeSchools[0]?.count || 0) };
+    
+    // Get new schools
+    const newSchoolsData = await db.execute(sql`
+      SELECT DATE(created_at) as date, COUNT(*) as count
+      FROM schools
+      WHERE created_at >= ${startDate}
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+    
+    // Get top schools by engagement
+    const topSchoolsData = await db.execute(sql`
+      SELECT 
+        s.id,
+        s.name,
+        COUNT(DISTINCT st.id) as student_count,
+        COUNT(DISTINCT p.id) as post_count,
+        COUNT(DISTINCT pl.id) + COUNT(DISTINCT pc.id) as engagement
+      FROM schools s
+      LEFT JOIN students st ON CAST(s.id AS text) = CAST(st.school_id AS text)
+      LEFT JOIN posts p ON CAST(st.id AS text) = CAST(p.student_id AS text) AND (p.type != 'announcement' OR p.type IS NULL)
+      LEFT JOIN post_likes pl ON CAST(p.id AS text) = CAST(pl.post_id AS text)
+      LEFT JOIN post_comments pc ON CAST(p.id AS text) = CAST(pc.post_id AS text)
+      GROUP BY s.id, s.name
+      ORDER BY engagement DESC
+      LIMIT 10
+    `);
+    
+    // Get schools at risk (expiring within 30 days or low engagement)
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const atRiskSchools = await db.execute(sql`
+      SELECT 
+        s.id,
+        s.name,
+        s.subscription_expires_at,
+        CASE 
+          WHEN s.subscription_expires_at <= ${thirtyDaysFromNow} AND s.subscription_expires_at > ${now}
+          THEN 'expiring_soon'
+          ELSE 'low_engagement'
+        END as risk_reason
+      FROM schools s
+      WHERE s.is_active = true
+      AND (
+        (s.subscription_expires_at <= ${thirtyDaysFromNow} AND s.subscription_expires_at > ${now})
+        OR s.id NOT IN (
+          SELECT DISTINCT st.school_id 
+          FROM students st 
+          INNER JOIN posts p ON st.id = p.student_id 
+          WHERE p.created_at >= ${startDate}
+        )
+      )
+      LIMIT 20
+    `);
+    
+    return {
+      total: Number(totalSchools[0]?.count || 0),
+      active: Number(activeSchools[0]?.count || 0),
+      byFrequency,
+      byPlan, // Backward compatibility
+      newSchools: newSchoolsData.rows.map((row: any) => ({
+        date: row.date,
+        count: Number(row.count || 0)
+      })),
+      topSchools: topSchoolsData.rows.map((row: any) => ({
+        schoolId: row.id,
+        name: row.name,
+        studentCount: Number(row.student_count || 0),
+        postCount: Number(row.post_count || 0),
+        engagement: Number(row.engagement || 0)
+      })),
+      atRisk: atRiskSchools.rows.map((row: any) => ({
+        schoolId: row.id,
+        name: row.name,
+        reason: row.risk_reason,
+        expiresAt: row.subscription_expires_at
+      }))
+    };
+  }
+
+  async getPlatformRevenueAnalytics(period: string = 'year'): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const now = new Date();
+    
+    // Get all active schools with their payment information
+    const allSchools = await db
+      .select()
+      .from(schools)
+      .where(
+        and(
+          eq(schools.isActive, true),
+          sql`${schools.subscriptionExpiresAt} IS NOT NULL`,
+          sql`${schools.subscriptionExpiresAt} > ${now}`
+        )
+      );
+    
+    // Calculate current MRR and ARR based on actual payment amounts
+    let mrr = 0;
+    let monthlyCount = 0;
+    let annualCount = 0;
+    let monthlyRevenue = 0;
+    let annualRevenue = 0;
+    
+    for (const school of allSchools) {
+      const paymentAmount = parseFloat(school.paymentAmount?.toString() || "0");
+      if (school.paymentFrequency === "monthly") {
+        monthlyCount++;
+        monthlyRevenue += paymentAmount;
+        mrr += paymentAmount;
+      } else if (school.paymentFrequency === "annual") {
+        annualCount++;
+        annualRevenue += paymentAmount;
+        mrr += paymentAmount / 12; // Convert annual to monthly
+      }
+    }
+    
+    const arr = mrr * 12;
+    
+    // Get revenue trends over time (monthly for last 12 months)
+    const trends: any[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      
+      // Get schools that were active at this month end
+      const monthSchools = await db
+        .select()
+        .from(schools)
+        .where(
+          and(
+            sql`${schools.createdAt} <= ${monthEnd}`,
+            or(
+              sql`${schools.subscriptionExpiresAt} IS NULL`,
+              sql`${schools.subscriptionExpiresAt} > ${monthEnd}`
+            ),
+            sql`${schools.isActive} = true`
+          )
+        );
+      
+      let monthMrr = 0;
+      for (const school of monthSchools) {
+        const paymentAmount = parseFloat(school.paymentAmount?.toString() || "0");
+        if (school.paymentFrequency === "monthly") {
+          monthMrr += paymentAmount;
+        } else if (school.paymentFrequency === "annual") {
+          monthMrr += paymentAmount / 12;
+        }
+      }
+      
+      trends.push({
+        month: monthDate.toISOString().substring(0, 7),
+        mrr: Math.round(monthMrr * 100) / 100,
+        arr: Math.round(monthMrr * 12 * 100) / 100
+      });
+    }
+    
+    // Get schools expiring soon (within 30 days) for churn risk
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const churnRiskSchools = await db
+      .select({
+        id: schools.id,
+        name: schools.name,
+        subscriptionExpiresAt: schools.subscriptionExpiresAt,
+        paymentAmount: schools.paymentAmount,
+        paymentFrequency: schools.paymentFrequency,
+      })
+      .from(schools)
+      .where(
+        and(
+          eq(schools.isActive, true),
+          sql`${schools.subscriptionExpiresAt} IS NOT NULL`,
+          sql`${schools.subscriptionExpiresAt} > ${now}`,
+          sql`${schools.subscriptionExpiresAt} <= ${thirtyDaysFromNow}`
+        )
+      );
+    
+    const churnRisk = churnRiskSchools.map((school: any) => ({
+      schoolId: school.id,
+      name: school.name,
+      renewalDate: school.subscriptionExpiresAt,
+      monthlyRevenue: school.paymentFrequency === "monthly" 
+        ? parseFloat(school.paymentAmount?.toString() || "0")
+        : parseFloat(school.paymentAmount?.toString() || "0") / 12
+    }));
+    
+    return {
+      mrr: Math.round(mrr * 100) / 100,
+      arr: Math.round(arr * 100) / 100,
+      byFrequency: {
+        monthly: { count: monthlyCount, revenue: Math.round(monthlyRevenue * 100) / 100 },
+        annual: { count: annualCount, revenue: Math.round(annualRevenue * 100) / 100 }
+      },
+      // Keep byPlan for backward compatibility but use frequency data
+      byPlan: {
+        premium: { count: 0, revenue: 0 },
+        standard: { count: monthlyCount + annualCount, revenue: Math.round(mrr * 100) / 100 }
+      },
+      trends,
+      churnRisk
+    };
+  }
+
+  async getPlatformContentAnalytics(period: string = 'month'): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const now = new Date();
+    let startDate: Date;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    }
+
+    // Get total posts
+    const totalPosts = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(posts)
+      .where(sql`${posts.type} != 'announcement' OR ${posts.type} IS NULL`);
+    
+    // Get posts by type
+    const postsByType = await db.execute(sql`
+      SELECT 
+        media_type,
+        COUNT(*) as count
+      FROM posts
+      WHERE (type != 'announcement' OR type IS NULL)
+      GROUP BY media_type
+    `);
+    
+    const byType: { [key: string]: number } = { image: 0, video: 0, announcement: 0 };
+    postsByType.rows.forEach((row: any) => {
+      if (row.media_type === 'image') byType.image = Number(row.count || 0);
+      if (row.media_type === 'video') byType.video = Number(row.count || 0);
+    });
+    
+    // Get announcement count
+    const announcements = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(posts)
+      .where(eq(posts.type, 'announcement'));
+    byType.announcement = Number(announcements[0]?.count || 0);
+    
+    // Get content trends
+    const trendsData = await db.execute(sql`
+      SELECT DATE(created_at) as date, COUNT(*) as count
+      FROM posts
+      WHERE created_at >= ${startDate} AND (type != 'announcement' OR type IS NULL)
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+    
+    // Get engagement totals
+    const totalLikes = await db.select({ count: sql<number>`COUNT(*)` }).from(postLikes);
+    const totalComments = await db.select({ count: sql<number>`COUNT(*)` }).from(postComments);
+    const totalViews = await db.select({ count: sql<number>`COUNT(*)` }).from(postViews);
+    
+    const totalEngagement = Number(totalLikes[0]?.count || 0) + Number(totalComments[0]?.count || 0) + Number(totalViews[0]?.count || 0);
+    const averagePerPost = Number(totalPosts[0]?.count || 0) > 0 ? totalEngagement / Number(totalPosts[0]?.count || 0) : 0;
+    
+    // Get top posts by engagement
+    const topPostsData = await db.execute(sql`
+      SELECT 
+        p.id,
+        p.student_id,
+        st.school_id,
+        COUNT(DISTINCT pl.id) + COUNT(DISTINCT pc.id) as engagement
+      FROM posts p
+      LEFT JOIN students st ON CAST(p.student_id AS text) = CAST(st.id AS text)
+      LEFT JOIN schools s ON CAST(st.school_id AS text) = CAST(s.id AS text)
+      LEFT JOIN post_likes pl ON CAST(p.id AS text) = CAST(pl.post_id AS text)
+      LEFT JOIN post_comments pc ON CAST(p.id AS text) = CAST(pc.post_id AS text)
+      WHERE (p.type != 'announcement' OR p.type IS NULL)
+      GROUP BY p.id, p.student_id, st.school_id
+      ORDER BY engagement DESC
+      LIMIT 10
+    `);
+    
+    return {
+      totalPosts: Number(totalPosts[0]?.count || 0),
+      byType,
+      trends: trendsData.rows.map((row: any) => ({
+        date: row.date,
+        count: Number(row.count || 0)
+      })),
+      engagement: {
+        total: totalEngagement,
+        averagePerPost: averagePerPost,
+        breakdown: {
+          likes: Number(totalLikes[0]?.count || 0),
+          comments: Number(totalComments[0]?.count || 0),
+          views: Number(totalViews[0]?.count || 0)
+        }
+      },
+      topPosts: topPostsData.rows.map((row: any) => ({
+        postId: row.id,
+        studentId: row.student_id,
+        schoolId: row.school_id,
+        engagement: Number(row.engagement || 0)
+      }))
+    };
+  }
+
+  async getPlatformEngagementAnalytics(period: string = 'month', granularity: string = 'day'): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const now = new Date();
+    let startDate: Date;
+    
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    }
+
+    // Get total engagement
+    const totalLikes = await db.select({ count: sql<number>`COUNT(*)` }).from(postLikes);
+    const totalComments = await db.select({ count: sql<number>`COUNT(*)` }).from(postComments);
+    const totalViews = await db.select({ count: sql<number>`COUNT(*)` }).from(postViews);
+    const totalSaves = await db.select({ count: sql<number>`COUNT(*)` }).from(savedPosts);
+    
+    // Get engagement trends
+    let dateGroupFormat = "DATE(created_at)";
+    if (granularity === 'hour') {
+      dateGroupFormat = "DATE_TRUNC('hour', created_at)";
+    } else if (granularity === 'week') {
+      dateGroupFormat = "DATE_TRUNC('week', created_at)";
+    } else if (granularity === 'month') {
+      dateGroupFormat = "DATE_TRUNC('month', created_at)";
+    } else {
+      dateGroupFormat = "DATE(created_at)";
+    }
+    
+    const likesTrend = await db.execute(sql`
+      SELECT ${sql.raw(dateGroupFormat)} as date, COUNT(*) as count
+      FROM post_likes
+      WHERE created_at >= ${startDate}
+      GROUP BY ${sql.raw(dateGroupFormat)}
+      ORDER BY date ASC
+    `);
+    
+    const commentsTrend = await db.execute(sql`
+      SELECT ${sql.raw(dateGroupFormat)} as date, COUNT(*) as count
+      FROM post_comments
+      WHERE created_at >= ${startDate}
+      GROUP BY ${sql.raw(dateGroupFormat)}
+      ORDER BY date ASC
+    `);
+    
+    const viewsDateGroupFormat = (() => {
+      if (granularity === 'hour') return "DATE_TRUNC('hour', viewed_at)";
+      if (granularity === 'week') return "DATE_TRUNC('week', viewed_at)";
+      if (granularity === 'month') return "DATE_TRUNC('month', viewed_at)";
+      return 'DATE(viewed_at)';
+    })();
+    const viewsTrend = await db.execute(sql`
+      SELECT ${sql.raw(viewsDateGroupFormat)} as date, COUNT(*) as count
+      FROM post_views
+      WHERE viewed_at >= ${startDate}
+      GROUP BY ${sql.raw(viewsDateGroupFormat)}
+      ORDER BY date ASC
+    `);
+    
+    const savesTrend = await db.execute(sql`
+      SELECT ${sql.raw(dateGroupFormat)} as date, COUNT(*) as count
+      FROM saved_posts
+      WHERE created_at >= ${startDate}
+      GROUP BY ${sql.raw(dateGroupFormat)}
+      ORDER BY date ASC
+    `);
+    
+    // Merge all trends into single array by date
+    const trendsMap = new Map<string, { date: string; likes: number; comments: number; views: number; saves: number }>();
+    
+    // Add likes
+    likesTrend.rows.forEach((row: any) => {
+      const dateKey = new Date(row.date).toISOString().split('T')[0];
+      if (!trendsMap.has(dateKey)) {
+        trendsMap.set(dateKey, { date: dateKey, likes: 0, comments: 0, views: 0, saves: 0 });
+      }
+      trendsMap.get(dateKey)!.likes = Number(row.count || 0);
+    });
+    
+    // Add comments
+    commentsTrend.rows.forEach((row: any) => {
+      const dateKey = new Date(row.date).toISOString().split('T')[0];
+      if (!trendsMap.has(dateKey)) {
+        trendsMap.set(dateKey, { date: dateKey, likes: 0, comments: 0, views: 0, saves: 0 });
+      }
+      trendsMap.get(dateKey)!.comments = Number(row.count || 0);
+    });
+    
+    // Add views
+    viewsTrend.rows.forEach((row: any) => {
+      const dateKey = new Date(row.date).toISOString().split('T')[0];
+      if (!trendsMap.has(dateKey)) {
+        trendsMap.set(dateKey, { date: dateKey, likes: 0, comments: 0, views: 0, saves: 0 });
+      }
+      trendsMap.get(dateKey)!.views = Number(row.count || 0);
+    });
+    
+    // Add saves
+    savesTrend.rows.forEach((row: any) => {
+      const dateKey = new Date(row.date).toISOString().split('T')[0];
+      if (!trendsMap.has(dateKey)) {
+        trendsMap.set(dateKey, { date: dateKey, likes: 0, comments: 0, views: 0, saves: 0 });
+      }
+      trendsMap.get(dateKey)!.saves = Number(row.count || 0);
+    });
+    
+    const trends = Array.from(trendsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    
+    // Get engagement by school
+    const bySchoolData = await db.execute(sql`
+      SELECT 
+        s.id as school_id,
+        s.name,
+        COUNT(DISTINCT pl.id) + COUNT(DISTINCT pc.id) + COUNT(DISTINCT pv.id) as engagement
+      FROM schools s
+      LEFT JOIN students st ON CAST(s.id AS text) = CAST(st.school_id AS text)
+      LEFT JOIN posts p ON CAST(st.id AS text) = CAST(p.student_id AS text) AND (p.type != 'announcement' OR p.type IS NULL)
+      LEFT JOIN post_likes pl ON CAST(p.id AS text) = CAST(pl.post_id AS text)
+      LEFT JOIN post_comments pc ON CAST(p.id AS text) = CAST(pc.post_id AS text)
+      LEFT JOIN post_views pv ON CAST(p.id AS text) = CAST(pv.post_id AS text)
+      GROUP BY s.id, s.name
+      ORDER BY engagement DESC
+      LIMIT 20
+    `);
+    
+    // Get peak engagement times (by hour)
+    const peakTimesData = await db.execute(sql`
+      SELECT 
+        EXTRACT(HOUR FROM created_at) as hour,
+        COUNT(*) as engagement
+      FROM post_likes
+      WHERE created_at >= ${startDate}
+      GROUP BY EXTRACT(HOUR FROM created_at)
+      ORDER BY hour ASC
+    `);
+    
+    return {
+      total: {
+        likes: Number(totalLikes[0]?.count || 0),
+        comments: Number(totalComments[0]?.count || 0),
+        views: Number(totalViews[0]?.count || 0),
+        saves: Number(totalSaves[0]?.count || 0)
+      },
+      trends: trends,
+      bySchool: bySchoolData.rows.map((row: any) => ({
+        schoolId: row.school_id,
+        name: row.name,
+        engagement: Number(row.engagement || 0)
+      })),
+      peakTimes: peakTimesData.rows.map((row: any) => ({
+        hour: Number(row.hour || 0),
+        engagement: Number(row.engagement || 0)
+      }))
+    };
+  }
+
+  async getPlatformGrowthTrends(metric: string = 'users', period: string = '6months'): Promise<any> {
+    if (!isDbConnected) throw new Error("Database not connected");
+    
+    const now = new Date();
+    let startDate: Date;
+    let months: number = 6;
+    
+    if (period.includes('month')) {
+      months = parseInt(period.replace('months', '').replace('month', '')) || 6;
+    }
+    
+    startDate = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+    
+    let data: any[] = [];
+    
+    if (metric === 'users') {
+      const usersData = await db.execute(sql`
+        SELECT DATE_TRUNC('month', created_at) as date, COUNT(*) as count
+        FROM users
+        WHERE created_at >= ${startDate}
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY date ASC
+      `);
+      
+      data = usersData.rows.map((row: any, index: number, arr: any[]) => ({
+        date: row.date,
+        value: Number(row.count || 0),
+        change: index > 0 ? Number(row.count || 0) - Number(arr[index - 1].count || 0) : 0
+      }));
+    } else if (metric === 'schools') {
+      const schoolsData = await db.execute(sql`
+        SELECT DATE_TRUNC('month', created_at) as date, COUNT(*) as count
+        FROM schools
+        WHERE created_at >= ${startDate}
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY date ASC
+      `);
+      
+      data = schoolsData.rows.map((row: any, index: number, arr: any[]) => ({
+        date: row.date,
+        value: Number(row.count || 0),
+        change: index > 0 ? Number(row.count || 0) - Number(arr[index - 1].count || 0) : 0
+      }));
+    } else if (metric === 'posts') {
+      const postsData = await db.execute(sql`
+        SELECT DATE_TRUNC('month', created_at) as date, COUNT(*) as count
+        FROM posts
+        WHERE created_at >= ${startDate} AND (type != 'announcement' OR type IS NULL)
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY date ASC
+      `);
+      
+      data = postsData.rows.map((row: any, index: number, arr: any[]) => ({
+        date: row.date,
+        value: Number(row.count || 0),
+        change: index > 0 ? Number(row.count || 0) - Number(arr[index - 1].count || 0) : 0
+      }));
+    }
+    
+    // Calculate growth rate
+    const firstValue = data[0]?.value || 0;
+    const lastValue = data[data.length - 1]?.value || 0;
+    const growthRate = firstValue > 0 ? ((lastValue - firstValue) / firstValue) * 100 : 0;
+    
+    // Calculate previous period comparison
+    const previousPeriodStart = new Date(startDate.getTime() - (now.getTime() - startDate.getTime()));
+    let previousPeriodData: any[] = [];
+    
+    if (metric === 'users') {
+      const prevData = await db.execute(sql`
+        SELECT COUNT(*) as count
+        FROM users
+        WHERE created_at >= ${previousPeriodStart} AND created_at < ${startDate}
+      `);
+      previousPeriodData = [{ count: Number(prevData.rows[0]?.count || 0) }];
+    }
+    
+    const previousPeriodTotal = previousPeriodData[0]?.count || 0;
+    const currentPeriodTotal = data.reduce((sum, item) => sum + item.value, 0);
+    const percentageChange = previousPeriodTotal > 0 ? ((currentPeriodTotal - previousPeriodTotal) / previousPeriodTotal) * 100 : 0;
+    
+    return {
+      data,
+      growthRate,
+      comparison: {
+        previousPeriod: previousPeriodTotal,
+        percentage: percentageChange
+      }
+    };
   }
 }
 
