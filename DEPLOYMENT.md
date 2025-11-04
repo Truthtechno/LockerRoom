@@ -141,7 +141,7 @@ The system will work without Redis but with:
 2. **Copy Connection String** from Variables tab
 3. **Optionally add Redis**: Create Redis service from Railway marketplace
 
-## Sentry Setup (Recommended for Production)
+### Option 4: Managed PostgreSQL
 
 Sentry provides error monitoring and performance tracking for production deployments.
 
@@ -160,10 +160,8 @@ Sentry provides error monitoring and performance tracking for production deploym
 - Performance monitoring
 - User impact tracking
 - Release tracking
-3. **Run Migrations**:
-   ```bash
-   DATABASE_URL="postgresql://..." npm run db:push
-   ```
+
+## Deployment Platforms
 
 ### Option 4: Managed PostgreSQL
 

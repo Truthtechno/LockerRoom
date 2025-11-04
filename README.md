@@ -155,9 +155,6 @@
    
    # Sentry Error Monitoring (Optional)
    SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
-   CLOUDINARY_CLOUD_NAME="your-cloudinary-cloud-name"
-   CLOUDINARY_API_KEY="your-cloudinary-api-key"
-   CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
    
    # Stripe Configuration (Optional - for XEN Watch payments)
    STRIPE_SECRET_KEY="sk_test_your_stripe_secret_key"
