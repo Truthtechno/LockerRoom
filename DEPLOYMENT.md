@@ -25,6 +25,8 @@ Before deploying, ensure you have:
 - ✅ **Database** provisioned and migrations run
 - ✅ **Cloudinary Account** set up with API credentials
 - ✅ **Stripe Account** configured (if using XEN Watch payments)
+- ✅ **Redis** configured (Upstash recommended) - Highly recommended for production
+- ✅ **Sentry** account configured - Recommended for error monitoring
 - ✅ **Domain Name** registered (optional)
 - ✅ **SSL Certificate** configured (automated on most platforms)
 - ✅ **Backup Strategy** for database
@@ -61,6 +63,13 @@ SESSION_SECRET=your-session-secret-key
 STRIPE_SECRET_KEY=sk_live_your_stripe_secret_key
 STRIPE_PUBLISHABLE_KEY=pk_live_your_stripe_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Redis Caching (Highly Recommended - improves performance significantly)
+REDIS_URL=https://your-redis-url.upstash.io
+REDIS_TOKEN=your-redis-token
+
+# Sentry Error Monitoring (Recommended for production)
+SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
 ```
 
 ### Generating Secure Secrets
@@ -72,6 +81,38 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 # Generate Session Secret
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
+
+## Redis Setup (Highly Recommended for Production)
+
+Redis caching significantly improves performance by reducing database load and enabling distributed rate limiting.
+
+### Option 1: Upstash Redis (Recommended - Serverless)
+
+1. **Create Account** at [upstash.com](https://upstash.com)
+2. **Create Redis Database**
+3. **Copy Connection Details**:
+   - `REDIS_URL` - Your Redis REST URL
+   - `REDIS_TOKEN` - Your Redis REST token
+4. **Add to Environment Variables** in your deployment platform
+
+**Benefits**:
+- Serverless (pay-per-use)
+- Global distribution
+- Automatic scaling
+- No server management
+
+### Option 2: Platform-Managed Redis
+
+**Railway**: Add Redis service from marketplace
+**Render**: Add Redis service from dashboard
+**DigitalOcean**: Create Managed Redis database
+
+### Option 3: Skip Redis (Not Recommended)
+
+The system will work without Redis but with:
+- ❌ No caching (higher database load and costs)
+- ❌ In-memory rate limiting only (doesn't work across multiple servers)
+- ❌ Slower response times
 
 ## Database Setup
 
@@ -98,6 +139,27 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 1. **Create PostgreSQL Service** in Railway dashboard
 2. **Copy Connection String** from Variables tab
+3. **Optionally add Redis**: Create Redis service from Railway marketplace
+
+## Sentry Setup (Recommended for Production)
+
+Sentry provides error monitoring and performance tracking for production deployments.
+
+### Setup Steps
+
+1. **Create Account** at [sentry.io](https://sentry.io)
+2. **Create New Project** (Node.js)
+3. **Copy DSN** from project settings
+4. **Add to Environment Variables**:
+   ```env
+   SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
+   ```
+
+**Benefits**:
+- Real-time error alerts
+- Performance monitoring
+- User impact tracking
+- Release tracking
 3. **Run Migrations**:
    ```bash
    DATABASE_URL="postgresql://..." npm run db:push
@@ -487,7 +549,7 @@ const logger = winston.createLogger({
 ### Performance Monitoring
 
 - **Uptime Monitoring**: Use services like UptimeRobot, Pingdom
-- **Error Tracking**: Integrate Sentry for error monitoring
+- **Error Tracking**: ✅ Sentry integrated (set `SENTRY_DSN` environment variable)
 - **Analytics**: Set up application analytics
 
 ### Updates & Maintenance
@@ -561,7 +623,7 @@ npm run build
 - **Enable Compression**: Already configured in Express
 - **Database Indexing**: Review and add indexes
 - **CDN for Static Assets**: Use Cloudinary CDN
-- **Caching**: Implement Redis for session storage (optional)
+- **Caching**: ✅ Redis caching implemented (set `REDIS_URL` and `REDIS_TOKEN` environment variables)
 
 ### Rollback Strategy
 

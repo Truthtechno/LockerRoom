@@ -39,6 +39,8 @@ This guide provides comprehensive information for developers working on the Lock
 - **Cloudinary** account ([Sign up](https://cloudinary.com/))
 - **Stripe** account (for XEN Watch payments - optional)
 - **Neon** account (for serverless PostgreSQL - recommended)
+- **Redis** (Upstash serverless recommended) - Optional, for caching and rate limiting
+- **Sentry** account - Optional, for error monitoring and performance tracking
 
 ## Initial Setup
 
@@ -83,9 +85,77 @@ STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
 
 # Session Storage
 SESSION_SECRET=your-session-secret-key
+
+# Redis Caching (Optional - improves performance significantly)
+REDIS_URL=https://your-redis-url.upstash.io
+REDIS_TOKEN=your-redis-token
+
+# Sentry Error Monitoring (Optional)
+SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
+
+# Rate Limiting (Optional - enables rate limiting in development)
+ENABLE_RATE_LIMIT=false
 ```
 
-### 4. Database Setup
+### 4. Redis Setup (Optional but Recommended)
+
+Redis caching significantly improves performance by reducing database load. The system works without Redis but with reduced performance.
+
+#### Option A: Upstash Redis (Recommended - Serverless)
+
+1. **Create Account** at [upstash.com](https://upstash.com)
+2. **Create Redis Database**
+3. **Copy Connection Details**:
+   - `REDIS_URL` - Your Redis REST URL
+   - `REDIS_TOKEN` - Your Redis REST token
+4. **Add to `.env`**:
+   ```env
+   REDIS_URL=https://your-redis-url.upstash.io
+   REDIS_TOKEN=your-redis-token
+   ```
+
+#### Option B: Local Redis (Development)
+
+1. **Install Redis**:
+   ```bash
+   # macOS
+   brew install redis
+   brew services start redis
+   
+   # Windows
+   # Download from https://redis.io/download
+   # Or use WSL: wsl --install, then apt install redis
+   
+   # Linux
+   sudo apt install redis-server
+   sudo systemctl start redis
+   ```
+
+2. **Add to `.env`**:
+   ```env
+   REDIS_URL=redis://localhost:6379
+   ```
+
+#### Option C: Skip Redis (Not Recommended)
+
+The system will work without Redis but with reduced performance:
+- No caching (higher database load)
+- In-memory rate limiting only (doesn't work across multiple servers)
+- Slower response times
+
+### 5. Sentry Setup (Optional)
+
+Sentry provides error monitoring and performance tracking:
+
+1. **Create Account** at [sentry.io](https://sentry.io)
+2. **Create New Project** (Node.js)
+3. **Copy DSN** from project settings
+4. **Add to `.env`**:
+   ```env
+   SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
+   ```
+
+### 6. Database Setup
 
 #### Option A: Local PostgreSQL
 
@@ -112,7 +182,7 @@ npm run db:push
 npm run seed
 ```
 
-### 5. Start Development Server
+### 7. Start Development Server
 
 ```bash
 # Start both frontend and backend concurrently
@@ -122,6 +192,22 @@ npm run dev:both
 npm run dev        # Backend on port 5174
 npm run dev:client # Frontend on port 5173
 ```
+
+### 8. Test Phase 1 Optimizations
+
+```bash
+# Run comprehensive test suite for Phase 1 optimizations
+npm run test:phase1
+
+# This tests:
+# - Redis caching functionality (with graceful fallback)
+# - Rate limiting middleware
+# - Sentry integration
+# - Streaming uploads verification
+# - Cache integration in routes
+```
+
+**Note**: The test suite will pass even if Redis/Sentry are not configured, as these are optional optimizations with graceful fallbacks.
 
 ## Project Structure
 
