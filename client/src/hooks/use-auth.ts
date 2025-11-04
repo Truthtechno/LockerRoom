@@ -58,6 +58,23 @@ export function useAuth() {
     // Listen for storage changes to update auth state when token changes
     const handleStorageChange = async (e: StorageEvent) => {
       if (e.key === 'token' || e.key === 'auth_user') {
+        // DEVELOPMENT MODE: Allow multiple users in different tabs
+        // Check if the change is from a different user by comparing event values
+        if (e.key === 'auth_user' && e.newValue && user) {
+          try {
+            const newUser = JSON.parse(e.newValue);
+            const currentUser = user;
+            
+            // If different user ID, don't refresh (allow multiple users in different tabs)
+            if (currentUser.id !== newUser.id) {
+              console.log('🔄 Storage change detected from different user, ignoring to allow multi-user testing...');
+              return;
+            }
+          } catch (e) {
+            // Ignore parse errors, proceed with normal flow
+          }
+        }
+        
         await fetchUser();
       }
     };
