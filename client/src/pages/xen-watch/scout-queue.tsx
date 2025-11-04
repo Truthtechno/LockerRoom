@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { formatHeight } from "@/lib/height-utils";
 import { Eye, Clock, CheckCircle, Star, Save, Send, Play, User, X, Calendar, TrendingUp, Users, Filter, Search, ArrowUpDown, ChevronRight, ChevronLeft } from "lucide-react";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
@@ -60,6 +61,9 @@ interface SubmissionWithReview {
     roleNumber?: string | null;
     position?: string | null;
     schoolId?: string | null;
+    phone?: string | null;
+    height?: string | null;
+    weight?: string | null;
     school?: {
       id: string;
       name: string;
@@ -892,6 +896,21 @@ export default function ScoutReviewQueue() {
                         <div>
                           <span className="font-medium">Position:</span> {submission.student.position || 'N/A'}
                         </div>
+                        {submission.student.roleNumber && (
+                          <div>
+                            <span className="font-medium">Number:</span> {submission.student.roleNumber}
+                          </div>
+                        )}
+                        {submission.student.height && (
+                          <div>
+                            <span className="font-medium">Height:</span> {formatHeight(submission.student.height)}
+                          </div>
+                        )}
+                        {submission.student.weight && (
+                          <div>
+                            <span className="font-medium">Weight:</span> {submission.student.weight} kg
+                          </div>
+                        )}
                         <div className="col-span-2">
                           <span className="font-medium">Date:</span> {new Date(submission.createdAt).toLocaleDateString()}
                         </div>
@@ -1023,6 +1042,18 @@ export default function ScoutReviewQueue() {
                         <div className="flex items-center space-x-2">
                           <span className="font-semibold text-muted-foreground">Number:</span>
                           <span className="text-foreground">{selectedSubmission.student.roleNumber}</span>
+                        </div>
+                      )}
+                      {selectedSubmission.student.height && (
+                        <div className="flex items-center space-x-2">
+                          <span className="font-semibold text-muted-foreground">Height:</span>
+                          <span className="text-foreground">{formatHeight(selectedSubmission.student.height)}</span>
+                        </div>
+                      )}
+                      {selectedSubmission.student.weight && (
+                        <div className="flex items-center space-x-2">
+                          <span className="font-semibold text-muted-foreground">Weight:</span>
+                          <span className="text-foreground">{selectedSubmission.student.weight} kg</span>
                         </div>
                       )}
                       {selectedSubmission.promoCode && (

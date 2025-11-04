@@ -25,6 +25,7 @@ import { Loader2 } from "lucide-react";
 import type { StudentWithStats, PostWithDetails, PostCommentWithUser } from "@shared/schema";
 import XenWatchSubmitModal from "@/components/xen-watch/submit-modal";
 import { ProfileSkeleton } from "@/components/ui/profile-skeleton";
+import { formatHeight, parseHeight, cmToFeetInches, feetInchesToCm } from "@/lib/height-utils";
 
 export default function Profile() {
   const { user } = useAuth();
@@ -56,6 +57,9 @@ export default function Profile() {
   // Edit profile state
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm'); // Height input unit toggle
+  const [heightFeet, setHeightFeet] = useState<string>(""); // Separate feet input
+  const [heightInches, setHeightInches] = useState<string>(""); // Separate inches input
   const [editFormData, setEditFormData] = useState({
     name: "",
     bio: "",
@@ -63,7 +67,8 @@ export default function Profile() {
     position: "",
     roleNumber: "",
     sport: "",
-    grade: ""
+    height: "",
+    weight: ""
   });
 
   // Remove post modal state since we're using dedicated pages
@@ -273,6 +278,8 @@ export default function Profile() {
             profilePic: null,
             bio: null,
             coverPhoto: null,
+            height: null,
+            weight: null,
             createdAt: new Date(),
             postsCount: 0,
             totalLikes: 0,
@@ -401,6 +408,24 @@ export default function Profile() {
   // Handler functions
   const handleEditProfile = () => {
     if (studentProfile) {
+      // Convert height from cm to display format based on current unit
+      let heightDisplay = "";
+      let feet = "";
+      let inches = "";
+      
+      if (studentProfile.height) {
+        const heightCm = parseFloat(studentProfile.height);
+        if (!isNaN(heightCm)) {
+          if (heightUnit === 'cm') {
+            heightDisplay = heightCm.toString();
+          } else {
+            const { feet: ft, inches: inch } = cmToFeetInches(heightCm);
+            feet = ft.toString();
+            inches = inch.toString();
+          }
+        }
+      }
+      
       setEditFormData({
         name: studentProfile.name || "",
         bio: studentProfile.bio || "",
@@ -408,8 +433,11 @@ export default function Profile() {
         position: studentProfile.position || "",
         roleNumber: studentProfile.roleNumber || "",
         sport: studentProfile.sport || "",
-        grade: studentProfile.grade || ""
+        height: heightDisplay,
+        weight: studentProfile.weight || ""
       });
+      setHeightFeet(feet);
+      setHeightInches(inches);
       setShowEditDialog(true);
     }
   };
@@ -466,10 +494,68 @@ export default function Profile() {
     const updates: Record<string, any> = {};
     let hasUpdates = false;
     
+    // Handle height conversion - always store in cm
+    if (heightUnit === 'cm') {
+      // Using centimeters - single input
+      if (editFormData.height && editFormData.height.trim() !== '') {
+        const cm = parseFloat(editFormData.height.trim());
+        if (!isNaN(cm) && cm > 0 && cm <= 300) {
+          updates.height = cm.toString();
+          hasUpdates = true;
+        } else {
+          toast({
+            title: "Invalid Height",
+            description: "Please enter a valid height in centimeters (0-300 cm).",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    } else {
+      // Using feet and inches - two separate inputs
+      if (heightFeet.trim() !== '' || heightInches.trim() !== '') {
+        const feet = parseInt(heightFeet.trim()) || 0;
+        const inches = parseInt(heightInches.trim()) || 0;
+        
+        if (feet < 0 || feet > 10 || inches < 0 || inches >= 12) {
+          toast({
+            title: "Invalid Height",
+            description: "Please enter valid values: feet (0-10) and inches (0-11).",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        if (feet === 0 && inches === 0) {
+          // Both empty, skip
+        } else {
+          const heightCm = feetInchesToCm(feet, inches);
+          updates.height = heightCm.toString();
+          hasUpdates = true;
+        }
+      }
+    }
+    
+    // Handle weight - store as provided (kg)
+    if (editFormData.weight && editFormData.weight.trim() !== '') {
+      const weight = parseFloat(editFormData.weight.trim());
+      if (!isNaN(weight) && weight > 0 && weight < 300) {
+        updates.weight = editFormData.weight.trim();
+        hasUpdates = true;
+      } else {
+        toast({
+          title: "Invalid Weight",
+          description: "Please enter a valid weight in kilograms (0-300 kg).",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     // Collect text field updates
     if (user?.role === 'student') {
-      // Students can edit: sport, position, roleNumber, bio, phone, grade (profilePic and coverPhoto are handled separately)
-      const allowedFields = ['sport', 'position', 'roleNumber', 'bio', 'phone', 'grade'];
+      // Students can edit: sport, position, roleNumber, bio, phone, height, weight (profilePic and coverPhoto are handled separately)
+      const allowedFields = ['sport', 'position', 'roleNumber', 'bio', 'phone'];
       
       allowedFields.forEach(field => {
         const value = editFormData[field as keyof typeof editFormData];
@@ -479,10 +565,12 @@ export default function Profile() {
         }
       });
     } else {
-      // Admins can edit all fields
-      Object.entries(editFormData).forEach(([key, value]) => {
+      // Admins can edit all fields except height and weight (handled above)
+      const adminFields = ['name', 'sport', 'position', 'roleNumber', 'bio', 'phone'];
+      adminFields.forEach(field => {
+        const value = editFormData[field as keyof typeof editFormData];
         if (value && value.trim() !== '') {
-          updates[key] = value;
+          updates[field] = value;
           hasUpdates = true;
         }
       });
@@ -510,7 +598,8 @@ export default function Profile() {
         position: "",
         roleNumber: "",
         sport: "",
-        grade: ""
+        height: "",
+        weight: ""
       });
     } catch (error) {
       console.error('❌ Profile save error:', error);
@@ -730,7 +819,11 @@ export default function Profile() {
                 }
               </p>
               <p className="text-muted-foreground">
-                {studentProfile?.school?.name} • {studentProfile?.grade || 'Class of 2025'}
+                {studentProfile?.school?.name}
+                {(studentProfile?.height || studentProfile?.weight) && studentProfile?.school?.name && ' • '}
+                {studentProfile?.height && formatHeight(studentProfile.height)}
+                {studentProfile?.height && studentProfile?.weight && ' • '}
+                {studentProfile?.weight && `${studentProfile.weight} kg`}
               </p>
             </div>
             
@@ -783,7 +876,7 @@ export default function Profile() {
             <h2 className="text-xl font-semibold text-foreground">Posts</h2>
           </div>
           
-          {postsLoading && (!postsData || postsData.pages.length === 0) ? (
+          {postsLoading && allPosts.length === 0 ? (
             <div className="grid grid-cols-3 gap-1 sm:gap-2 p-4">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="aspect-square bg-muted animate-pulse rounded-lg" />
@@ -915,7 +1008,14 @@ export default function Profile() {
 
 
       {/* Edit Profile Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+      <Dialog open={showEditDialog} onOpenChange={(open) => {
+        setShowEditDialog(open);
+        if (!open) {
+          // Reset height fields when dialog closes
+          setHeightFeet("");
+          setHeightInches("");
+        }
+      }}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Profile</DialogTitle>
@@ -1039,17 +1139,6 @@ export default function Profile() {
                 />
               </div>
 
-              {/* Grade field - Editable text input for students */}
-              <div className="space-y-2">
-                <Label htmlFor="edit-grade">Class/Grade</Label>
-                <Input
-                  id="edit-grade"
-                  value={editFormData.grade}
-                  onChange={(e) => setEditFormData({ ...editFormData, grade: e.target.value })}
-                  placeholder="Grade 10, Class A"
-                />
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="edit-sport">Sport</Label>
                 <Select 
@@ -1099,6 +1188,126 @@ export default function Profile() {
                   onChange={(e) => setEditFormData({ ...editFormData, roleNumber: e.target.value })}
                   placeholder="10"
                 />
+              </div>
+
+              {/* Height field with unit toggle */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Height</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Convert existing height value when switching units
+                      if (heightUnit === 'cm') {
+                        // Switching from cm to ft/in - convert current value
+                        if (editFormData.height && editFormData.height.trim() !== '') {
+                          const cm = parseFloat(editFormData.height.trim());
+                          if (!isNaN(cm)) {
+                            const { feet, inches } = cmToFeetInches(cm);
+                            setHeightFeet(feet.toString());
+                            setHeightInches(inches.toString());
+                          }
+                        }
+                      } else {
+                        // Switching from ft/in to cm - convert current value
+                        if (heightFeet.trim() !== '' || heightInches.trim() !== '') {
+                          const feet = parseInt(heightFeet.trim()) || 0;
+                          const inches = parseInt(heightInches.trim()) || 0;
+                          if (feet > 0 || inches > 0) {
+                            const heightCm = feetInchesToCm(feet, inches);
+                            setEditFormData({ ...editFormData, height: heightCm.toString() });
+                          }
+                        }
+                        setHeightFeet("");
+                        setHeightInches("");
+                      }
+                      setHeightUnit(heightUnit === 'cm' ? 'ft' : 'cm');
+                    }}
+                    className="text-xs"
+                  >
+                    {heightUnit === 'cm' ? 'Switch to ft/in' : 'Switch to cm'}
+                  </Button>
+                </div>
+                
+                {heightUnit === 'cm' ? (
+                  // Centimeters - single input
+                  <>
+                    <Input
+                      id="edit-height"
+                      type="number"
+                      value={editFormData.height}
+                      onChange={(e) => setEditFormData({ ...editFormData, height: e.target.value })}
+                      placeholder="175"
+                      min="0"
+                      max="300"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter height in centimeters
+                    </p>
+                  </>
+                ) : (
+                  // Feet and inches - two separate inputs
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="edit-height-feet" className="text-xs">Feet</Label>
+                        <Input
+                          id="edit-height-feet"
+                          type="number"
+                          value={heightFeet}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 10)) {
+                              setHeightFeet(value);
+                            }
+                          }}
+                          placeholder="5"
+                          min="0"
+                          max="10"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="edit-height-inches" className="text-xs">Inches</Label>
+                        <Input
+                          id="edit-height-inches"
+                          type="number"
+                          value={heightInches}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 11)) {
+                              setHeightInches(value);
+                            }
+                          }}
+                          placeholder="10"
+                          min="0"
+                          max="11"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Enter height in feet and inches separately
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Weight field */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-weight">Weight (kg)</Label>
+                <Input
+                  id="edit-weight"
+                  type="number"
+                  value={editFormData.weight}
+                  onChange={(e) => setEditFormData({ ...editFormData, weight: e.target.value })}
+                  placeholder="70"
+                  min="0"
+                  max="300"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter weight in kilograms
+                </p>
               </div>
             </div>
 

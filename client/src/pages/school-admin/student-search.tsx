@@ -13,6 +13,7 @@ import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
+import { formatHeight } from "@/lib/height-utils";
 
 type Student = {
   id: string;
@@ -30,6 +31,8 @@ type Student = {
   position?: string;
   sport?: string;
   bio?: string;
+  height?: string;
+  weight?: string;
   createdAt: string;
 };
 
@@ -480,6 +483,22 @@ export default function StudentSearch() {
                             <p className="text-sm text-muted-foreground">{selectedStudent.guardianContact}</p>
                           </div>
                         )}
+
+                        {/* Physical Attributes */}
+                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
+                          {selectedStudent.height && (
+                            <div>
+                              <h4 className="font-medium text-sm mb-1">Height</h4>
+                              <p className="text-sm text-muted-foreground">{formatHeight(selectedStudent.height)}</p>
+                            </div>
+                          )}
+                          {selectedStudent.weight && (
+                            <div>
+                              <h4 className="font-medium text-sm mb-1">Weight</h4>
+                              <p className="text-sm text-muted-foreground">{selectedStudent.weight} kg</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardContent>

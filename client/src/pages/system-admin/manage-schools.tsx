@@ -47,6 +47,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as XLSX from 'xlsx';
+import { formatHeight } from "@/lib/height-utils";
 
 const renewSubscriptionSchema = z.object({
   renewalDate: z.string().optional(),
@@ -714,9 +715,12 @@ export default function ManageSchools() {
     const exportData = filtered.map((student: any) => ({
       'Name': student.name || 'N/A',
       'Email': student.email || 'N/A',
+      'Phone': student.phone || 'N/A',
       'Position': student.position || 'N/A',
       'Number': (student.roleNumber || student.role_number)?.toString() || 'N/A',
       'Sport': student.sport || 'N/A',
+      'Height': student.height ? formatHeight(student.height) : 'N/A',
+      'Weight': student.weight ? `${student.weight} kg` : 'N/A',
       'Created Date': formatDate(student.createdAt)
     }));
 
@@ -729,9 +733,12 @@ export default function ManageSchools() {
     ws['!cols'] = [
       { wch: 25 }, // Name
       { wch: 30 }, // Email
+      { wch: 15 }, // Phone
       { wch: 15 }, // Position
       { wch: 10 }, // Number
       { wch: 15 }, // Sport
+      { wch: 10 }, // Height
+      { wch: 12 }, // Weight
       { wch: 15 }  // Created Date
     ];
 
@@ -1504,9 +1511,12 @@ export default function ManageSchools() {
                               <TableHead className="w-12"></TableHead>
                               <TableHead>Name</TableHead>
                               <TableHead>Email</TableHead>
+                              <TableHead>Phone</TableHead>
                               <TableHead>Position</TableHead>
                               <TableHead>Number</TableHead>
                               <TableHead>Sport</TableHead>
+                              <TableHead>Height</TableHead>
+                              <TableHead>Weight</TableHead>
                               <TableHead>Created</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -1530,6 +1540,7 @@ export default function ManageSchools() {
                                 </TableCell>
                                 <TableCell className="font-medium">{student.name}</TableCell>
                                 <TableCell>{student.email}</TableCell>
+                                <TableCell>{student.phone || 'N/A'}</TableCell>
                                 <TableCell>{student.position || 'N/A'}</TableCell>
                                 <TableCell className="font-medium">
                                   {(() => {
@@ -1546,12 +1557,14 @@ export default function ManageSchools() {
                                   })()}
                                 </TableCell>
                                 <TableCell>{student.sport || 'N/A'}</TableCell>
+                                <TableCell>{student.height ? formatHeight(student.height) : 'N/A'}</TableCell>
+                                <TableCell>{student.weight ? `${student.weight} kg` : 'N/A'}</TableCell>
                                 <TableCell>{formatDate(student.createdAt)}</TableCell>
                               </TableRow>
                             ))}
                             {(!studentsData?.students || studentsData.students.length === 0) && (
                               <TableRow>
-                                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                                   No students found
                                 </TableCell>
                               </TableRow>

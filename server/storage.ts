@@ -2031,6 +2031,10 @@ export class PostgresStorage implements IStorage {
         ...(updates.role_number !== undefined ? { roleNumber: updates.role_number } : {}),
         ...(updates.profile_pic_url !== undefined ? { profilePicUrl: updates.profile_pic_url } : {}),
         ...(updates.cover_photo !== undefined ? { coverPhoto: updates.cover_photo } : {}),
+        ...(updates.phone !== undefined ? { phone: updates.phone } : {}),
+        ...(updates.grade !== undefined ? { grade: updates.grade } : {}),
+        ...(updates.height !== undefined ? { height: updates.height } : {}),
+        ...(updates.weight !== undefined ? { weight: updates.weight } : {}),
       })
       .where(eq(students.userId, userId))
       .returning();
@@ -2783,97 +2787,115 @@ export class PostgresStorage implements IStorage {
   }
 
   async getPostsByStudentWithUserContext(studentId: string, userId: string, limit?: number, offset?: number): Promise<PostWithDetails[]> {
-    // Get all posts for the specific student
-    const studentPosts = await db.select().from(posts)
-      .where(eq(posts.studentId, studentId))
-      .orderBy(desc(posts.createdAt));
+    if (!isDbConnected) return [];
     
-    const postsWithDetails: PostWithDetails[] = [];
-    
-    for (const post of studentPosts) {
-      // Skip only posts that are explicitly in processing state (not legacy posts)
-      if (post.status === 'processing') {
-        continue; // Skip posts that are currently being processed
+    try {
+      // Get all regular posts (not announcements) for the specific student
+      // Only include posts with type='post' or type is NULL (legacy posts)
+      const studentPosts = await db.select().from(posts)
+        .where(
+          and(
+            eq(posts.studentId, studentId),
+            // Only regular posts, not announcements
+            sql`(${posts.type} = 'post' OR ${posts.type} IS NULL)`,
+            // Skip only posts that are explicitly in processing state
+            sql`(${posts.status} != 'processing' OR ${posts.status} IS NULL)`
+          )
+        )
+        .orderBy(desc(posts.createdAt));
+      
+      console.log(`📊 Found ${studentPosts.length} posts for student ${studentId}`);
+      
+      const postsWithDetails: PostWithDetails[] = [];
+      
+      for (const post of studentPosts) {
+        // Get student with user information
+        const studentResult = await db
+          .select({
+            student: students,
+            user: users
+          })
+          .from(students)
+          .innerJoin(users, eq(students.userId, users.id))
+          .where(eq(students.id, post.studentId))
+          .limit(1);
+        
+        if (!studentResult[0]) {
+          console.warn(`⚠️ Post ${post.id} has no associated student`);
+          continue;
+        }
+        
+        const { student, user } = studentResult[0];
+        
+        const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
+        const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
+        const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
+        const views = await getPostViews(post.id);
+
+        // Check if current user has liked/saved this post
+        const userLike = await db.select().from(postLikes).where(
+          and(eq(postLikes.postId, post.id), eq(postLikes.userId, userId))
+        ).limit(1);
+        
+        const userSave = await db.select().from(savedPosts).where(
+          and(eq(savedPosts.postId, post.id), eq(savedPosts.userId, userId))
+        ).limit(1);
+
+        // Use new fields directly since legacy fields have been migrated
+        // Prefer mediaUrl (which contains secure_url from Cloudinary) with fallback
+        const effectiveMediaUrl = post.mediaUrl || '';
+        const effectiveMediaType = post.mediaType || 'image';
+        const effectiveStatus = post.status || 'ready';
+
+        // Check if post has content - be more lenient: include if has media OR caption
+        const hasMedia = effectiveMediaUrl && effectiveMediaUrl.trim() !== '';
+        const hasCaption = post.caption && post.caption.trim() !== '';
+        
+        // Include post if it has either media or caption
+        if (!hasMedia && !hasCaption) {
+          console.warn(`⚠️ Post ${post.id} skipped: no media and no caption`);
+          continue; // Skip posts with no content
+        }
+
+        // Check if current user is following this student
+        const isFollowing = await this.isFollowingStudent(userId, student.id);
+
+        postsWithDetails.push({
+          ...post,
+          effectiveMediaUrl,
+          effectiveMediaType,
+          effectiveStatus,
+          student: {
+            id: student.id,
+            userId: student.userId,
+            name: user.name || student.name || 'Unknown Student',
+            sport: student.sport || '',
+            position: student.position || '',
+            roleNumber: student.roleNumber || '',
+            profilePicUrl: student.profilePicUrl || student.profilePic || null,
+            isFollowing
+          },
+          likesCount: likes.length,
+          commentsCount: comments.length,
+          savesCount: saves.length,
+          viewCount: views.length,
+          isLiked: userLike.length > 0,
+          isSaved: userSave.length > 0,
+        });
       }
-
-      // Get student with user information
-      const studentResult = await db
-        .select({
-          student: students,
-          user: users
-        })
-        .from(students)
-        .innerJoin(users, eq(students.userId, users.id))
-        .where(eq(students.id, post.studentId))
-        .limit(1);
       
-      if (!studentResult[0]) continue;
+      console.log(`✅ Returning ${postsWithDetails.length} posts with details for student ${studentId}`);
       
-      const { student, user } = studentResult[0];
-      
-      const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
-      const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
-      const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
-      const views = await getPostViews(post.id);
-
-      // Check if current user has liked/saved this post
-      const userLike = await db.select().from(postLikes).where(
-        and(eq(postLikes.postId, post.id), eq(postLikes.userId, userId))
-      ).limit(1);
-      
-      const userSave = await db.select().from(savedPosts).where(
-        and(eq(savedPosts.postId, post.id), eq(savedPosts.userId, userId))
-      ).limit(1);
-
-      // Use new fields directly since legacy fields have been migrated
-      // Prefer mediaUrl (which contains secure_url from Cloudinary) with fallback
-      const effectiveMediaUrl = post.mediaUrl || '';
-      const effectiveMediaType = post.mediaType || 'image';
-      const effectiveStatus = post.status || 'ready';
-
-      // Add warning for null media_url
-      if (!effectiveMediaUrl) {
-        console.warn(`⚠️ Post ${post.id} has no media URL`);
+      // Apply pagination if specified
+      if (limit && offset !== undefined) {
+        return postsWithDetails.slice(offset, offset + limit);
       }
-
-      // Only include posts that have some content
-      if (!effectiveMediaUrl && !post.caption) {
-        continue; // Skip posts with no content
-      }
-
-      // Check if current user is following this student
-      const isFollowing = await this.isFollowingStudent(userId, student.id);
-
-      postsWithDetails.push({
-        ...post,
-        effectiveMediaUrl,
-        effectiveMediaType,
-        effectiveStatus,
-        student: {
-          id: student.id,
-          userId: student.userId,
-          name: user.name || student.name || 'Unknown Student',
-          sport: student.sport || '',
-          position: student.position || '',
-          roleNumber: student.roleNumber || '',
-          profilePicUrl: student.profilePicUrl || student.profilePic || null,
-          isFollowing
-        },
-        likesCount: likes.length,
-        commentsCount: comments.length,
-        savesCount: saves.length,
-        viewCount: views.length,
-        isLiked: userLike.length > 0,
-        isSaved: userSave.length > 0,
-      });
+      
+      return postsWithDetails;
+    } catch (error) {
+      console.error(`❌ Error fetching posts for student ${studentId}:`, error);
+      return [];
     }
-    
-    // Apply pagination if specified
-    if (limit && offset !== undefined) {
-      return postsWithDetails.slice(offset, offset + limit);
-    }
-    
-    return postsWithDetails;
   }
 
   async createPost(insertPost: InsertPost): Promise<Post> {

@@ -1301,6 +1301,8 @@ export function registerSystemAdminRoutes(app: Express) {
             gender: students.gender,
             bio: students.bio,
             profilePicUrl: students.profilePicUrl,
+            height: students.height,
+            weight: students.weight,
             createdAt: users.createdAt,
           })
           .from(students)

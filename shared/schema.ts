@@ -88,6 +88,9 @@ export const students = pgTable("students", {
   profilePic: text("profile_pic"), // Keep for backward compatibility
   bio: text("bio"),
   coverPhoto: text("cover_photo"),
+  // Physical attributes
+  height: text("height"), // Stored in cm as a number string
+  weight: text("weight"), // Stored in kg as a number string
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 

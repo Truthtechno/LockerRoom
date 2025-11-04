@@ -1871,26 +1871,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const studentWithStats = await storage.getStudentWithStats(userId);
       
       if (!studentWithStats) {
+        console.warn(`⚠️ Student profile not found for user ${userId}`);
         return res.status(404).json({ message: "Student profile not found" });
       }
 
       // Map DB fields to frontend expected field names
+      // Ensure all fields including height and weight are included
       const responseData = {
         ...studentWithStats,
         profilePic: studentWithStats?.profilePicUrl || studentWithStats?.profilePic,
-        coverPhoto: studentWithStats?.coverPhoto
+        coverPhoto: studentWithStats?.coverPhoto,
+        // Explicitly include height and weight to ensure they're returned
+        height: studentWithStats?.height || null,
+        weight: studentWithStats?.weight || null,
       };
 
-      console.log('📸 Returning profile URLs:', {
+      console.log('✅ Returning student profile:', {
+        id: responseData.id,
+        name: responseData.name,
         profilePic: responseData.profilePic,
-        coverPhoto: responseData.coverPhoto
+        coverPhoto: responseData.coverPhoto,
+        height: responseData.height,
+        weight: responseData.weight,
+        postsCount: responseData.postsCount,
+        hasSchool: !!responseData.school
       });
+      
       res.json(responseData);
-    } catch (error) {
-      console.error('Get student profile error:', error);
+    } catch (error: any) {
+      console.error('❌ Get student profile error:', error);
       
       // If it's a database error, try to return basic profile without stats
-      if (error.message && error.message.includes('relation') && error.message.includes('does not exist')) {
+      if (error?.message && error.message.includes('relation') && error.message.includes('does not exist')) {
         console.log('🔧 Database schema issue detected, returning basic profile');
         try {
           const userId = req.user?.id || (req as any).auth?.id;
@@ -1924,7 +1936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/students/me", requireAuth, async (req, res) => {
     try {
       const userId = (req as any).auth.id;
-      const { bio, sport, position, roleNumber, profilePicUrl, coverPhoto } = req.body;
+      const { bio, sport, position, roleNumber, profilePicUrl, coverPhoto, phone, grade, height, weight } = req.body;
 
       const updates: any = {};
       if (bio !== undefined) updates.bio = bio;
@@ -1933,6 +1945,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (roleNumber !== undefined) updates.role_number = roleNumber;
       if (profilePicUrl !== undefined) updates.profile_pic_url = profilePicUrl;
       if (coverPhoto !== undefined) updates.cover_photo = coverPhoto;
+      if (phone !== undefined) updates.phone = phone;
+      if (grade !== undefined) updates.grade = grade;
+      if (height !== undefined) updates.height = height;
+      if (weight !== undefined) updates.weight = weight;
 
       const updated = await storage.updateStudentByUserId(userId, updates);
       return res.json(updated);
@@ -3461,9 +3477,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 12;
       const offset = parseInt(req.query.offset as string) || 0;
       
+      console.log(`📊 Fetching posts for student ${studentId} (limit: ${limit}, offset: ${offset})`);
+      
       const posts = await storage.getPostsByStudentWithUserContext(studentId, userId, limit, offset);
+      
+      console.log(`✅ Returning ${posts.length} posts for student ${studentId}`);
+      
       res.json(posts);
     } catch (error) {
+      console.error(`❌ Error fetching posts for student ${req.params.studentId}:`, error);
       res.status(500).json({ message: "Failed to fetch student posts" });
     }
   });

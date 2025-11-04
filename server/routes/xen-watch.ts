@@ -156,6 +156,9 @@ router.post("/submissions", requireAuth, requireRoles(['student']), async (req, 
           name: students.name,
           position: students.position,
           schoolId: students.schoolId,
+          phone: students.phone,
+          height: students.height,
+          weight: students.weight,
           school: {
             id: schools.id,
             name: schools.name
@@ -351,14 +354,17 @@ router.post("/submissions", requireAuth, requireRoles(['student']), async (req, 
       const allSubmissions = await db
         .select({
           submission: submissions,
-          student: {
-            id: students.id,
-            name: students.name,
-            profilePicUrl: students.profilePicUrl,
-            roleNumber: students.roleNumber,
-            position: students.position,
-            schoolId: students.schoolId
-          },
+        student: {
+          id: students.id,
+          name: students.name,
+          profilePicUrl: students.profilePicUrl,
+          roleNumber: students.roleNumber,
+          position: students.position,
+          schoolId: students.schoolId,
+          phone: students.phone,
+          height: students.height,
+          weight: students.weight
+        },
           school: {
             id: schools.id,
             name: schools.name
@@ -448,14 +454,17 @@ router.post("/submissions", requireAuth, requireRoles(['student']), async (req, 
         .select({
           submission: submissions,
           review: submissionReviews,
-          student: {
-            id: students.id,
-            name: students.name,
-            profilePicUrl: students.profilePicUrl,
-            roleNumber: students.roleNumber,
-            position: students.position,
-            schoolId: students.schoolId
-          },
+        student: {
+          id: students.id,
+          name: students.name,
+          profilePicUrl: students.profilePicUrl,
+          roleNumber: students.roleNumber,
+          position: students.position,
+          schoolId: students.schoolId,
+          phone: students.phone,
+          height: students.height,
+          weight: students.weight
+        },
           school: {
             id: schools.id,
             name: schools.name
@@ -969,14 +978,17 @@ router.post("/submissions", requireAuth, requireRoles(['student']), async (req, 
       const submissionsData = await db
         .select({
           submission: submissions,
-          student: {
-            id: students.id,
-            name: students.name,
-            profilePicUrl: students.profilePicUrl,
-            roleNumber: students.roleNumber,
-            position: students.position,
-            schoolId: students.schoolId
-          },
+        student: {
+          id: students.id,
+          name: students.name,
+          profilePicUrl: students.profilePicUrl,
+          roleNumber: students.roleNumber,
+          position: students.position,
+          schoolId: students.schoolId,
+          phone: students.phone,
+          height: students.height,
+          weight: students.weight
+        },
           school: {
             id: schools.id,
             name: schools.name

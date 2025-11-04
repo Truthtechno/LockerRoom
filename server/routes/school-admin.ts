@@ -354,7 +354,9 @@ export function registerSchoolAdminRoutes(app: Express) {
           dateOfBirth: dateOfBirth || null,
           guardianContact: guardianContact || null,
           roleNumber: roleNumber || null,
-          profilePicUrl: profilePicUrl // Set the uploaded profile picture
+          profilePicUrl: profilePicUrl, // Set the uploaded profile picture
+          height: null,
+          weight: null
         }).returning();
         
         console.log('✅ Step 2 completed: Student created with ID:', studentRow.id, 'and schoolId:', schoolId);
