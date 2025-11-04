@@ -23,13 +23,17 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-lg border p-4 pr-8 shadow-lg backdrop-blur-sm transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full cursor-pointer hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]",
   {
     variants: {
       variant: {
-        default: "border bg-background text-foreground",
+        default: "border bg-background/95 text-foreground",
         destructive:
-          "destructive group border-destructive bg-destructive text-destructive-foreground",
+          "destructive group border-destructive bg-destructive/95 text-destructive-foreground",
+        success: "border-green-500/20 bg-green-50/95 dark:bg-green-950/95 text-green-900 dark:text-green-100",
+        info: "border-blue-500/20 bg-blue-50/95 dark:bg-blue-950/95 text-blue-900 dark:text-blue-100",
+        warning: "border-yellow-500/20 bg-yellow-50/95 dark:bg-yellow-950/95 text-yellow-900 dark:text-yellow-100",
+        social: "border-purple-500/20 bg-gradient-to-r from-purple-50/95 to-pink-50/95 dark:from-purple-950/95 dark:to-pink-950/95 text-foreground",
       },
     },
     defaultVariants: {

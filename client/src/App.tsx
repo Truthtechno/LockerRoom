@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { useAuth } from "@/hooks/use-auth";
 import { DynamicHead } from "@/components/ui/dynamic-head";
+import { useNotificationToast } from "@/hooks/use-notification-toast";
 
 // Pages
 import Login from "@/pages/login";
@@ -87,6 +88,9 @@ function ProtectedRoute({
 
 function Router() {
   const { user, isLoading } = useAuth();
+  
+  // Enable notification toast pop-ups for authenticated users
+  useNotificationToast();
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;

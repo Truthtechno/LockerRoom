@@ -5634,6 +5634,7 @@ export class PostgresStorage implements IStorage {
           email: users.email,
           role: users.role,
           profilePicUrl: users.profilePicUrl,
+          linkedId: users.linkedId,
         }
       })
       .from(notifications)
@@ -5643,26 +5644,103 @@ export class PostgresStorage implements IStorage {
       .limit(limit)
       .offset(offset);
     
-    // Transform to match expected format
-    return result.map(row => ({
-      id: row.id,
-      userId: row.userId,
-      type: row.type,
-      title: row.title,
-      message: row.message,
-      entityType: row.entityType,
-      entityId: row.entityId,
-      relatedUserId: row.relatedUserId,
-      metadata: row.metadata,
-      isRead: row.isRead,
-      createdAt: row.createdAt,
-      relatedUser: row.relatedUser?.id ? {
-        id: row.relatedUser.id,
-        name: row.relatedUser.name,
-        profilePicUrl: row.relatedUser.profilePicUrl,
-        role: row.relatedUser.role,
-      } : null,
+    // Transform to match expected format and fetch profile pictures from role-specific tables
+    const notificationsWithProfilePics = await Promise.all(result.map(async (row) => {
+      let profilePicUrl = row.relatedUser?.profilePicUrl || null;
+      
+      // If profile picture is missing and we have a related user, fetch from role-specific table
+      if (!profilePicUrl && row.relatedUser?.id && row.relatedUser?.role && row.relatedUser?.linkedId) {
+        const user = row.relatedUser;
+        try {
+          if (user.role === 'student') {
+            const studentResult = await db.select({ profilePicUrl: students.profilePicUrl })
+              .from(students)
+              .where(eq(students.id, user.linkedId))
+              .limit(1);
+            if (studentResult[0]?.profilePicUrl) {
+              profilePicUrl = studentResult[0].profilePicUrl;
+            }
+          } else if (user.role === 'school_admin') {
+            const adminResult = await db.select({ profilePicUrl: schoolAdmins.profilePicUrl })
+              .from(schoolAdmins)
+              .where(eq(schoolAdmins.id, user.linkedId))
+              .limit(1);
+            if (adminResult[0]?.profilePicUrl) {
+              profilePicUrl = adminResult[0].profilePicUrl;
+            }
+          } else if (user.role === 'system_admin') {
+            const adminResult = await db.select({ profilePicUrl: systemAdmins.profilePicUrl })
+              .from(systemAdmins)
+              .where(eq(systemAdmins.id, user.linkedId))
+              .limit(1);
+            if (adminResult[0]?.profilePicUrl) {
+              profilePicUrl = adminResult[0].profilePicUrl;
+            }
+          } else if (user.role === 'viewer' || user.role === 'public_viewer') {
+            const viewerResult = await db.select({ profilePicUrl: viewers.profilePicUrl })
+              .from(viewers)
+              .where(eq(viewers.id, user.linkedId))
+              .limit(1);
+            if (viewerResult[0]?.profilePicUrl) {
+              profilePicUrl = viewerResult[0].profilePicUrl;
+            }
+          } else if (user.role === 'scout_admin' || user.role === 'xen_scout') {
+            // Try scoutProfiles first
+            if (user.linkedId) {
+              const scoutProfileResult = await db.select({ profilePicUrl: scoutProfiles.profilePicUrl })
+                .from(scoutProfiles)
+                .where(eq(scoutProfiles.id, user.linkedId))
+                .limit(1);
+              if (scoutProfileResult[0]?.profilePicUrl) {
+                profilePicUrl = scoutProfileResult[0].profilePicUrl;
+              } else {
+                // Fallback to admins table
+                const adminResult = await db.select({ profilePicUrl: admins.profilePicUrl })
+                  .from(admins)
+                  .where(eq(admins.id, user.linkedId))
+                  .limit(1);
+                if (adminResult[0]?.profilePicUrl) {
+                  profilePicUrl = adminResult[0].profilePicUrl;
+                }
+              }
+            }
+          } else if (['moderator', 'finance', 'support', 'coach', 'analyst'].includes(user.role)) {
+            const adminResult = await db.select({ profilePicUrl: admins.profilePicUrl })
+              .from(admins)
+              .where(eq(admins.id, user.linkedId || user.id))
+              .limit(1);
+            if (adminResult[0]?.profilePicUrl) {
+              profilePicUrl = adminResult[0].profilePicUrl;
+            }
+          }
+        } catch (error) {
+          console.error(`⚠️ Error fetching profile picture for user ${user.id} (role: ${user.role}):`, error);
+          // Continue with null profilePicUrl if fetch fails
+        }
+      }
+      
+      return {
+        id: row.id,
+        userId: row.userId,
+        type: row.type,
+        title: row.title,
+        message: row.message,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        relatedUserId: row.relatedUserId,
+        metadata: row.metadata,
+        isRead: row.isRead,
+        createdAt: row.createdAt,
+        relatedUser: row.relatedUser?.id ? {
+          id: row.relatedUser.id,
+          name: row.relatedUser.name,
+          profilePicUrl: profilePicUrl,
+          role: row.relatedUser.role,
+        } : null,
+      };
     }));
+    
+    return notificationsWithProfilePics;
   }
 
   async markNotificationAsRead(notificationId: string, userId: string): Promise<void> {
