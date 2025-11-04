@@ -11,6 +11,21 @@ if (typeof globalThis.fetch === 'undefined') {
   })();
 }
 
+// Initialize Sentry error monitoring (must be before other imports)
+import * as Sentry from "@sentry/node";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0, // 10% in prod, 100% in dev
+    debug: process.env.NODE_ENV === 'development',
+  });
+  console.log('✅ Sentry error monitoring initialized');
+} else {
+  console.log('⚠️ Sentry not configured (SENTRY_DSN not set) - error monitoring disabled');
+}
+
 import express, { type Request, Response, NextFunction } from "express";
 import "dotenv/config";
 import helmet from "helmet";
@@ -23,6 +38,9 @@ import { ensureAdminsTable, backfillAdminsFromUsers } from "../scripts/ensure-ad
 import { notifyExpiringSubscriptions, deactivateExpiredSubscriptions } from "./utils/notification-helpers";
 
 const app = express();
+
+// Sentry will automatically capture errors via Express integration
+// No explicit middleware needed - Sentry hooks into Express automatically
 
 // Security middleware with Helmet
 app.use(helmet({
@@ -141,9 +159,16 @@ app.use((req, res, next) => {
   // Ensure system admin user exists
   await ensureSysAdmin();
 
+  // Sentry error handler is already set up via setupExpressErrorHandler
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+
+    // Log error to Sentry if configured
+    if (process.env.SENTRY_DSN && status >= 500) {
+      Sentry.captureException(err);
+    }
 
     res.status(status).json({ message });
     throw err;

@@ -8,6 +8,8 @@ import { storage } from "./storage";
 import { authStorage } from "./auth-storage";
 import Stripe from 'stripe';
 import { requireAuth, requireSelfByParam, requireScoutAdmin, requireScoutOrAdmin, requireSystemAdmin } from "./middleware/auth";
+import { rateLimit as createRateLimit } from "./middleware/rate-limit";
+import { cacheGet, cacheInvalidate } from "./cache";
 import uploadRoutes from "./routes/upload";
 import xenWatchRoutes from "./routes/xen-watch";
 import { registerScoutAdminRoutes } from "./routes/scout-admin";
@@ -120,42 +122,8 @@ const validateInput = (req: any, res: any, next: any) => {
   next();
 };
 
-// Rate limiting middleware (simple in-memory implementation)
-const rateLimitMap = new Map();
-const rateLimit = (maxRequests: number, windowMs: number) => {
-  return (req: any, res: any, next: any) => {
-    // Skip rate limiting entirely in development
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🔐 Rate limiting skipped in development for:', req.path);
-      return next();
-    }
-    
-    const key = req.ip || req.connection.remoteAddress || 'unknown';
-    const now = Date.now();
-    const windowStart = now - windowMs;
-    
-    if (!rateLimitMap.has(key)) {
-      rateLimitMap.set(key, []);
-    }
-    
-    const requests = rateLimitMap.get(key);
-    const validRequests = requests.filter((time: number) => time > windowStart);
-    
-    if (validRequests.length >= maxRequests) {
-      console.log('🔐 Rate limit exceeded for IP:', key, 'requests:', validRequests.length);
-      return res.status(429).json({ 
-        error: { 
-          code: "rate_limit_exceeded", 
-          message: 'Too many requests, please try again later' 
-        } 
-      });
-    }
-    
-    validRequests.push(now);
-    rateLimitMap.set(key, validRequests);
-    next();
-  };
-};
+// Rate limiting middleware (distributed with Redis, falls back to in-memory)
+const rateLimit = createRateLimit;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -960,8 +928,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Get user data with schoolId from database, with JWT fallback
-      let userResult = await db.select({
+      // Use Redis caching for user profile (10 minute TTL)
+      const userCacheKey = `user:${userId}`;
+      const cachedUser = await cacheGet(
+        userCacheKey,
+        async () => {
+          // Get user data with schoolId from database, with JWT fallback
+          let userResult = await db.select({
         id: users.id,
         name: users.name,
         email: users.email,
@@ -1102,26 +1075,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('⚠️ Unknown role for profile picture:', user.role);
       }
 
-      const responseData = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        schoolId: finalSchoolId,
-        linkedId: user.linkedId,
-        profilePicUrl,
-        coverPhoto
-      };
+          const responseData = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            schoolId: finalSchoolId,
+            linkedId: user.linkedId,
+            profilePicUrl,
+            coverPhoto
+          };
+          
+          return responseData;
+        },
+        600 // 10 minute TTL
+      );
       
       console.log('✅ /api/users/me - Returning user data:', {
-        id: responseData.id,
-        role: responseData.role,
-        schoolId: responseData.schoolId,
-        profilePicUrl: responseData.profilePicUrl
+        id: cachedUser.id,
+        role: cachedUser.role,
+        schoolId: cachedUser.schoolId,
+        profilePicUrl: cachedUser.profilePicUrl
       });
 
       // Return user data with unified profilePicUrl
-      res.json(responseData);
+      res.json(cachedUser);
     } catch (error) {
       console.error('❌ Get current user error:', error);
       res.status(500).json({ 
@@ -2295,7 +2273,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader("X-Content-Type-Options", "nosniff");
       
       // Get all posts globally (no school restriction) - TikTok/Instagram style
-      let posts = await storage.getPostsWithUserContext(userId, limit, offset);
+      // Use Redis caching for feed pages (5 minute TTL for subsequent pages, no cache for first page)
+      const cacheKey = `feed:${userId}:${limit}:${offset}`;
+      const cacheTTL = offset === 0 ? 60 : 300; // 1 min for first page, 5 min for others
+      
+      let posts = await cacheGet(
+        cacheKey,
+        () => storage.getPostsWithUserContext(userId, limit, offset),
+        cacheTTL
+      );
       
       // Store original posts length to determine hasMore correctly (before merging announcements)
       const originalPostsLength = posts.length;
