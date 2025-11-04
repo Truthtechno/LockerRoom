@@ -28,8 +28,8 @@ const createSchoolSchema = z.object({
   }, "Student limit must be between 1 and 10,000"),
   paymentAmount: z.string().min(1, "Payment amount is required").refine((val) => {
     const num = parseFloat(val);
-    return !isNaN(num) && num > 0;
-  }, "Payment amount must be a positive number"),
+    return !isNaN(num) && num >= 0;
+  }, "Payment amount must be a number greater than or equal to 0"),
   paymentFrequency: z.enum(["monthly", "annual", "one-time"], {
     required_error: "Payment frequency is required",
   }),

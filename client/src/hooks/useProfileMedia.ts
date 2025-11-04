@@ -213,7 +213,7 @@ export function useProfileMedia() {
       // Update profile with the Cloudinary URL based on user role
       if (user?.role === 'school_admin') {
         await putSchoolAdminMe({ profilePicUrl: url });
-      } else if (user?.role === 'scout_admin' || user?.role === 'system_admin') {
+      } else if (user?.role === 'scout_admin' || user?.role === 'xen_scout' || user?.role === 'system_admin') {
         await putAdminMe({ profilePicUrl: url });
       } else {
         await putStudentMe({ profilePicUrl: url });

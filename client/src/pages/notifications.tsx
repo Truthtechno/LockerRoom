@@ -27,7 +27,10 @@ import {
   Star,
   BarChart3,
   Settings,
-  Clock
+  Clock,
+  DollarSign,
+  Building2,
+  Shield
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/timeAgo";
@@ -75,6 +78,17 @@ const getNotificationIcon = (type: string) => {
     submission_progress: BarChart3,
     platform_news: Megaphone,
     following_posted: Eye,
+    xen_watch_payment: DollarSign, // System admin: XEN Watch payment received
+    subscription_expiring: AlertCircle,
+    school_created: Building2, // System admin: new school created
+    school_admin_created: Shield, // System admin: new school admin created
+    xen_scout_created: Users, // System admin: new xen scout created
+    scout_admin_created: Shield, // System admin: new scout admin created
+    school_payment_recorded: DollarSign, // System/School admin: school payment recorded
+    school_renewal: CheckCheck, // System/School admin: school subscription renewed
+    school_limit_increase: TrendingUp, // System/School admin: student limit increased
+    school_limit_decrease: TrendingUp, // System/School admin: student limit decreased
+    school_frequency_change: Settings, // System/School admin: payment frequency changed
   };
   return iconMap[type] || Bell;
 };
@@ -102,6 +116,17 @@ const getNotificationColor = (type: string) => {
     submission_progress: "text-blue-500",
     platform_news: "text-yellow-500",
     following_posted: "text-blue-500",
+    xen_watch_payment: "text-green-600", // System admin: XEN Watch payment received
+    subscription_expiring: "text-orange-500",
+    school_created: "text-blue-600", // System admin: new school created
+    school_admin_created: "text-purple-600", // System admin: new school admin created
+    xen_scout_created: "text-cyan-500", // System admin: new xen scout created
+    scout_admin_created: "text-indigo-600", // System admin: new scout admin created
+    school_payment_recorded: "text-green-600", // System/School admin: school payment recorded
+    school_renewal: "text-green-500", // System/School admin: school subscription renewed
+    school_limit_increase: "text-blue-500", // System/School admin: student limit increased
+    school_limit_decrease: "text-orange-500", // System/School admin: student limit decreased
+    school_frequency_change: "text-purple-500", // System/School admin: payment frequency changed
   };
   return colorMap[type] || "text-gray-500";
 };

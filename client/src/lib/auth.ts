@@ -226,6 +226,29 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       sessionStorage.clear();
       // Return null - no authenticated user
       return null;
+    } else if (response.status === 403) {
+      // Check if account is deactivated
+      try {
+        const errorData = await response.json();
+        if (errorData.error?.code === 'account_deactivated') {
+          console.warn("Account deactivated, clearing auth data");
+          localStorage.removeItem("auth_user");
+          localStorage.removeItem("token");
+          localStorage.removeItem("schoolId");
+          sessionStorage.clear();
+          // Redirect to login with error message
+          window.location.href = `/login?error=${encodeURIComponent(errorData.error.message || 'Account deactivated')}`;
+          return null;
+        }
+      } catch {
+        // If JSON parsing fails, treat as generic 403
+      }
+      // For other 403 errors, clear auth and redirect
+      localStorage.removeItem("auth_user");
+      localStorage.removeItem("token");
+      localStorage.removeItem("schoolId");
+      sessionStorage.clear();
+      return null;
     } else {
       // For other errors, use cached data if available
       console.warn("Failed to fetch current user from API, using cached data");

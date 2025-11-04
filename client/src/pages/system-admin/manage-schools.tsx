@@ -57,13 +57,14 @@ const updateSchoolSchema = z.object({
   address: z.string().optional(),
   contactEmail: z.string().email("Valid email is required").optional().or(z.literal("")),
   contactPhone: z.string().optional(),
+  paymentFrequency: z.enum(["monthly", "annual", "one-time"]).optional(),
 });
 
 const recordPaymentSchema = z.object({
   paymentAmount: z.string().min(1, "Payment amount is required").refine((val) => {
     const num = parseFloat(val);
-    return !isNaN(num) && num > 0;
-  }, "Payment amount must be a positive number"),
+    return !isNaN(num) && num >= 0;
+  }, "Payment amount must be a number greater than or equal to 0"),
   paymentFrequency: z.enum(["monthly", "annual", "one-time"], {
     required_error: "Payment frequency is required",
   }),
@@ -325,6 +326,9 @@ export default function ManageSchools() {
     mutationFn: async (data: UpdateSchoolFormData) => {
       if (!selectedSchool) throw new Error("No school selected");
       
+      // Log the data being sent to debug
+      console.log('📤 Updating school with data:', data);
+      
       const response = await fetch(`/api/system-admin/schools/${selectedSchool.id}`, {
         method: "PUT",
         headers: {
@@ -339,16 +343,20 @@ export default function ManageSchools() {
         throw new Error(error.error?.message || error.message || "Failed to update school");
       }
 
-      return response.json();
+      const result = await response.json();
+      console.log('📥 School update response:', result);
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "School Updated! 🎉",
         description: `${selectedSchool?.name} has been updated successfully.`,
       });
       setShowUpdateModal(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools", selectedSchool?.id] });
+      // Invalidate and refetch to ensure fresh data
+      await queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools", selectedSchool?.id] });
+      await queryClient.refetchQueries({ queryKey: ["/api/system-admin/schools"] });
     },
     onError: (error: any) => {
       toast({
@@ -417,6 +425,7 @@ export default function ManageSchools() {
       address: school.address || "",
       contactEmail: school.contactEmail || "",
       contactPhone: school.contactPhone || "",
+      paymentFrequency: (school.paymentFrequency || school.payment_frequency || "monthly") as "monthly" | "annual" | "one-time",
     });
     setShowUpdateModal(true);
   };
@@ -1570,7 +1579,20 @@ export default function ManageSchools() {
             </DialogHeader>
             
             <div className="flex-1 overflow-y-auto min-h-0 pr-1">
-              <form onSubmit={updateForm.handleSubmit((data) => updateSchoolMutation.mutate(data))} className="space-y-4">
+              <form onSubmit={updateForm.handleSubmit((data) => {
+                // Always include paymentFrequency - get from form or fallback to current school value
+                const currentPaymentFrequency = updateForm.getValues("paymentFrequency") || 
+                  selectedSchool?.paymentFrequency || 
+                  selectedSchool?.payment_frequency || 
+                  "monthly";
+                
+                const submitData = {
+                  ...data,
+                  paymentFrequency: currentPaymentFrequency as "monthly" | "annual" | "one-time"
+                };
+                console.log('📋 Form submission data:', submitData);
+                updateSchoolMutation.mutate(submitData);
+              })} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="update-name">School Name *</Label>
                 <Input
@@ -1617,10 +1639,35 @@ export default function ManageSchools() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="update-payment-frequency">Payment Frequency</Label>
+                <Select
+                  value={updateForm.watch("paymentFrequency") || (selectedSchool?.paymentFrequency || selectedSchool?.payment_frequency || "monthly")}
+                  onValueChange={(value) => {
+                    updateForm.setValue("paymentFrequency", value as "monthly" | "annual" | "one-time", { shouldValidate: true });
+                  }}
+                  disabled={updateSchoolMutation.isPending}
+                >
+                  <SelectTrigger id="update-payment-frequency">
+                    <SelectValue placeholder="Select payment frequency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="annual">Annual</SelectItem>
+                    <SelectItem value="one-time">One-Time</SelectItem>
+                  </SelectContent>
+                </Select>
+                {updateForm.formState.errors.paymentFrequency && (
+                  <p className="text-sm text-destructive">{updateForm.formState.errors.paymentFrequency.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Change the subscription frequency from monthly to annual or vice versa
+                </p>
+              </div>
+
               <div className="bg-muted/50 p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Note:</strong> Student limit and payment information cannot be updated here. 
-                  Use "School Payments" to change payment frequency or student limits.
+                  <strong>Note:</strong> Student limit cannot be updated here. Use "School Payments" to change student limits.
                 </p>
               </div>
 

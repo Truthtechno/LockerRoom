@@ -199,6 +199,14 @@ export function registerScoutAdminRoutes(app: Express) {
           console.error('❌ Failed to notify scout admins (non-critical):', err);
         });
 
+        // Notify system admins about the new xen scout
+        const { notifySystemAdminsOfNewXenScout } = await import('../utils/notification-helpers');
+        if (newUser.role === 'xen_scout' && newUser.xenId) {
+          notifySystemAdminsOfNewXenScout(newUser.id, newUser.name, newUser.xenId).catch(err => {
+            console.error('❌ Failed to notify system admins of new xen scout (non-critical):', err);
+          });
+        }
+
         res.json({
           success: true,
           scout: {

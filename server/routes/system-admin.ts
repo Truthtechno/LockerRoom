@@ -85,11 +85,21 @@ export function registerSystemAdminRoutes(app: Express) {
           });
         }
 
-        if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+        if (paymentAmount === undefined || paymentAmount === null || paymentAmount === '') {
           return res.status(400).json({ 
             error: { 
               code: 'validation_error', 
-              message: 'Valid payment amount is required' 
+              message: 'Payment amount is required' 
+            } 
+          });
+        }
+        
+        const amount = parseFloat(paymentAmount);
+        if (isNaN(amount) || amount < 0) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Payment amount must be a valid number greater than or equal to 0' 
             } 
           });
         }
@@ -156,6 +166,12 @@ export function registerSystemAdminRoutes(app: Express) {
         });
 
         console.log(`🏫 School created: ${school.name} (ID: ${school.id}) - Payment: $${paymentAmount} ${paymentFrequency}`);
+
+        // Notify system admins about the new school
+        const { notifySystemAdminsOfNewSchool } = await import('../utils/notification-helpers');
+        notifySystemAdminsOfNewSchool(school.id, school.name).catch(err => {
+          console.error('❌ Failed to notify system admins of new school (non-critical):', err);
+        });
 
         res.json({
           success: true,
@@ -298,6 +314,12 @@ export function registerSystemAdminRoutes(app: Express) {
 
         console.log(`👨‍💼 School admin created: ${name} (${email}) for school: ${school.name} with OTP: ${otp}`);
 
+        // Notify system admins about the new school admin
+        const { notifySystemAdminsOfNewSchoolAdmin } = await import('../utils/notification-helpers');
+        notifySystemAdminsOfNewSchoolAdmin(user.id, name, school.id, school.name).catch(err => {
+          console.error('❌ Failed to notify system admins of new school admin (non-critical):', err);
+        });
+
         res.json({
           success: true,
           schoolAdmin: {
@@ -332,10 +354,26 @@ export function registerSystemAdminRoutes(app: Express) {
     requireRole('system_admin'),
     async (req, res) => {
       try {
-        // Get schools with counts of admins and students
+        // Get schools with counts of admins and students, and most recent payment date
         const schoolsWithStats = await db.execute(sql`
           SELECT 
-            s.*,
+            s.id,
+            s.name,
+            s.address,
+            s.contact_email,
+            s.contact_phone,
+            s.payment_amount,
+            s.payment_frequency,
+            s.subscription_expires_at,
+            s.is_active,
+            COALESCE(
+              MAX(CASE WHEN spr.payment_type IN ('initial', 'renewal') THEN spr.recorded_at END),
+              s.last_payment_date
+            ) as last_payment_date,
+            s.max_students,
+            s.profile_pic_url,
+            s.created_at,
+            s.updated_at,
             COUNT(DISTINCT sa.id) as admin_count,
             COUNT(DISTINCT st.id) as student_count,
             COUNT(DISTINCT p.id) as post_count
@@ -343,6 +381,8 @@ export function registerSystemAdminRoutes(app: Express) {
           LEFT JOIN school_admins sa ON s.id = sa.school_id
           LEFT JOIN students st ON s.id = st.school_id
           LEFT JOIN posts p ON st.id = p.student_id
+          LEFT JOIN school_payment_records spr ON s.id = spr.school_id 
+            AND spr.payment_type IN ('initial', 'renewal')
           GROUP BY s.id, s.name, s.address, s.contact_email, s.contact_phone, 
                    s.payment_amount, s.payment_frequency, s.subscription_expires_at,
                    s.is_active, s.last_payment_date, s.max_students, s.profile_pic_url,
@@ -665,11 +705,21 @@ export function registerSystemAdminRoutes(app: Express) {
         }
 
         // Validation
-        if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+        if (paymentAmount === undefined || paymentAmount === null || paymentAmount === '') {
           return res.status(400).json({ 
             error: { 
               code: 'validation_error', 
-              message: 'Valid payment amount is required' 
+              message: 'Payment amount is required' 
+            } 
+          });
+        }
+        
+        const amount = parseFloat(paymentAmount);
+        if (isNaN(amount) || amount < 0) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Payment amount must be a valid number greater than or equal to 0' 
             } 
           });
         }
@@ -746,6 +796,35 @@ export function registerSystemAdminRoutes(app: Express) {
             })
             .where(eq(schools.id, schoolId));
         }
+
+        // Update school's last_payment_date for initial and renewal payments
+        if (paymentType === 'initial' || paymentType === 'renewal') {
+          await db.update(schools)
+            .set({ 
+              lastPaymentDate: now,
+              paymentAmount: paymentAmount.toString(),
+              updatedAt: now,
+            })
+            .where(eq(schools.id, schoolId));
+          console.log(`📅 Updated school's last_payment_date to ${now.toISOString()} for payment type: ${paymentType}`);
+        }
+
+        // Notify system admins and school admins about the payment
+        const { notifySchoolPaymentRecorded } = await import('../utils/notification-helpers');
+        notifySchoolPaymentRecorded(
+          paymentRecord.id,
+          schoolId,
+          school.name,
+          paymentAmount.toString(),
+          paymentFrequency,
+          paymentType,
+          studentLimitBefore ? parseInt(studentLimitBefore, 10) : null,
+          studentLimitAfter ? parseInt(studentLimitAfter, 10) : null,
+          oldFrequency || null,
+          newFrequency || null
+        ).catch(err => {
+          console.error('❌ Failed to notify about school payment (non-critical):', err);
+        });
 
         res.json({
           success: true,
@@ -1006,7 +1085,10 @@ export function registerSystemAdminRoutes(app: Express) {
     async (req, res) => {
       try {
         const { schoolId } = req.params;
-        const { name, address, contactEmail, contactPhone } = req.body;
+        const { name, address, contactEmail, contactPhone, paymentFrequency } = req.body;
+        const auth = (req as any).auth;
+        
+        console.log(`📝 Update School Request - ID: ${schoolId}, paymentFrequency: ${paymentFrequency}, body:`, JSON.stringify(req.body));
         
         // Check if school exists
         const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
@@ -1018,21 +1100,131 @@ export function registerSystemAdminRoutes(app: Express) {
             } 
           });
         }
+        
+        console.log(`📊 Current school data - Name: ${school.name}, Frequency: ${school.paymentFrequency}, LastPayment: ${school.lastPaymentDate?.toISOString() || 'N/A'}, CurrentExpiry: ${school.subscriptionExpiresAt?.toISOString() || 'N/A'}`);
+
+        // Validate payment frequency if provided
+        if (paymentFrequency !== undefined && !['monthly', 'annual', 'one-time'].includes(paymentFrequency)) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'validation_error', 
+              message: 'Payment frequency must be monthly, annual, or one-time' 
+            } 
+          });
+        }
+
+        // Check if payment frequency is changing
+        const oldFrequency = school.paymentFrequency;
+        const frequencyChanged = paymentFrequency !== undefined && paymentFrequency !== oldFrequency;
+        
+        // Determine the effective frequency to use for calculations
+        const effectiveFrequency = paymentFrequency !== undefined ? paymentFrequency : oldFrequency;
 
         // Update only allowed fields
+        const now = new Date();
         const updateData: any = {
-          updatedAt: new Date(),
+          updatedAt: now,
         };
         
         if (name !== undefined) updateData.name = name;
         if (address !== undefined) updateData.address = address || null;
         if (contactEmail !== undefined) updateData.contactEmail = contactEmail || null;
         if (contactPhone !== undefined) updateData.contactPhone = contactPhone || null;
+        if (paymentFrequency !== undefined) updateData.paymentFrequency = paymentFrequency;
 
+        // Recalculate expiration date if payment frequency is being explicitly updated
+        // This ensures expiration dates are correct even if frequency was set before this fix
+        const shouldRecalculate = paymentFrequency !== undefined && effectiveFrequency;
+        
+        console.log(`🔍 Recalculation check - paymentFrequency: ${paymentFrequency}, effectiveFrequency: ${effectiveFrequency}, shouldRecalculate: ${shouldRecalculate}`);
+        
+        if (shouldRecalculate) {
+          let newExpirationDate: Date | null = null;
+          
+          // Use last payment date as base if available, otherwise use current date
+          // If changing from monthly to annual, we want to extend from last payment, not reset
+          const baseDate = school.lastPaymentDate ? new Date(school.lastPaymentDate) : now;
+          
+          console.log(`📅 Base date calculation - lastPaymentDate: ${school.lastPaymentDate?.toISOString() || 'N/A'}, using: ${baseDate.toISOString()}`);
+          
+          if (effectiveFrequency === 'monthly') {
+            newExpirationDate = new Date(baseDate);
+            newExpirationDate.setMonth(newExpirationDate.getMonth() + 1);
+            console.log(`📅 Monthly calculation: ${baseDate.toISOString()} + 1 month = ${newExpirationDate.toISOString()}`);
+          } else if (effectiveFrequency === 'annual') {
+            newExpirationDate = new Date(baseDate);
+            newExpirationDate.setFullYear(newExpirationDate.getFullYear() + 1);
+            console.log(`📅 Annual calculation: ${baseDate.toISOString()} + 1 year = ${newExpirationDate.toISOString()}`);
+          } else if (effectiveFrequency === 'one-time') {
+            // One-time payments don't have an expiration date
+            newExpirationDate = null;
+            console.log(`📅 One-time payment - no expiration date`);
+          }
+          
+          updateData.subscriptionExpiresAt = newExpirationDate;
+          console.log(`🔄 Recalculating expiration date for ${school.name}: ${oldFrequency} → ${effectiveFrequency}, base date: ${baseDate.toISOString()}, new expiry: ${newExpirationDate?.toISOString() || 'N/A'}`);
+          console.log(`💾 Update data before save:`, JSON.stringify(updateData, null, 2));
+        } else {
+          console.log(`⚠️ Not recalculating - paymentFrequency: ${paymentFrequency}, effectiveFrequency: ${effectiveFrequency}`);
+        }
+
+        console.log(`💾 About to update database with:`, JSON.stringify(updateData, (key, value) => {
+          if (value instanceof Date) return value.toISOString();
+          return value;
+        }, 2));
+        
         const [updatedSchool] = await db.update(schools)
           .set(updateData)
           .where(eq(schools.id, schoolId))
           .returning();
+
+        console.log(`✅ School updated: ${updatedSchool.name} (ID: ${schoolId})`);
+        console.log(`   - Payment frequency: ${updatedSchool.paymentFrequency} (was: ${school.paymentFrequency})`);
+        console.log(`   - Expires: ${updatedSchool.subscriptionExpiresAt?.toISOString() || 'N/A'} (was: ${school.subscriptionExpiresAt?.toISOString() || 'N/A'})`);
+        console.log(`   - Last Payment: ${updatedSchool.lastPaymentDate?.toISOString() || 'N/A'}`);
+
+        // If payment frequency changed, create a payment record for audit trail
+        // Note: This creates a frequency_change record, but for actual payments,
+        // system admins should use the "Record Payment" feature to create initial/renewal records
+        if (frequencyChanged && oldFrequency && paymentFrequency) {
+          try {
+            const [paymentRecord] = await db.insert(schoolPaymentRecords).values({
+              schoolId: schoolId,
+              paymentAmount: school.paymentAmount || '0.00',
+              paymentFrequency: paymentFrequency,
+              paymentType: 'frequency_change',
+              oldFrequency: oldFrequency,
+              newFrequency: paymentFrequency,
+              notes: `Payment frequency changed from ${oldFrequency} to ${paymentFrequency} via Update School Information`,
+              recordedBy: auth.id,
+              recordedAt: now,
+            }).returning();
+            
+            // Note: We don't update last_payment_date here because frequency_change
+            // doesn't represent a new payment. If a payment was made, it should be
+            // recorded as 'initial' or 'renewal' through the payment recording feature.
+
+            // Notify system admins and school admins about the frequency change
+            const { notifySchoolPaymentRecorded } = await import('../utils/notification-helpers');
+            notifySchoolPaymentRecorded(
+              paymentRecord.id,
+              schoolId,
+              school.name,
+              school.paymentAmount || '0.00',
+              paymentFrequency,
+              'frequency_change',
+              null, // studentLimitBefore
+              null, // studentLimitAfter
+              oldFrequency,
+              paymentFrequency
+            ).catch(err => {
+              console.error('❌ Failed to notify about frequency change (non-critical):', err);
+            });
+          } catch (error) {
+            console.error('❌ Error creating payment record for frequency change (non-critical):', error);
+            // Don't fail the request if payment record creation fails
+          }
+        }
 
         res.json({
           success: true,

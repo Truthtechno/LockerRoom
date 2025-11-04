@@ -3,7 +3,7 @@ import multer from 'multer';
 import { db } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { uploadBuffer } from '../storage';
-import { students, viewers, schoolAdmins, systemAdmins } from '@shared/schema';
+import { students, viewers, schoolAdmins, systemAdmins, admins } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 
 // Extend Express Request type to include user
@@ -13,7 +13,7 @@ declare global {
       user?: { 
         id: string; 
         email: string;
-        role: 'student' | 'viewer' | 'school_admin' | 'system_admin'; 
+        role: 'student' | 'viewer' | 'school_admin' | 'system_admin' | 'scout_admin' | 'xen_scout'; 
         schoolId: string | null;
         linkedId: string;
       };
@@ -187,6 +187,17 @@ router.put('/api/profile/picture', requireAuth, upload.single('profilePic'), han
         updateResult = await db.update(systemAdmins)
           .set({ profilePicUrl: url })
           .where(eq(systemAdmins.id, linkedId));
+          
+      } else if (role === 'scout_admin' || role === 'xen_scout') {
+        // For scouts: users.linked_id = admins.id
+        if (!linkedId) {
+          console.log('❌ No linkedId for scout:', role);
+          return res.status(404).json({ error: 'Scout profile not found' });
+        }
+        console.log('🔄 Updating admins table for scout:', { linkedId, url, role });
+        updateResult = await db.update(admins)
+          .set({ profilePicUrl: url })
+          .where(eq(admins.id, linkedId));
           
       } else {
         console.log('❌ Invalid user role:', role);

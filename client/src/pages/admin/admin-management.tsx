@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,10 @@ import { z } from "zod";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { ArrowLeft, Shield, UserPlus, Crown, Settings, Trash2, Edit, Users, Lock, Upload, User, Check, Copy, AlertTriangle, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Shield, UserPlus, Crown, Settings, Trash2, Edit, Users, Lock, Upload, User, Check, Copy, AlertTriangle, Mail, Phone, Search, Filter, Download, MoreHorizontal, Ban, Power } from "lucide-react";
+import * as XLSX from 'xlsx';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
@@ -28,6 +31,7 @@ type ScoutAdmin = {
   xenId: string;
   profilePicUrl?: string;
   createdAt: string;
+  isFrozen?: boolean;
 };
 
 const adminFormSchema = z.object({
@@ -61,6 +65,9 @@ export default function AdminManagement() {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpCopied, setOtpCopied] = useState(false);
   const [scoutData, setScoutData] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterRole, setFilterRole] = useState<string>("all");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const adminForm = useForm<AdminFormData>({
     resolver: zodResolver(adminFormSchema),
@@ -74,6 +81,55 @@ export default function AdminManagement() {
   const { data: scoutAdmins, isLoading: scoutsLoading } = useQuery<ScoutAdmin[]>({
     queryKey: ["/api/scout-admins"],
   });
+
+  // Calculate metrics
+  const metrics = useMemo(() => {
+    if (!scoutAdmins) {
+      return {
+        total: 0,
+        systemAdmins: 0,
+        scoutAdmins: 0,
+        otherRoles: 0,
+      };
+    }
+
+    const systemAdmins = scoutAdmins.filter(admin => admin.role === "system_admin").length;
+    const scoutAdminsCount = scoutAdmins.filter(admin => admin.role === "scout_admin").length;
+    const otherRoles = scoutAdmins.filter(admin => 
+      admin.role !== "system_admin" && admin.role !== "scout_admin"
+    ).length;
+
+    return {
+      total: scoutAdmins.length,
+      systemAdmins,
+      scoutAdmins: scoutAdminsCount,
+      otherRoles,
+    };
+  }, [scoutAdmins]);
+
+  // Filter and search admins
+  const filteredAdmins = useMemo(() => {
+    if (!scoutAdmins) return [];
+    
+    return scoutAdmins.filter(admin => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = 
+          admin.name.toLowerCase().includes(query) ||
+          admin.email.toLowerCase().includes(query) ||
+          (admin.xenId && admin.xenId.toLowerCase().includes(query));
+        if (!matchesSearch) return false;
+      }
+
+      // Role filter
+      if (filterRole !== "all" && admin.role !== filterRole) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [scoutAdmins, searchQuery, filterRole]);
 
   const createAdminMutation = useMutation({
     mutationFn: async (data: AdminFormData) => {
@@ -175,6 +231,165 @@ export default function AdminManagement() {
     adminForm.reset();
   };
 
+  // Handle disable admin
+  const handleDisableAdmin = async (adminId: string, adminName: string) => {
+    setActionLoading(adminId);
+    try {
+      const response = await fetch(`/api/admin/${adminId}/disable`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to disable admin');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "Admin Disabled",
+        description: result.message || `"${adminName}" has been disabled. They will not be able to log in.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/scout-admins"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to disable admin",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle enable admin
+  const handleEnableAdmin = async (adminId: string, adminName: string) => {
+    setActionLoading(adminId);
+    try {
+      const response = await fetch(`/api/admin/${adminId}/enable`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to enable admin');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "Admin Enabled",
+        description: result.message || `"${adminName}" has been enabled. They can now log in again.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/scout-admins"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to enable admin",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle delete admin
+  const handleDeleteAdmin = async (adminId: string, adminName: string) => {
+    setActionLoading(adminId);
+    try {
+      const response = await fetch(`/api/admin/${adminId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to delete admin');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: "Admin Deleted",
+        description: result.message || `"${adminName}" has been permanently deleted.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/scout-admins"] });
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete admin",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Export admins to Excel
+  const handleExportAdmins = () => {
+    if (!filteredAdmins || filteredAdmins.length === 0) {
+      toast({
+        title: "No Data",
+        description: "No admins to export",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Prepare data for export
+    const exportData = filteredAdmins.map((admin) => ({
+      'Name': admin.name,
+      'Email': admin.email,
+      'Role': admin.role,
+      'XEN ID': admin.xenId || '',
+      'Created At': new Date(admin.createdAt).toLocaleDateString(),
+    }));
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Admins');
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 25 }, // Name
+      { wch: 30 }, // Email
+      { wch: 15 }, // Role
+      { wch: 15 }, // XEN ID
+      { wch: 15 }, // Created At
+    ];
+
+    // Enable autofilter (filters in Excel)
+    if (ws['!ref']) {
+      ws['!autofilter'] = { ref: ws['!ref'] as string };
+    }
+
+    const filename = `admins_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, filename);
+
+    toast({
+      title: "Export Successful! 🎉",
+      description: `${filteredAdmins.length} admin record(s) exported to Excel`,
+    });
+  };
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -219,9 +434,9 @@ export default function AdminManagement() {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case "system_admin":
-        return <Badge variant="default" className="bg-red-600 text-xs"><Crown className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />System Admin</Badge>;
+        return <Badge variant="default" className="bg-red-600 text-xs text-white"><Crown className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />System Admin</Badge>;
       case "scout_admin":
-        return <Badge variant="default" className="bg-blue-600 text-xs"><Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />Scout Admin</Badge>;
+        return <Badge variant="default" className="bg-blue-600 text-xs text-white"><Shield className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />Scout Admin</Badge>;
       case "xen_scout":
         return <Badge variant="secondary" className="bg-green-600 text-white text-xs"><User className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-1" />XEN Scout</Badge>;
       case "moderator":
@@ -442,7 +657,7 @@ export default function AdminManagement() {
               <User className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent className="p-0 pt-2">
-              <div className="text-xl sm:text-2xl font-bold">{scoutAdmins?.length || 0}</div>
+              <div className="text-xl sm:text-2xl font-bold">{metrics.total}</div>
             </CardContent>
           </Card>
           
@@ -453,7 +668,7 @@ export default function AdminManagement() {
             </CardHeader>
             <CardContent className="p-0 pt-2">
               <div className="text-xl sm:text-2xl font-bold text-red-600">
-                {scoutAdmins?.filter(s => s.role === "system_admin").length || 0}
+                {metrics.systemAdmins}
               </div>
             </CardContent>
           </Card>
@@ -465,7 +680,7 @@ export default function AdminManagement() {
             </CardHeader>
             <CardContent className="p-0 pt-2">
               <div className="text-xl sm:text-2xl font-bold text-blue-600">
-                {scoutAdmins?.filter(s => s.role === "scout_admin").length || 0}
+                {metrics.scoutAdmins}
               </div>
             </CardContent>
           </Card>
@@ -477,16 +692,72 @@ export default function AdminManagement() {
             </CardHeader>
             <CardContent className="p-0 pt-2">
               <div className="text-xl sm:text-2xl font-bold text-green-600">
-                {scoutAdmins?.filter(s => !["system_admin", "scout_admin", "xen_scout"].includes(s.role)).length || 0}
+                {metrics.otherRoles}
               </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Search, Filter, and Export Controls */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search admins by name, email, or XEN ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 w-full"
+            />
+          </div>
+          <Select value={filterRole} onValueChange={setFilterRole}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <Filter className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Filter by Role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              <SelectItem value="system_admin">System Admin</SelectItem>
+              <SelectItem value="scout_admin">Scout Admin</SelectItem>
+              <SelectItem value="xen_scout">XEN Scout</SelectItem>
+              <SelectItem value="moderator">Moderator</SelectItem>
+              <SelectItem value="finance">Finance</SelectItem>
+              <SelectItem value="support">Support</SelectItem>
+              <SelectItem value="coach">Coach</SelectItem>
+              <SelectItem value="analyst">Analyst</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleExportAdmins}
+            disabled={!filteredAdmins || filteredAdmins.length === 0}
+            className="w-full sm:w-auto"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Excel
+          </Button>
+          {(searchQuery || filterRole !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery("");
+                setFilterRole("all");
+              }}
+              className="w-full sm:w-auto"
+            >
+              Clear Filters
+            </Button>
+          )}
+        </div>
+
         {/* Admins List */}
-        {scoutAdmins && scoutAdmins.length > 0 ? (
+        {filteredAdmins && filteredAdmins.length > 0 ? (
           <div className="space-y-3 sm:space-y-6">
-            {scoutAdmins.map((scout) => (
+            {filteredAdmins.map((scout) => {
+              const isDisabled = scout.isFrozen || false;
+              
+              return (
               <Card key={scout.id} className="overflow-hidden" data-testid={`scout-${scout.id}`}>
                 <CardHeader className="p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
@@ -517,11 +788,96 @@ export default function AdminManagement() {
                       <div className="text-xs text-muted-foreground">
                         Since {new Date(scout.createdAt).toLocaleDateString()}
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            disabled={actionLoading === scout.id}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {isDisabled ? (
+                            <DropdownMenuItem
+                              onClick={() => handleEnableAdmin(scout.id, scout.name)}
+                              disabled={actionLoading === scout.id}
+                            >
+                              <Power className="w-4 h-4 mr-2" />
+                              Enable Account
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() => handleDisableAdmin(scout.id, scout.name)}
+                              disabled={actionLoading === scout.id}
+                            >
+                              <Ban className="w-4 h-4 mr-2" />
+                              Disable Account
+                            </DropdownMenuItem>
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem
+                                onSelect={(e) => e.preventDefault()}
+                                disabled={actionLoading === scout.id}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete Account
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Admin Account</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently delete the admin account for:
+                                  <br />
+                                  <strong>{scout.name}</strong> ({scout.email})
+                                  <br />
+                                  <br />
+                                  All associated data will be permanently removed.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteAdmin(scout.id, scout.name)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  disabled={actionLoading === scout.id}
+                                >
+                                  {actionLoading === scout.id ? "Deleting..." : "Delete Permanently"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </CardHeader>
               </Card>
-            ))}
+            );
+            })}
+          </div>
+        ) : scoutAdmins && scoutAdmins.length > 0 ? (
+          <div className="text-center py-8 sm:py-12">
+            <User className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-foreground mb-2">No Matching Admins</h3>
+            <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 px-4">
+              No administrators match your current filters. Try adjusting your search or filter criteria.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchQuery("");
+                setFilterRole("all");
+              }}
+            >
+              Clear Filters
+            </Button>
           </div>
         ) : (
           <div className="text-center py-8 sm:py-12">

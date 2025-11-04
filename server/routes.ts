@@ -11,7 +11,7 @@ import { requireAuth, requireSelfByParam, requireScoutAdmin, requireScoutOrAdmin
 import uploadRoutes from "./routes/upload";
 import xenWatchRoutes from "./routes/xen-watch";
 import { registerScoutAdminRoutes } from "./routes/scout-admin";
-import { notifyFollowersOfNewPost, notifyScoutAdminsOfNewScout } from "./utils/notification-helpers";
+import { notifyFollowersOfNewPost, notifyScoutAdminsOfNewScout, notifySystemAdminsOfXenWatchPayment } from "./utils/notification-helpers";
 import { 
   insertUserSchema, 
   insertPostSchema, 
@@ -280,9 +280,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🔐 Attempting admin authentication for:', email);
       
       // Try admin OTP verification first (for scout roles and new admins)
-      const adminOTPResult = await authStorage.verifyAdminOTP(email, password);
+      let adminOTPResult;
+      try {
+        adminOTPResult = await authStorage.verifyAdminOTP(email, password);
+      } catch (error: any) {
+        // Handle deactivated account error
+        if (error.message === 'ACCOUNT_DEACTIVATED') {
+          console.log('🔐 Login blocked: Admin account is deactivated for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
+            } 
+          });
+        }
+        // Re-throw other errors
+        throw error;
+      }
+      
       if (adminOTPResult) {
         const { admin, requiresPasswordReset } = adminOTPResult;
+
+        // Additional safety check: verify account is not frozen before returning token
+        const [linkedUser] = await db.select({ isFrozen: users.isFrozen })
+          .from(users)
+          .where(eq(users.linkedId, admin.id))
+          .limit(1);
+        const [userByEmail] = await db.select({ isFrozen: users.isFrozen })
+          .from(users)
+          .where(eq(users.email, email))
+          .limit(1);
+        
+        if (linkedUser?.isFrozen || userByEmail?.isFrozen) {
+          console.log('🔐 Login blocked: Admin account is deactivated (safety check) for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
+            } 
+          });
+        }
 
         // For scout roles, find the corresponding user record
         let userId = admin.id;
@@ -340,9 +377,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Try admin password verification (for system_admin and other roles)
-      const adminResult = await authStorage.verifyAdminPassword(email, password);
+      let adminResult;
+      try {
+        adminResult = await authStorage.verifyAdminPassword(email, password);
+      } catch (error: any) {
+        // Handle deactivated account error
+        if (error.message === 'ACCOUNT_DEACTIVATED') {
+          console.log('🔐 Login blocked: Admin account is deactivated for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
+            } 
+          });
+        }
+        // Re-throw other errors
+        throw error;
+      }
+      
       if (adminResult) {
         const admin = adminResult;
+
+        // Additional safety check: verify account is not frozen before returning token
+        const [linkedUser] = await db.select({ isFrozen: users.isFrozen })
+          .from(users)
+          .where(eq(users.linkedId, admin.id))
+          .limit(1);
+        const [userByEmail] = await db.select({ isFrozen: users.isFrozen })
+          .from(users)
+          .where(eq(users.email, email))
+          .limit(1);
+        
+        if (linkedUser?.isFrozen || userByEmail?.isFrozen) {
+          console.log('🔐 Login blocked: Admin account is deactivated (safety check) for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
+            } 
+          });
+        }
 
         // For scout roles, find the corresponding user record
         let userId = admin.id;
@@ -409,11 +483,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Note: Frozen check is already done in verifyOTP, but we add an extra check here for safety
         if ((user as any).isFrozen) {
-          console.log('🔐 Login blocked: Account is frozen for:', email);
+          console.log('🔐 Login blocked: Account is deactivated for:', email);
           return res.status(403).json({ 
             error: { 
-              code: "account_frozen", 
-              message: "Your account has been temporarily disabled. Please contact your administrator." 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
             } 
           });
         }
@@ -479,19 +553,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } 
           });
         }
+        // Check for deactivated account error
+        if (error.message === 'ACCOUNT_DEACTIVATED') {
+          console.log('🔐 Login blocked: Account is deactivated for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
+            } 
+          });
+        }
         // Re-throw other errors
         throw error;
       }
       
       if (!result) {
-        // Check if account exists and is frozen
+        // Check if account exists and is frozen (fallback check)
         const [user] = await db.select({ isFrozen: users.isFrozen }).from(users).where(eq(users.email, email));
         if (user?.isFrozen) {
-          console.log('🔐 Login blocked: Account is frozen for:', email);
+          console.log('🔐 Login blocked: Account is deactivated for:', email);
           return res.status(403).json({ 
             error: { 
-              code: "account_frozen", 
-              message: "Your account has been temporarily disabled. Please contact your administrator." 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
             } 
           });
         }
@@ -1890,12 +1974,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('📤 Updating admin profile:', { userId, userRole, linkedId, profilePicUrl });
 
-      // Only allow scout admins and system admins to update their profiles
-      if (userRole !== 'scout_admin' && userRole !== 'system_admin') {
+      // Only allow scout admins, xen scouts, and system admins to update their profiles
+      if (userRole !== 'scout_admin' && userRole !== 'xen_scout' && userRole !== 'system_admin') {
         return res.status(403).json({ 
           error: { 
             code: "unauthorized_role", 
-            message: "Only scout admins and system admins can update their profiles" 
+            message: "Only scout admins, xen scouts, and system admins can update their profiles" 
           } 
         });
       }
@@ -1931,9 +2015,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             profilePicUrl: updatedAdmin[0].profilePicUrl
           }
         });
-      } else {
-        // For scout admins: update admins table
-        console.log('🔄 Updating admins table:', { linkedId, profilePicUrl });
+      } else if (userRole === 'scout_admin' || userRole === 'xen_scout') {
+        // For scout admins and xen scouts: update admins table
+        console.log('🔄 Updating admins table for scout:', { linkedId, profilePicUrl, role: userRole });
         updatedAdmin = await db.update(admins)
           .set(updates)
           .where(eq(admins.id, linkedId))
@@ -1943,12 +2027,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ 
             error: { 
               code: "admin_not_found", 
-              message: "Admin profile not found" 
+              message: "Scout profile not found" 
             } 
           });
         }
 
-        console.log('✅ Admin profile updated successfully:', updatedAdmin[0]);
+        console.log('✅ Scout profile updated successfully:', updatedAdmin[0]);
         return res.json({
           success: true,
           admin: {
@@ -1958,6 +2042,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             role: updatedAdmin[0].role,
             profilePicUrl: updatedAdmin[0].profilePicUrl
           }
+        });
+      } else {
+        return res.status(403).json({ 
+          error: { 
+            code: "unauthorized_role", 
+            message: "Unauthorized role for this endpoint" 
+          } 
         });
       }
     } catch (err: any) {
@@ -5465,6 +5556,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(eq(paymentTransactions.id, transaction.id))
           .returning();
 
+        // Notify system admins if this is a XEN Watch payment
+        if (type === 'xen_watch' && updatedTransaction.status === 'completed') {
+          notifySystemAdminsOfXenWatchPayment(
+            updatedTransaction.id,
+            userId,
+            updatedTransaction.amountCents,
+            updatedTransaction.currency
+          ).catch(err => {
+            console.error('❌ Failed to notify system admins of XEN Watch payment (non-critical):', err);
+          });
+        }
+
         res.json({ 
           success: true,
           transactionId: updatedTransaction.id,
@@ -5499,6 +5602,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
           .where(eq(paymentTransactions.id, transaction.id))
           .returning();
+
+        // Notify system admins if this is a XEN Watch payment
+        if (type === 'xen_watch' && updatedTransaction.status === 'completed') {
+          notifySystemAdminsOfXenWatchPayment(
+            updatedTransaction.id,
+            userId,
+            updatedTransaction.amountCents,
+            updatedTransaction.currency
+          ).catch(err => {
+            console.error('❌ Failed to notify system admins of XEN Watch payment (non-critical):', err);
+          });
+        }
 
         res.json({ 
           success: true,
@@ -6810,6 +6925,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         profilePicUrl
       });
       
+      // Notify system admins about the new scout admin
+      const { notifySystemAdminsOfNewScoutAdmin } = await import('./utils/notification-helpers');
+      notifySystemAdminsOfNewScoutAdmin(result.user.id, name, xenId).catch(err => {
+        console.error('❌ Failed to notify system admins of new scout admin (non-critical):', err);
+      });
+      
       res.json({ user: result.user, profile: result.profile });
     } catch (error) {
       console.error('Error creating Scout Admin:', error);
@@ -6827,6 +6948,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email,
         xenId,
         profilePicUrl
+      });
+      
+      // Notify system admins about the new xen scout
+      const { notifySystemAdminsOfNewXenScout } = await import('./utils/notification-helpers');
+      notifySystemAdminsOfNewXenScout(result.user.id, name, xenId).catch(err => {
+        console.error('❌ Failed to notify system admins of new xen scout (non-critical):', err);
       });
       
       res.json({ user: result.user, profile: result.profile });

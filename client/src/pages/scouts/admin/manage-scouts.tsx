@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -32,6 +31,7 @@ import {
   Target,
   Activity,
   Check,
+  CheckCircle,
   Copy,
   AlertTriangle,
   Trash2,
@@ -490,7 +490,7 @@ export default function ManageScoutsCRM() {
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Page Title */}
+          {/* Page Title - Enhanced */}
           <div className="mb-8">
             <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
               <div>
@@ -500,16 +500,20 @@ export default function ManageScoutsCRM() {
                 </p>
               </div>
               <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-3">
-                <Button onClick={exportToExcel} variant="outline" className="flex items-center space-x-2 flex-1 sm:flex-none">
+                <Button 
+                  onClick={exportToExcel} 
+                  variant="outline" 
+                  className="flex items-center space-x-2 flex-1 sm:flex-none hover:bg-muted"
+                >
                   <Download className="w-4 h-4" />
                   <span className="hidden sm:inline">Export Excel</span>
                   <span className="sm:hidden">Export</span>
                 </Button>
                 <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
                   <DialogTrigger asChild>
-                    <Button className="flex items-center space-x-2 flex-1 sm:flex-none">
+                    <Button className="flex items-center space-x-2 flex-1 sm:flex-none bg-primary hover:bg-primary/90">
                       <Plus className="w-4 h-4" />
-                      <span className="hidden sm:inline">Create Scout</span>
+                      <span className="hidden sm:inline">+ Create Scout</span>
                       <span className="sm:hidden">Create</span>
                     </Button>
                   </DialogTrigger>
@@ -530,103 +534,135 @@ export default function ManageScoutsCRM() {
             </div>
           </div>
 
-          {/* Analytics Overview */}
+          {/* Analytics Overview - Enhanced with Professional Styling */}
           {analytics && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Scouts</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+              <Card className="border-l-4 border-l-purple-500">
+                <CardHeader className="pb-2 sm:pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Total Scouts</CardTitle>
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                      <Users className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
+                <CardContent className="pt-0">
+                  <div className="text-xl sm:text-2xl font-bold text-foreground">
                     {(() => {
                       const scoutCount = analytics?.scoutStats?.length || 0;
-                      console.log('👥 Total Scouts Count:', { scoutCount, scoutStats: analytics?.scoutStats?.length });
                       return scoutCount;
                     })()}
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                     Active scout accounts
                   </p>
                 </CardContent>
               </Card>
               
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Avg Completion Rate</CardTitle>
-                  <Target className="h-4 w-4 text-muted-foreground" />
+              <Card className="border-l-4 border-l-blue-500">
+                <CardHeader className="pb-2 sm:pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Avg Completion</CardTitle>
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                      <Target className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
+                <CardContent className="pt-0">
+                  <div className="text-xl sm:text-2xl font-bold text-foreground">
                     {(() => {
                       const scoutStats = analytics?.scoutStats || [];
                       const avgCompletion = scoutStats.length > 0 
                         ? Math.round(scoutStats.reduce((sum, s) => sum + (Number(s.completionRate) || 0), 0) / scoutStats.length)
                         : 0;
-                      console.log('📈 Avg Completion Rate Calculation:', { scoutStats: scoutStats.length, avgCompletion });
                       return `${avgCompletion}%`;
                     })()}
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 line-clamp-2">
                     Reviews completed vs assigned
                   </p>
                 </CardContent>
               </Card>
               
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Avg Quality Score</CardTitle>
-                  <Star className="h-4 w-4 text-muted-foreground" />
+              <Card className="border-l-4 border-l-amber-500">
+                <CardHeader className="pb-2 sm:pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Avg Quality</CardTitle>
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                      <Star className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-400" />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
+                <CardContent className="pt-0">
+                  <div className="text-xl sm:text-2xl font-bold text-foreground">
                     {(() => {
                       const scoutStats = analytics?.scoutStats || [];
                       const avgQuality = scoutStats.length > 0 
                         ? Math.round(scoutStats.reduce((sum, s) => sum + (Number(s.qualityScore) || 0), 0) / scoutStats.length)
                         : 0;
-                      console.log('⭐ Avg Quality Score Calculation:', { scoutStats: scoutStats.length, avgQuality });
                       return `${avgQuality}%`;
                     })()}
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 line-clamp-2">
                     High-quality review percentage
                   </p>
                 </CardContent>
               </Card>
               
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <Card className="border-l-4 border-l-emerald-500">
+                <CardHeader className="pb-2 sm:pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
+                <CardContent className="pt-0">
+                  <div className="text-xl sm:text-2xl font-bold text-foreground">
                     {(() => {
                       const revenue = analytics?.revenueStats?.total_revenue || 0;
-                      console.log('💰 Revenue Calculation:', { revenue, revenueStats: analytics?.revenueStats });
-                      return `$${Number(revenue).toFixed(2)}`;
+                      const revenueValue = Number(revenue);
+                      if (revenueValue >= 1000) {
+                        return `$${(revenueValue / 1000).toFixed(1)}k`;
+                      }
+                      return `$${revenueValue.toFixed(2)}`;
                     })()}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    From paid submissions
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {analytics?.revenueStats?.total_paid_submissions || 0} paid submissions
                   </p>
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {/* Filters and Search */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Filter className="w-5 h-5 mr-2" />
-                Filters & Search
-              </CardTitle>
+          {/* Filters and Search - Enhanced */}
+          <Card className="mb-4 sm:mb-6">
+            <CardHeader className="pb-3 sm:pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center text-base sm:text-lg">
+                  <Filter className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                  Filters & Search
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setPerformanceFilter('all');
+                    setTimeFilter('all');
+                    setSortBy('completed_reviews');
+                  }}
+                  className="text-xs h-8 px-2 sm:px-3"
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  <span className="hidden sm:inline">Reset</span>
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <CardContent className="p-4 sm:p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label>Search Scouts</Label>
                   <div className="relative">
@@ -695,15 +731,18 @@ export default function ManageScoutsCRM() {
 
           {/* Scouts Table */}
           <Card>
-            <CardHeader>
-              <CardTitle>Scout Performance Details</CardTitle>
-              <CardDescription>
-                {filteredAndSortedScouts.length} scouts found
-              </CardDescription>
+            <CardHeader className="pb-3 sm:pb-6">
+              <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+                <div>
+                  <CardTitle className="text-lg sm:text-xl">Scout Performance Details</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm mt-1">
+                    {filteredAndSortedScouts.length} scout{filteredAndSortedScouts.length !== 1 ? 's' : ''} found
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[500px] lg:h-[600px]">
-                <div className="space-y-4">
+            <CardContent className="p-0 sm:p-6">
+              <div className="space-y-3 sm:space-y-4 px-2 sm:px-4 lg:px-0">
                   {filteredAndSortedScouts.length === 0 ? (
                     <div className="text-center py-16">
                       <div className="mx-auto w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-6">
@@ -725,135 +764,252 @@ export default function ManageScoutsCRM() {
                     </div>
                   ) : (
                     filteredAndSortedScouts.map((scout) => (
-                    <Card key={scout.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-4 lg:p-6">
-                        <div className="flex flex-col space-y-4 lg:flex-row lg:items-start lg:justify-between lg:space-y-0">
-                          <div className="flex items-start space-x-4">
-                            <Avatar className="w-12 h-12">
-                              <AvatarImage src={scout.profile_pic_url} />
-                              <AvatarFallback>{scout.name?.charAt(0) || 'S'}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                              <div className="flex flex-col space-y-2 mb-2 lg:flex-row lg:items-center lg:space-y-0 lg:space-x-3">
-                                <h3 className="text-lg font-semibold">{scout.name || 'Unnamed Scout'}</h3>
-                                <div className="flex items-center space-x-2">
-                                  {getPerformanceBadge(scout)}
-                                  <Badge variant="outline">{scout.role}</Badge>
-                                  {scout.isFrozen && (
-                                    <Badge variant="destructive" className="flex items-center space-x-1">
-                                      <Lock className="w-3 h-3" />
-                                      <span>Frozen</span>
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 text-sm text-muted-foreground mb-4">
-                                <div>
-                                  <span className="font-medium">Email:</span> {scout.email}
-                                </div>
-                                <div>
-                                  <span className="font-medium">XEN ID:</span> {scout.xen_id}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Joined:</span> {new Date(scout.created_at).toLocaleDateString()}
-                                </div>
-                                <div className="flex items-center">
-                                  <span className="font-medium mr-2">Trend:</span>
-                                  {getTrendIcon(scout.performanceTrend)}
-                                  <span className="ml-1 capitalize">{scout.performanceTrend}</span>
-                                </div>
-                              </div>
-                              
-                              {/* Performance Metrics */}
-                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-4">
-                                <div className="text-center">
-                                  <div className="text-lg lg:text-2xl font-bold text-blue-600">{scout.total_assignments}</div>
-                                  <div className="text-xs text-muted-foreground">Assignments</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-lg lg:text-2xl font-bold text-green-600">{scout.completed_reviews}</div>
-                                  <div className="text-xs text-muted-foreground">Completed</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-lg lg:text-2xl font-bold text-purple-600">{Number(scout.completionRate) || 0}%</div>
-                                  <div className="text-xs text-muted-foreground">Completion</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-lg lg:text-2xl font-bold text-yellow-600">{scout.avg_rating ? Number(scout.avg_rating).toFixed(1) : 'N/A'}</div>
-                                  <div className="text-xs text-muted-foreground">Avg Rating</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-lg lg:text-2xl font-bold text-emerald-600">{Number(scout.qualityScore) || 0}%</div>
-                                  <div className="text-xs text-muted-foreground">Quality</div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-lg lg:text-2xl font-bold text-indigo-600">{Number(scout.consistencyScore) || 0}%</div>
-                                  <div className="text-xs text-muted-foreground">Consistency</div>
+                    <Card key={scout.id} className="hover:shadow-md transition-all duration-200 border border-border/50 hover:border-primary/50">
+                      <CardContent className="p-0">
+                        {/* Complete Redesign - Mobile Responsive Card Layout */}
+                        <div className="flex flex-col lg:flex-row w-full">
+                          {/* Left Section: Avatar & Basic Info - Enhanced Desktop Design */}
+                          <div className="flex items-start gap-3 sm:gap-3 p-3 sm:p-4 border-b lg:border-b-0 lg:border-r border-border/50 lg:min-w-[220px] lg:max-w-[260px] w-full lg:w-auto bg-muted/30 lg:bg-transparent">
+                            <div className="flex items-start gap-3 w-full lg:flex-col lg:items-center lg:text-center">
+                              <Avatar className="w-12 h-12 sm:w-14 sm:h-14 lg:w-20 lg:h-20 border-2 border-primary/30 dark:border-primary/50 flex-shrink-0 shadow-lg lg:mb-3">
+                                <AvatarImage src={scout.profile_pic_url} />
+                                <AvatarFallback className="bg-gradient-to-br from-primary/30 to-primary/10 text-primary font-bold text-base sm:text-lg lg:text-2xl">
+                                  {scout.name?.charAt(0).toUpperCase() || 'S'}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0 lg:flex-none lg:w-full">
+                                <h3 className="font-bold text-sm sm:text-base lg:text-xl text-foreground truncate lg:text-center mb-1.5 lg:mb-2">
+                                  {scout.name || 'Unnamed Scout'}
+                                </h3>
+                                <div className="flex flex-col gap-1.5 lg:items-center lg:gap-2">
+                                  <div className="flex items-center gap-1.5 flex-wrap lg:justify-center">
+                                    {getPerformanceBadge(scout)}
+                                    {scout.isFrozen && (
+                                      <Badge variant="destructive" className="text-[10px] px-2 py-0.5 h-5">
+                                        <Lock className="w-3 h-3 mr-1" />
+                                        Frozen
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 w-fit lg:w-auto">
+                                    {scout.role}
+                                  </Badge>
                                 </div>
                               </div>
                             </div>
                           </div>
-                          
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => {
-                                e.preventDefault();
-                                setSelectedScout(scout);
-                                setIsEditModalOpen(true);
-                              }}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => {
-                                e.preventDefault();
-                                setSelectedScout(scout);
-                                setIsEditModalOpen(true);
-                              }}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit Profile
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => {
-                                e.preventDefault();
-                                setSelectedScout(scout);
-                                // View Activity - for now just show a toast, can be expanded later
-                                toast({
-                                  title: "View Activity",
-                                  description: `Activity for ${scout.name || scout.email} - Feature coming soon!`,
-                                });
-                              }}>
-                                <Calendar className="w-4 h-4 mr-2" />
-                                View Activity
-                              </DropdownMenuItem>
-                              {scout.role === 'xen_scout' && (
-                                <>
-                                  <div className="h-px bg-border my-1" />
-                                  <DropdownMenuItem 
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      setScoutToDelete(scout);
-                                      setIsDeleteDialogOpen(true);
-                                    }}
-                                    className="text-destructive focus:text-destructive"
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Delete Scout
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+
+                          {/* Center Section: Performance Metrics */}
+                          <div className="flex-1 min-w-0 p-3 sm:p-4">
+                            {/* Mobile: Compact Metrics Grid - All visible, no scroll */}
+                            <div className="lg:hidden space-y-2.5">
+                              {/* Primary Metrics - 3x2 Grid Layout */}
+                              <div className="grid grid-cols-3 gap-1.5">
+                                <div className="flex flex-col items-center gap-0.5 bg-blue-500/10 dark:bg-blue-500/20 px-1.5 py-1.5 rounded-md">
+                                  <div className="text-xs font-bold text-blue-600 dark:text-blue-400">{scout.total_assignments}</div>
+                                  <div className="text-[8px] text-muted-foreground leading-tight text-center">Assign</div>
+                                </div>
+                                <div className="flex flex-col items-center gap-0.5 bg-green-500/10 dark:bg-green-500/20 px-1.5 py-1.5 rounded-md">
+                                  <div className="text-xs font-bold text-green-600 dark:text-green-400">{scout.completed_reviews}</div>
+                                  <div className="text-[8px] text-muted-foreground leading-tight text-center">Done</div>
+                                </div>
+                                <div className="flex flex-col items-center gap-0.5 bg-purple-500/10 dark:bg-purple-500/20 px-1.5 py-1.5 rounded-md">
+                                  <div className="text-xs font-bold text-purple-600 dark:text-purple-400">{Number(scout.completionRate) || 0}%</div>
+                                  <div className="text-[8px] text-muted-foreground leading-tight text-center">Rate</div>
+                                </div>
+                                <div className="flex flex-col items-center gap-0.5 bg-yellow-500/10 dark:bg-yellow-500/20 px-1.5 py-1.5 rounded-md">
+                                  <div className="flex items-center gap-0.5">
+                                    <Star className="w-2 h-2 text-yellow-600 dark:text-yellow-400 fill-current flex-shrink-0" />
+                                    <div className="text-xs font-bold text-yellow-600 dark:text-yellow-400">
+                                      {scout.avg_rating ? Number(scout.avg_rating).toFixed(1) : 'N/A'}
+                                    </div>
+                                  </div>
+                                  <div className="text-[8px] text-muted-foreground leading-tight text-center">Rating</div>
+                                </div>
+                                <div className="flex flex-col items-center gap-0.5 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-1.5 rounded-md">
+                                  <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{Number(scout.qualityScore) || 0}%</div>
+                                  <div className="text-[8px] text-muted-foreground leading-tight text-center">Quality</div>
+                                </div>
+                                <div className="flex flex-col items-center gap-0.5 bg-indigo-500/10 dark:bg-indigo-500/20 px-1.5 py-1.5 rounded-md">
+                                  <div className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{Number(scout.consistencyScore) || 0}%</div>
+                                  <div className="text-[8px] text-muted-foreground leading-tight text-center">Consist</div>
+                                </div>
+                              </div>
+                              
+                              {/* Contact Info - Compact with better wrapping */}
+                              <div className="flex flex-col gap-1 text-[10px] sm:text-xs text-muted-foreground">
+                                <span className="break-all min-w-0 leading-tight">{scout.email}</span>
+                                {scout.xen_id && (
+                                  <span className="break-all min-w-0 leading-tight text-muted-foreground/80">{scout.xen_id}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Desktop: Enhanced Metrics Grid with Modern Card Design */}
+                            <div className="hidden lg:block space-y-4">
+                              {/* Primary Performance Metrics - 3x2 Grid with Cards */}
+                              <div className="grid grid-cols-3 gap-3">
+                                <div className="bg-blue-500/10 dark:bg-blue-500/20 border border-blue-200/50 dark:border-blue-800/50 rounded-lg p-3 hover:bg-blue-500/15 dark:hover:bg-blue-500/25 transition-colors">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="p-1.5 bg-blue-500/20 dark:bg-blue-500/30 rounded-md">
+                                      <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                  </div>
+                                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">{scout.total_assignments}</div>
+                                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assignments</div>
+                                </div>
+                                
+                                <div className="bg-green-500/10 dark:bg-green-500/20 border border-green-200/50 dark:border-green-800/50 rounded-lg p-3 hover:bg-green-500/15 dark:hover:bg-green-500/25 transition-colors">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="p-1.5 bg-green-500/20 dark:bg-green-500/30 rounded-md">
+                                      <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                    </div>
+                                  </div>
+                                  <div className="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">{scout.completed_reviews}</div>
+                                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Completed</div>
+                                </div>
+                                
+                                <div className="bg-purple-500/10 dark:bg-purple-500/20 border border-purple-200/50 dark:border-purple-800/50 rounded-lg p-3 hover:bg-purple-500/15 dark:hover:bg-purple-500/25 transition-colors">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="p-1.5 bg-purple-500/20 dark:bg-purple-500/30 rounded-md">
+                                      <Activity className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                    </div>
+                                  </div>
+                                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">{Number(scout.completionRate) || 0}%</div>
+                                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Completion</div>
+                                </div>
+                                
+                                <div className="bg-yellow-500/10 dark:bg-yellow-500/20 border border-yellow-200/50 dark:border-yellow-800/50 rounded-lg p-3 hover:bg-yellow-500/15 dark:hover:bg-yellow-500/25 transition-colors">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="p-1.5 bg-yellow-500/20 dark:bg-yellow-500/30 rounded-md">
+                                      <Star className="w-4 h-4 text-yellow-600 dark:text-yellow-400 fill-current" />
+                                    </div>
+                                  </div>
+                                  <div className="flex items-baseline gap-1 mb-1">
+                                    <span className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                                      {scout.avg_rating ? Number(scout.avg_rating).toFixed(1) : 'N/A'}
+                                    </span>
+                                    <Star className="w-3 h-3 text-yellow-600 dark:text-yellow-400 fill-current mb-0.5" />
+                                  </div>
+                                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Avg Rating</div>
+                                </div>
+                                
+                                <div className="bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-200/50 dark:border-emerald-800/50 rounded-lg p-3 hover:bg-emerald-500/15 dark:hover:bg-emerald-500/25 transition-colors">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="p-1.5 bg-emerald-500/20 dark:bg-emerald-500/30 rounded-md">
+                                      <Award className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                    </div>
+                                  </div>
+                                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-1">{Number(scout.qualityScore) || 0}%</div>
+                                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Quality</div>
+                                </div>
+                                
+                                <div className="bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-200/50 dark:border-indigo-800/50 rounded-lg p-3 hover:bg-indigo-500/15 dark:hover:bg-indigo-500/25 transition-colors">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="p-1.5 bg-indigo-500/20 dark:bg-indigo-500/30 rounded-md">
+                                      <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                    </div>
+                                  </div>
+                                  <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-1">{Number(scout.consistencyScore) || 0}%</div>
+                                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Consistency</div>
+                                </div>
+                              </div>
+
+                              {/* Secondary Info Bar - Modern Design */}
+                              <div className="flex items-center justify-between pt-3 border-t border-border/50">
+                                <div className="flex items-center gap-4 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-muted rounded-md">
+                                      <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                                    </div>
+                                    <span className="text-muted-foreground font-medium truncate max-w-[200px]">{scout.email}</span>
+                                  </div>
+                                  {scout.xen_id && (
+                                    <div className="flex items-center gap-2">
+                                      <div className="p-1.5 bg-muted rounded-md">
+                                        <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                                      </div>
+                                      <span className="text-muted-foreground font-medium">XEN: {scout.xen_id}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-4 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-muted rounded-md">
+                                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                                    </div>
+                                    <span className="text-muted-foreground font-medium">{new Date(scout.created_at).toLocaleDateString()}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {getTrendIcon(scout.performanceTrend)}
+                                    <span className="text-muted-foreground font-medium capitalize">{scout.performanceTrend}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Section: Actions */}
+                          <div className="flex items-center justify-end lg:justify-center p-2.5 sm:p-3 border-t lg:border-t-0 lg:border-l border-border/50 lg:min-w-[48px] lg:w-12 flex-shrink-0">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.preventDefault();
+                                  setSelectedScout(scout);
+                                  setIsEditModalOpen(true);
+                                }}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.preventDefault();
+                                  setSelectedScout(scout);
+                                  setIsEditModalOpen(true);
+                                }}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit Profile
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.preventDefault();
+                                  setSelectedScout(scout);
+                                  toast({
+                                    title: "View Activity",
+                                    description: `Activity for ${scout.name || scout.email} - Feature coming soon!`,
+                                  });
+                                }}>
+                                  <Calendar className="w-4 h-4 mr-2" />
+                                  View Activity
+                                </DropdownMenuItem>
+                                {scout.role === 'xen_scout' && (
+                                  <>
+                                    <div className="h-px bg-border my-1" />
+                                    <DropdownMenuItem 
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setScoutToDelete(scout);
+                                        setIsDeleteDialogOpen(true);
+                                      }}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete Scout
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
                   ))
                   )}
                 </div>
-              </ScrollArea>
             </CardContent>
           </Card>
         </div>
@@ -1000,50 +1156,6 @@ export default function ManageScoutsCRM() {
                     <span>{generateOTPMutation.isPending ? 'Generating...' : 'Generate New OTP'}</span>
                   </Button>
                 </div>
-              </div>
-
-              {/* Freeze Account */}
-              <div className="space-y-4 border-t pt-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <Label className="text-base font-semibold">Freeze Account</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Temporarily disable this scout's account. They won't be able to log in while frozen.
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    {selectedScout.isFrozen ? (
-                      <Badge variant="destructive">Frozen</Badge>
-                    ) : (
-                      <Badge variant="default">Active</Badge>
-                    )}
-                    <Switch
-                      checked={selectedScout.isFrozen || false}
-                      onCheckedChange={(checked) => {
-                        toggleFreezeMutation.mutate({
-                          scoutId: selectedScout.id,
-                          isFrozen: checked
-                        });
-                      }}
-                      disabled={toggleFreezeMutation.isPending}
-                    />
-                  </div>
-                </div>
-                {selectedScout.isFrozen && (
-                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                    <div className="flex items-start space-x-2">
-                      <Lock className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm">
-                        <p className="font-medium text-amber-800 dark:text-amber-200">
-                          Account Frozen
-                        </p>
-                        <p className="text-amber-700 dark:text-amber-300 mt-1">
-                          This scout cannot log in or access their account. Toggle the switch above to unfreeze.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Actions */}

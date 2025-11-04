@@ -158,10 +158,11 @@ export class AuthStorage {
       return null;
     }
 
-    // Check if account is frozen
+    // Check if account is frozen - throw error instead of returning null
+    // so it can be caught and handled properly by login endpoint
     if (user.isFrozen) {
       console.log('🔐 Login blocked: Account is frozen for user:', user.id, 'email:', email);
-      return null;
+      throw new Error('ACCOUNT_DEACTIVATED');
     }
     
     const isValid = await bcrypt.compare(password, user.passwordHash);
@@ -296,10 +297,11 @@ export class AuthStorage {
         return null;
       }
 
-      // Check if account is frozen
+      // Check if account is frozen - throw error instead of returning null
+      // so it can be caught and handled properly by login endpoint
       if (user.isFrozen) {
         console.log('🔐 Login blocked: Account is frozen for user:', user.id, 'email:', email);
-        return null;
+        throw new Error('ACCOUNT_DEACTIVATED');
       }
       
       // Verify the provided OTP/password against the stored hash
@@ -801,6 +803,25 @@ export class AuthStorage {
         return null;
       }
 
+      // Check if the linked user account is frozen
+      const [linkedUser] = await db.select({ isFrozen: users.isFrozen })
+        .from(users)
+        .where(eq(users.linkedId, admin.id))
+        .limit(1);
+      
+      // Also check if user exists with same email (for admin accounts created directly in users table)
+      const [userByEmail] = await db.select({ isFrozen: users.isFrozen })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+
+      const isFrozen = linkedUser?.isFrozen || userByEmail?.isFrozen || false;
+      
+      if (isFrozen) {
+        console.log('🔐 Admin OTP login blocked: Account is frozen for admin:', admin.id, 'email:', email);
+        throw new Error('ACCOUNT_DEACTIVATED');
+      }
+
       // For scout roles, check if OTP matches
       if ((admin.role === 'scout_admin' || admin.role === 'xen_scout') && admin.otp) {
         if (admin.otp === otp) {
@@ -833,6 +854,10 @@ export class AuthStorage {
       console.log('🔐 Admin OTP verification failed: No valid OTP for admin:', admin.id);
       return null;
     } catch (error) {
+      // Re-throw ACCOUNT_DEACTIVATED error to be handled by login endpoint
+      if (error instanceof Error && error.message === 'ACCOUNT_DEACTIVATED') {
+        throw error;
+      }
       console.error('🔐 Admin OTP verification error:', error);
       return null;
     }
@@ -847,9 +872,34 @@ export class AuthStorage {
         return null;
       }
 
+      // Check if the linked user account is frozen
+      const [linkedUser] = await db.select({ isFrozen: users.isFrozen })
+        .from(users)
+        .where(eq(users.linkedId, admin.id))
+        .limit(1);
+      
+      // Also check if user exists with same email (for admin accounts created directly in users table)
+      const [userByEmail] = await db.select({ isFrozen: users.isFrozen })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+
+      const isFrozen = linkedUser?.isFrozen || userByEmail?.isFrozen || false;
+      
+      if (isFrozen) {
+        console.log('🔐 Admin password login blocked: Account is frozen for admin:', admin.id, 'email:', email);
+        throw new Error('ACCOUNT_DEACTIVATED');
+      }
+
       // Check if there's a corresponding user record with password
       const [user] = await db.select().from(users).where(eq(users.email, email));
       if (user && user.passwordHash) {
+        // Double-check frozen status on the actual user record being used
+        if (user.isFrozen) {
+          console.log('🔐 Admin password login blocked: User account is frozen (second check) for admin:', admin.id, 'email:', email);
+          throw new Error('ACCOUNT_DEACTIVATED');
+        }
+        
         const isValid = await bcrypt.compare(password, user.passwordHash);
         if (isValid) {
           console.log('🔐 Admin password verification successful for:', admin.id);
@@ -872,6 +922,10 @@ export class AuthStorage {
       console.log('🔐 Admin password verification failed: Invalid password for admin:', admin.id);
       return null;
     } catch (error) {
+      // Re-throw ACCOUNT_DEACTIVATED error to be handled by login endpoint
+      if (error instanceof Error && error.message === 'ACCOUNT_DEACTIVATED') {
+        throw error;
+      }
       console.error('🔐 Admin password verification error:', error);
       return null;
     }

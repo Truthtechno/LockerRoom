@@ -1,6 +1,6 @@
 import { storage } from '../storage';
 import { db } from '../db';
-import { students, users, notifications, submissions, submissionReviews, submissionFinalFeedback, schools, schoolAdmins } from '@shared/schema';
+import { students, users, notifications, submissions, submissionReviews, submissionFinalFeedback, schools, schoolAdmins, systemAdmins, paymentTransactions } from '@shared/schema';
 import { eq, and, inArray, sql, lt, gte, lte } from 'drizzle-orm';
 
 /**
@@ -686,6 +686,520 @@ export async function notifyScoutAdminsOfNewScout(scoutUserId: string, scoutName
     console.log(`✅ Created ${notificationCount} notification(s) for ${scoutAdmins.length} scout admin(s)`);
   } catch (error: any) {
     console.error('❌ Error in notifyScoutAdminsOfNewScout:', error?.message || error);
+  }
+}
+
+/**
+ * Notify system admins when a student makes a payment for XEN Watch
+ * Called when a payment transaction is completed for XEN Watch
+ */
+export async function notifySystemAdminsOfXenWatchPayment(transactionId: string, studentId: string, amountCents: number, currency: string): Promise<void> {
+  try {
+    console.log(`🔔 Creating XEN Watch payment notification for transaction ${transactionId} by student ${studentId}`);
+    
+    // Get student info
+    const student = await db
+      .select()
+      .from(students)
+      .where(eq(students.userId, studentId))
+      .limit(1);
+    
+    if (student.length === 0) {
+      console.log(`⚠️ Student ${studentId} not found, skipping notifications`);
+      return;
+    }
+
+    const studentInfo = student[0];
+    
+    // Format amount
+    const amount = (amountCents / 100).toFixed(2);
+    const currencySymbol = currency.toUpperCase() === 'USD' ? '$' : currency.toUpperCase();
+    
+    // Get all system admins
+    const systemAdminUsers = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(systemAdmins, eq(users.linkedId, systemAdmins.id))
+      .where(eq(users.role, 'system_admin'));
+
+    console.log(`📋 Found ${systemAdminUsers.length} system admin(s) to notify`);
+
+    if (systemAdminUsers.length === 0) {
+      console.log(`ℹ️ No system admins found, skipping notifications`);
+      return;
+    }
+
+    let notificationCount = 0;
+
+    for (const admin of systemAdminUsers) {
+      try {
+        // Check if notification already exists to avoid duplicates
+        const existingNotifications = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.userId, admin.userId),
+              eq(notifications.entityType, 'payment_transaction'),
+              eq(notifications.entityId, transactionId),
+              eq(notifications.type, 'xen_watch_payment')
+            )
+          )
+          .limit(1);
+
+        if (existingNotifications.length > 0) {
+          console.log(`ℹ️ Notification already exists for system admin ${admin.userId} about transaction ${transactionId}, skipping`);
+          continue;
+        }
+
+        console.log(`📬 Creating payment notification for system admin: ${admin.userId}`);
+        
+        await storage.createNotification({
+          userId: admin.userId,
+          type: 'xen_watch_payment',
+          title: 'XEN Watch Payment Received',
+          message: `${studentInfo.name} made a payment of ${currencySymbol}${amount} for XEN Watch submission`,
+          entityType: 'payment_transaction',
+          entityId: transactionId,
+          relatedUserId: studentId,
+          metadata: JSON.stringify({
+            transactionId,
+            studentId,
+            studentName: studentInfo.name,
+            amountCents,
+            amount,
+            currency,
+          }),
+        });
+
+        notificationCount++;
+        console.log(`✅ Notification created for system admin ${admin.userId}`);
+      } catch (e: any) {
+        console.error(`❌ Error creating notification for system admin ${admin.userId}: ${e?.message || e}`);
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for ${systemAdminUsers.length} system admin(s)`);
+  } catch (error: any) {
+    console.error('❌ Error in notifySystemAdminsOfXenWatchPayment:', error?.message || error);
+  }
+}
+
+/**
+ * Notify system admins when a new school is created
+ */
+export async function notifySystemAdminsOfNewSchool(schoolId: string, schoolName: string): Promise<void> {
+  try {
+    console.log(`🔔 Creating school creation notification for ${schoolName} (${schoolId})`);
+    
+    // Get all system admins
+    const systemAdminUsers = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(systemAdmins, eq(users.linkedId, systemAdmins.id))
+      .where(eq(users.role, 'system_admin'));
+
+    console.log(`📋 Found ${systemAdminUsers.length} system admin(s) to notify`);
+
+    if (systemAdminUsers.length === 0) {
+      console.log(`ℹ️ No system admins found, skipping notifications`);
+      return;
+    }
+
+    let notificationCount = 0;
+
+    for (const admin of systemAdminUsers) {
+      try {
+        // Check if notification already exists to avoid duplicates
+        const existingNotifications = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.userId, admin.userId),
+              eq(notifications.entityType, 'school'),
+              eq(notifications.entityId, schoolId),
+              eq(notifications.type, 'school_created')
+            )
+          )
+          .limit(1);
+
+        if (existingNotifications.length > 0) {
+          continue;
+        }
+
+        console.log(`📬 Creating school creation notification for system admin: ${admin.userId}`);
+        
+        await storage.createNotification({
+          userId: admin.userId,
+          type: 'school_created',
+          title: 'New School Created',
+          message: `A new school "${schoolName}" has been added to the platform`,
+          entityType: 'school',
+          entityId: schoolId,
+          metadata: JSON.stringify({
+            schoolId,
+            schoolName,
+          }),
+        });
+
+        notificationCount++;
+      } catch (e: any) {
+        console.error(`❌ Error creating notification for system admin ${admin.userId}: ${e?.message || e}`);
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for ${systemAdminUsers.length} system admin(s)`);
+  } catch (error: any) {
+    console.error('❌ Error in notifySystemAdminsOfNewSchool:', error?.message || error);
+  }
+}
+
+/**
+ * Notify system admins when a new school admin is created
+ */
+export async function notifySystemAdminsOfNewSchoolAdmin(schoolAdminId: string, schoolAdminName: string, schoolId: string, schoolName: string): Promise<void> {
+  try {
+    console.log(`🔔 Creating school admin creation notification for ${schoolAdminName} (${schoolAdminId})`);
+    
+    // Get all system admins
+    const systemAdminUsers = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(systemAdmins, eq(users.linkedId, systemAdmins.id))
+      .where(eq(users.role, 'system_admin'));
+
+    console.log(`📋 Found ${systemAdminUsers.length} system admin(s) to notify`);
+
+    if (systemAdminUsers.length === 0) {
+      console.log(`ℹ️ No system admins found, skipping notifications`);
+      return;
+    }
+
+    let notificationCount = 0;
+
+    for (const admin of systemAdminUsers) {
+      try {
+        // Check if notification already exists to avoid duplicates
+        const existingNotifications = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.userId, admin.userId),
+              eq(notifications.entityType, 'user'),
+              eq(notifications.entityId, schoolAdminId),
+              eq(notifications.type, 'school_admin_created')
+            )
+          )
+          .limit(1);
+
+        if (existingNotifications.length > 0) {
+          continue;
+        }
+
+        console.log(`📬 Creating school admin creation notification for system admin: ${admin.userId}`);
+        
+        await storage.createNotification({
+          userId: admin.userId,
+          type: 'school_admin_created',
+          title: 'New School Admin Created',
+          message: `${schoolAdminName} has been added as an admin for ${schoolName}`,
+          entityType: 'user',
+          entityId: schoolAdminId,
+          metadata: JSON.stringify({
+            schoolAdminId,
+            schoolAdminName,
+            schoolId,
+            schoolName,
+          }),
+        });
+
+        notificationCount++;
+      } catch (e: any) {
+        console.error(`❌ Error creating notification for system admin ${admin.userId}: ${e?.message || e}`);
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for ${systemAdminUsers.length} system admin(s)`);
+  } catch (error: any) {
+    console.error('❌ Error in notifySystemAdminsOfNewSchoolAdmin:', error?.message || error);
+  }
+}
+
+/**
+ * Notify system admins when a new xen scout is created
+ */
+export async function notifySystemAdminsOfNewXenScout(scoutUserId: string, scoutName: string, xenId: string): Promise<void> {
+  try {
+    console.log(`🔔 Creating xen scout creation notification for ${scoutName} (${scoutUserId})`);
+    
+    // Get all system admins
+    const systemAdminUsers = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(systemAdmins, eq(users.linkedId, systemAdmins.id))
+      .where(eq(users.role, 'system_admin'));
+
+    console.log(`📋 Found ${systemAdminUsers.length} system admin(s) to notify`);
+
+    if (systemAdminUsers.length === 0) {
+      console.log(`ℹ️ No system admins found, skipping notifications`);
+      return;
+    }
+
+    let notificationCount = 0;
+
+    for (const admin of systemAdminUsers) {
+      try {
+        // Check if notification already exists to avoid duplicates
+        const existingNotifications = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.userId, admin.userId),
+              eq(notifications.entityType, 'user'),
+              eq(notifications.entityId, scoutUserId),
+              eq(notifications.type, 'xen_scout_created')
+            )
+          )
+          .limit(1);
+
+        if (existingNotifications.length > 0) {
+          continue;
+        }
+
+        console.log(`📬 Creating xen scout creation notification for system admin: ${admin.userId}`);
+        
+        await storage.createNotification({
+          userId: admin.userId,
+          type: 'xen_scout_created',
+          title: 'New XEN Scout Created',
+          message: `A new XEN Scout ${scoutName} (${xenId}) has been added to the platform`,
+          entityType: 'user',
+          entityId: scoutUserId,
+          relatedUserId: scoutUserId,
+          metadata: JSON.stringify({
+            scoutUserId,
+            scoutName,
+            xenId,
+          }),
+        });
+
+        notificationCount++;
+      } catch (e: any) {
+        console.error(`❌ Error creating notification for system admin ${admin.userId}: ${e?.message || e}`);
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for ${systemAdminUsers.length} system admin(s)`);
+  } catch (error: any) {
+    console.error('❌ Error in notifySystemAdminsOfNewXenScout:', error?.message || error);
+  }
+}
+
+/**
+ * Notify system admins when a new scout admin is created
+ */
+export async function notifySystemAdminsOfNewScoutAdmin(scoutAdminUserId: string, scoutAdminName: string, xenId: string): Promise<void> {
+  try {
+    console.log(`🔔 Creating scout admin creation notification for ${scoutAdminName} (${scoutAdminUserId})`);
+    
+    // Get all system admins
+    const systemAdminUsers = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(systemAdmins, eq(users.linkedId, systemAdmins.id))
+      .where(eq(users.role, 'system_admin'));
+
+    console.log(`📋 Found ${systemAdminUsers.length} system admin(s) to notify`);
+
+    if (systemAdminUsers.length === 0) {
+      console.log(`ℹ️ No system admins found, skipping notifications`);
+      return;
+    }
+
+    let notificationCount = 0;
+
+    for (const admin of systemAdminUsers) {
+      try {
+        // Check if notification already exists to avoid duplicates
+        const existingNotifications = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.userId, admin.userId),
+              eq(notifications.entityType, 'user'),
+              eq(notifications.entityId, scoutAdminUserId),
+              eq(notifications.type, 'scout_admin_created')
+            )
+          )
+          .limit(1);
+
+        if (existingNotifications.length > 0) {
+          continue;
+        }
+
+        console.log(`📬 Creating scout admin creation notification for system admin: ${admin.userId}`);
+        
+        await storage.createNotification({
+          userId: admin.userId,
+          type: 'scout_admin_created',
+          title: 'New Scout Admin Created',
+          message: `A new Scout Admin ${scoutAdminName} (${xenId}) has been added to the platform`,
+          entityType: 'user',
+          entityId: scoutAdminUserId,
+          relatedUserId: scoutAdminUserId,
+          metadata: JSON.stringify({
+            scoutAdminUserId,
+            scoutAdminName,
+            xenId,
+          }),
+        });
+
+        notificationCount++;
+      } catch (e: any) {
+        console.error(`❌ Error creating notification for system admin ${admin.userId}: ${e?.message || e}`);
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for ${systemAdminUsers.length} system admin(s)`);
+  } catch (error: any) {
+    console.error('❌ Error in notifySystemAdminsOfNewScoutAdmin:', error?.message || error);
+  }
+}
+
+/**
+ * Notify system admins and school admins when a school payment is recorded
+ * Supports: initial, renewal, student_limit_increase, student_limit_decrease, frequency_change
+ */
+export async function notifySchoolPaymentRecorded(
+  paymentRecordId: string,
+  schoolId: string,
+  schoolName: string,
+  paymentAmount: string,
+  paymentFrequency: string,
+  paymentType: string,
+  studentLimitBefore: number | null,
+  studentLimitAfter: number | null,
+  oldFrequency: string | null,
+  newFrequency: string | null
+): Promise<void> {
+  try {
+    console.log(`🔔 Creating school payment notification for ${schoolName} (${schoolId}) - Type: ${paymentType}`);
+    
+    // Get all system admins
+    const systemAdminUsers = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(systemAdmins, eq(users.linkedId, systemAdmins.id))
+      .where(eq(users.role, 'system_admin'));
+
+    // Get all school admins for this school
+    const schoolAdminUsers = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(schoolAdmins, eq(users.linkedId, schoolAdmins.id))
+      .where(eq(schoolAdmins.schoolId, schoolId));
+
+    // Build notification message based on payment type
+    let title = '';
+    let message = '';
+    let notificationType = 'school_payment_recorded';
+
+    switch (paymentType) {
+      case 'renewal':
+        title = 'School Subscription Renewed';
+        message = `${schoolName}'s ${paymentFrequency} subscription has been renewed for $${paymentAmount}`;
+        notificationType = 'school_renewal';
+        break;
+      case 'student_limit_increase':
+        title = 'Student Limit Increased';
+        message = `${schoolName}'s student limit has been increased from ${studentLimitBefore} to ${studentLimitAfter} students (Payment: $${paymentAmount})`;
+        notificationType = 'school_limit_increase';
+        break;
+      case 'student_limit_decrease':
+        title = 'Student Limit Decreased';
+        message = `${schoolName}'s student limit has been decreased from ${studentLimitBefore} to ${studentLimitAfter} students`;
+        notificationType = 'school_limit_decrease';
+        break;
+      case 'frequency_change':
+        title = 'Payment Frequency Changed';
+        message = `${schoolName}'s payment frequency changed from ${oldFrequency} to ${newFrequency} (Payment: $${paymentAmount})`;
+        notificationType = 'school_frequency_change';
+        break;
+      case 'initial':
+      default:
+        title = 'School Payment Recorded';
+        message = `Payment of $${paymentAmount} (${paymentFrequency}) recorded for ${schoolName}`;
+        notificationType = 'school_payment_recorded';
+        break;
+    }
+
+    const allRecipients = [...systemAdminUsers, ...schoolAdminUsers];
+    console.log(`📋 Found ${systemAdminUsers.length} system admin(s) and ${schoolAdminUsers.length} school admin(s) to notify`);
+
+    if (allRecipients.length === 0) {
+      console.log(`ℹ️ No recipients found, skipping notifications`);
+      return;
+    }
+
+    let notificationCount = 0;
+
+    for (const recipient of allRecipients) {
+      try {
+        // Check if notification already exists to avoid duplicates
+        const existingNotifications = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.userId, recipient.userId),
+              eq(notifications.entityType, 'school_payment_record'),
+              eq(notifications.entityId, paymentRecordId),
+              eq(notifications.type, notificationType)
+            )
+          )
+          .limit(1);
+
+        if (existingNotifications.length > 0) {
+          continue;
+        }
+
+        console.log(`📬 Creating payment notification for user: ${recipient.userId}`);
+        
+        await storage.createNotification({
+          userId: recipient.userId,
+          type: notificationType,
+          title,
+          message,
+          entityType: 'school_payment_record',
+          entityId: paymentRecordId,
+          metadata: JSON.stringify({
+            paymentRecordId,
+            schoolId,
+            schoolName,
+            paymentAmount,
+            paymentFrequency,
+            paymentType,
+            studentLimitBefore,
+            studentLimitAfter,
+            oldFrequency,
+            newFrequency,
+          }),
+        });
+
+        notificationCount++;
+      } catch (e: any) {
+        console.error(`❌ Error creating notification for user ${recipient.userId}: ${e?.message || e}`);
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for ${allRecipients.length} recipient(s)`);
+  } catch (error: any) {
+    console.error('❌ Error in notifySchoolPaymentRecorded:', error?.message || error);
   }
 }
 

@@ -1,7 +1,7 @@
 import { Express } from 'express';
 import { requireAuth, requireRole, requireRoles } from '../middleware/auth';
 import { db } from '../db';
-import { users, admins, scoutProfiles, systemAdmins, Role } from '../../shared/schema';
+import { users, admins, scoutProfiles, systemAdmins, submissionReviews, Role } from '../../shared/schema';
 import { eq, sql, inArray } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import multer from 'multer';
@@ -218,6 +218,18 @@ export function registerAdminRoutes(app: Express) {
           });
         }
 
+        // Notify system admins about new scouts/admins
+        const { notifySystemAdminsOfNewXenScout, notifySystemAdminsOfNewScoutAdmin } = await import('../utils/notification-helpers');
+        if (role === 'xen_scout' && xenId) {
+          notifySystemAdminsOfNewXenScout(newUser.id, newUser.name, xenId).catch(err => {
+            console.error('❌ Failed to notify system admins of new xen scout (non-critical):', err);
+          });
+        } else if (role === 'scout_admin' && xenId) {
+          notifySystemAdminsOfNewScoutAdmin(newUser.id, newUser.name, xenId).catch(err => {
+            console.error('❌ Failed to notify system admins of new scout admin (non-critical):', err);
+          });
+        }
+
         res.json({
           success: true,
           admin: {
@@ -395,24 +407,343 @@ export function registerAdminRoutes(app: Express) {
     requireRoles(['system_admin']),
     async (req, res) => {
       try {
-        // Get all admins from the admins table
-        const allAdmins = await db.select({
-          id: admins.id,
-          name: admins.name,
-          email: admins.email,
-          role: admins.role,
-          xenId: admins.xenId,
-          profilePicUrl: admins.profilePicUrl,
-          createdAt: admins.createdAt,
-        }).from(admins);
+        // Get all admins from the admins table with user status
+        let adminsFromTable: any[] = [];
+        try {
+          adminsFromTable = await db.select({
+            admin: admins,
+            user: {
+              id: users.id,
+              isFrozen: users.isFrozen,
+            }
+          })
+          .from(admins)
+          .leftJoin(users, eq(users.linkedId, admins.id));
+          console.log(`📊 Admin Management: Found ${adminsFromTable.length} admins in admins table`);
+        } catch (tableError: any) {
+          // If admins table doesn't exist, log warning but continue
+          if (tableError.message?.includes('does not exist') || tableError.message?.includes('relation') || tableError.code === '42P01') {
+            console.warn('⚠️ Admins table may not exist. Run migration: npm run migrate or check database schema.');
+          } else {
+            throw tableError;
+          }
+        }
+
+        // Get all admin/scout roles from users table (for scouts created by scout admins)
+        // These are admin roles that should be counted: system_admin, scout_admin, xen_scout, moderator, finance, support, coach, analyst
+        const adminRoles = ['system_admin', 'scout_admin', 'xen_scout', 'moderator', 'finance', 'support', 'coach', 'analyst'];
+        const usersWithAdminRoles = await db.select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          xenId: users.xenId,
+          profilePicUrl: users.profilePicUrl,
+          createdAt: users.createdAt,
+          isFrozen: users.isFrozen,
+        })
+        .from(users)
+        .where(inArray(users.role, adminRoles));
+        
+        console.log(`📊 Admin Management: Found ${usersWithAdminRoles.length} users with admin roles`);
+
+        // Create a map of emails from admins table to avoid duplicates
+        const adminsMap = new Map<string, any>();
+        adminsFromTable.forEach(({ admin, user }) => {
+          adminsMap.set(admin.email.toLowerCase(), {
+            id: admin.id,
+            name: admin.name,
+            email: admin.email,
+            role: admin.role,
+            xenId: admin.xenId,
+            profilePicUrl: admin.profilePicUrl,
+            createdAt: admin.createdAt,
+            isFrozen: user?.isFrozen || false,
+          });
+        });
+
+        // Add users that don't exist in admins table (by email)
+        usersWithAdminRoles.forEach(user => {
+          const emailKey = user.email.toLowerCase();
+          if (!adminsMap.has(emailKey)) {
+            // This user exists in users table but not in admins table
+            // Add it to the list
+            adminsMap.set(emailKey, {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              xenId: user.xenId,
+              profilePicUrl: user.profilePicUrl,
+              createdAt: user.createdAt,
+              isFrozen: user.isFrozen || false,
+            });
+          }
+        });
+
+        // Convert map back to array and sort by creation date
+        const allAdmins = Array.from(adminsMap.values()).sort((a, b) => 
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+
+        console.log(`📊 Admin Management: Found ${allAdmins.length} total admins (${adminsFromTable.length} from admins table, ${usersWithAdminRoles.length} from users table, ${allAdmins.length - adminsFromTable.length} unique from users)`);
 
         res.json(allAdmins);
       } catch (error) {
-        console.error('Get administrators error:', error);
+        console.error('❌ Get administrators error:', error);
+        console.error('Error details:', error instanceof Error ? error.stack : error);
         res.status(500).json({
           error: {
             code: 'fetch_failed',
-            message: 'Failed to fetch administrators'
+            message: 'Failed to fetch administrators',
+            details: error instanceof Error ? error.message : String(error)
+          }
+        });
+      }
+    }
+  );
+
+  // Disable/Enable Admin Account
+  app.put('/api/admin/:adminId/disable',
+    requireAuth,
+    requireRoles(['system_admin']),
+    async (req, res) => {
+      try {
+        const { adminId } = req.params;
+        
+        console.log(`🚫 Disabling admin account: ${adminId}`);
+        
+        // Find admin in admins table
+        const [admin] = await db.select().from(admins).where(eq(admins.id, adminId));
+        
+        // Also check users table in case admin was created by scout admin
+        const [user] = await db.select().from(users)
+          .where(eq(users.id, adminId));
+        
+        if (!admin && !user) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'admin_not_found', 
+              message: 'Admin not found' 
+            } 
+          });
+        }
+
+        // Find the corresponding user record if admin exists in admins table
+        let userToDisable = user;
+        if (admin) {
+          const [linkedUser] = await db.select().from(users)
+            .where(eq(users.linkedId, admin.id))
+            .limit(1);
+          if (linkedUser) {
+            userToDisable = linkedUser;
+          }
+        }
+
+        if (!userToDisable) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'user_not_found', 
+              message: 'User account not found for this admin' 
+            } 
+          });
+        }
+
+        // Prevent disabling self
+        const currentUser = (req as any).user;
+        if (currentUser?.id === userToDisable.id) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'cannot_disable_self', 
+              message: 'You cannot disable your own account' 
+            } 
+          });
+        }
+
+        // Freeze the user account
+        await db.update(users)
+          .set({ 
+            isFrozen: true,
+          })
+          .where(eq(users.id, userToDisable.id));
+
+        console.log(`✅ Admin disabled: ${userToDisable.name} (${userToDisable.email})`);
+
+        res.json({
+          success: true,
+          message: `Admin account "${userToDisable.name}" has been disabled. They will not be able to log in.`
+        });
+      } catch (error) {
+        console.error('Error disabling admin:', error);
+        res.status(500).json({
+          error: {
+            code: 'disable_failed',
+            message: 'Failed to disable admin account'
+          }
+        });
+      }
+    }
+  );
+
+  // Enable Admin Account
+  app.put('/api/admin/:adminId/enable',
+    requireAuth,
+    requireRoles(['system_admin']),
+    async (req, res) => {
+      try {
+        const { adminId } = req.params;
+        
+        console.log(`✅ Enabling admin account: ${adminId}`);
+        
+        // Find admin in admins table
+        const [admin] = await db.select().from(admins).where(eq(admins.id, adminId));
+        
+        // Also check users table in case admin was created by scout admin
+        const [user] = await db.select().from(users)
+          .where(eq(users.id, adminId));
+        
+        if (!admin && !user) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'admin_not_found', 
+              message: 'Admin not found' 
+            } 
+          });
+        }
+
+        // Find the corresponding user record if admin exists in admins table
+        let userToEnable = user;
+        if (admin) {
+          const [linkedUser] = await db.select().from(users)
+            .where(eq(users.linkedId, admin.id))
+            .limit(1);
+          if (linkedUser) {
+            userToEnable = linkedUser;
+          }
+        }
+
+        if (!userToEnable) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'user_not_found', 
+              message: 'User account not found for this admin' 
+            } 
+          });
+        }
+
+        // Unfreeze the user account
+        await db.update(users)
+          .set({ 
+            isFrozen: false,
+          })
+          .where(eq(users.id, userToEnable.id));
+
+        console.log(`✅ Admin enabled: ${userToEnable.name} (${userToEnable.email})`);
+
+        res.json({
+          success: true,
+          message: `Admin account "${userToEnable.name}" has been enabled. They can now log in again.`
+        });
+      } catch (error) {
+        console.error('Error enabling admin:', error);
+        res.status(500).json({
+          error: {
+            code: 'enable_failed',
+            message: 'Failed to enable admin account'
+          }
+        });
+      }
+    }
+  );
+
+  // Delete Admin Account
+  app.delete('/api/admin/:adminId',
+    requireAuth,
+    requireRoles(['system_admin']),
+    async (req, res) => {
+      try {
+        const { adminId } = req.params;
+        
+        console.log(`🗑️ Deleting admin account: ${adminId}`);
+        
+        // Find admin in admins table
+        const [admin] = await db.select().from(admins).where(eq(admins.id, adminId));
+        
+        // Also check users table in case admin was created by scout admin
+        const [user] = await db.select().from(users)
+          .where(eq(users.id, adminId));
+        
+        if (!admin && !user) {
+          return res.status(404).json({ 
+            error: { 
+              code: 'admin_not_found', 
+              message: 'Admin not found' 
+            } 
+          });
+        }
+
+        // Find the corresponding user record
+        let userToDelete = user;
+        if (admin) {
+          const [linkedUser] = await db.select().from(users)
+            .where(eq(users.linkedId, admin.id))
+            .limit(1);
+          if (linkedUser) {
+            userToDelete = linkedUser;
+          }
+        }
+
+        // Prevent deleting self
+        const currentUser = (req as any).user;
+        if (userToDelete && currentUser?.id === userToDelete.id) {
+          return res.status(400).json({ 
+            error: { 
+              code: 'cannot_delete_self', 
+              message: 'You cannot delete your own account' 
+            } 
+          });
+        }
+
+        const adminName = userToDelete?.name || admin?.name || 'Unknown';
+        const adminEmail = userToDelete?.email || admin?.email || 'Unknown';
+
+        // Delete submission reviews if it's a scout
+        if (userToDelete && (userToDelete.role === 'xen_scout' || userToDelete.role === 'scout_admin')) {
+          await db.delete(submissionReviews)
+            .where(eq(submissionReviews.scoutId, userToDelete.id));
+          
+          // Delete scout profile if exists
+          const [scoutProfile] = await db.select().from(scoutProfiles)
+            .where(eq(scoutProfiles.userId, userToDelete.id))
+            .limit(1);
+          
+          if (scoutProfile) {
+            await db.delete(scoutProfiles).where(eq(scoutProfiles.id, scoutProfile.id));
+          }
+        }
+
+        // Delete user account
+        if (userToDelete) {
+          await db.delete(users).where(eq(users.id, userToDelete.id));
+        }
+
+        // Delete admin record if exists
+        if (admin) {
+          await db.delete(admins).where(eq(admins.id, admin.id));
+        }
+
+        console.log(`✅ Admin deleted: ${adminName} (${adminEmail})`);
+
+        res.json({
+          success: true,
+          message: `Admin account "${adminName}" has been permanently deleted.`
+        });
+      } catch (error) {
+        console.error('Error deleting admin:', error);
+        res.status(500).json({
+          error: {
+            code: 'delete_failed',
+            message: 'Failed to delete admin account'
           }
         });
       }

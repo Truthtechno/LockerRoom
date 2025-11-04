@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../db';
-import { users, Role } from '@shared/schema';
+import { users, admins, Role } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 
 export type AppRole = Role;
@@ -43,6 +43,36 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         error: { 
           code: 'missing_linkedId', 
           message: 'User does not have a linked profile record' 
+        } 
+      });
+    }
+    
+    // CRITICAL: Check if account is frozen/disabled in database
+    // This invalidates existing sessions for disabled accounts
+    const [user] = await db.select({ isFrozen: users.isFrozen })
+      .from(users)
+      .where(eq(users.id, payload.id))
+      .limit(1);
+    
+    // For admin roles, also check via linkedId (admins table)
+    let isFrozen = user?.isFrozen || false;
+    if (!isFrozen && payload.linkedId) {
+      // Check if this is an admin account via linkedId
+      const [linkedUser] = await db.select({ isFrozen: users.isFrozen })
+        .from(users)
+        .where(eq(users.linkedId, payload.linkedId))
+        .limit(1);
+      if (linkedUser?.isFrozen) {
+        isFrozen = true;
+      }
+    }
+    
+    if (isFrozen) {
+      console.log('🔐 Auth middleware blocked: Account is deactivated for user:', payload.id, 'email:', payload.email);
+      return res.status(403).json({ 
+        error: { 
+          code: 'account_deactivated', 
+          message: 'Your account has been deactivated. Please contact Customer Support for reactivation.' 
         } 
       });
     }

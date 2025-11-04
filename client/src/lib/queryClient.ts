@@ -5,10 +5,12 @@ async function throwIfResNotOk(res: Response) {
     // Clone the response before reading so the original stream isn't consumed
     const clonedRes = res.clone();
     let errorMessage = res.statusText;
+    let errorCode: string | undefined;
     try {
       const errorData = await clonedRes.json();
-      if (errorData.error && errorData.error.message) {
-        errorMessage = errorData.error.message;
+      if (errorData.error) {
+        errorMessage = errorData.error.message || errorMessage;
+        errorCode = errorData.error.code;
       } else if (errorData.message) {
         errorMessage = errorData.message;
       }
@@ -21,9 +23,22 @@ async function throwIfResNotOk(res: Response) {
       }
     }
     
+    // Handle account deactivated (403) - clear auth and redirect to login
+    if (res.status === 403 && errorCode === 'account_deactivated') {
+      console.warn('Account deactivated, clearing auth data and redirecting to login');
+      localStorage.removeItem("auth_user");
+      localStorage.removeItem("token");
+      localStorage.removeItem("schoolId");
+      sessionStorage.clear();
+      // Redirect to login with error message
+      window.location.href = `/login?error=${encodeURIComponent(errorMessage)}`;
+      throw new Error(errorMessage);
+    }
+    
     const error = new Error(errorMessage);
     (error as any).status = res.status;
     (error as any).code = res.status;
+    (error as any).errorCode = errorCode;
     throw error;
   }
 }

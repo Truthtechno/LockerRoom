@@ -19,6 +19,7 @@ import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { ensureSysAdmin } from "./ensure-sysadmin";
+import { ensureAdminsTable, backfillAdminsFromUsers } from "../scripts/ensure-admins-table";
 import { notifyExpiringSubscriptions, deactivateExpiredSubscriptions } from "./utils/notification-helpers";
 
 const app = express();
@@ -127,6 +128,15 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  // Ensure admins table exists and backfill existing admins
+  try {
+    await ensureAdminsTable();
+    await backfillAdminsFromUsers();
+  } catch (error) {
+    console.warn(`⚠️ Failed to ensure admins table: ${error instanceof Error ? error.message : String(error)}`);
+    // Continue server startup even if this fails
+  }
 
   // Ensure system admin user exists
   await ensureSysAdmin();

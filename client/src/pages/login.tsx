@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,21 @@ export default function Login() {
     email: "",
     password: "",
   });
+
+  // Check for error message in URL (from account deactivated redirect)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('error');
+    if (errorParam) {
+      toast({
+        title: "Account Deactivated",
+        description: decodeURIComponent(errorParam),
+        variant: "destructive",
+      });
+      // Clean up URL
+      window.history.replaceState({}, '', '/login');
+    }
+  }, [toast]);
 
   const demoAccounts = [
     { role: "System Admin", email: "sysadmin@lockerroom.com", password: "SuperSecure123!" },
@@ -135,8 +150,7 @@ export default function Login() {
             {branding?.companyName && (
               <p className="text-muted-foreground mt-2">{branding.companyName}</p>
             )}
-             <p className="text-muted-foreground mt-2">XEN Sports Armoury</p>
-          </div>
+           </div>
 
           {/* Login Form */}
           <Card className="w-full shadow-xl">

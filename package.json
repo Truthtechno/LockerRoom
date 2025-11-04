@@ -32,10 +32,13 @@
     "test:e2e:ui": "playwright test --ui",
     "test:all": "npm run test:api && npm run test:e2e",
     "test:qa": "tsx scripts/run-qa-tests.ts",
+    "test:admin-disable": "tsx scripts/test-admin-disable-delete.ts",
     "reset-system-data": "tsx scripts/reset-system-data.ts",
     "seed-test-data": "tsx scripts/seed-test-data.ts",
     "verify-system-integrity": "tsx scripts/verify-system-integrity.ts",
-    "reset-and-stabilize-system": "tsx scripts/reset-and-stabilize-system.ts"
+    "reset-and-stabilize-system": "tsx scripts/reset-and-stabilize-system.ts",
+    "backfill:system-admin-notifications": "tsx scripts/backfill-system-admin-notifications.ts",
+    "backfill:school-payment-notifications": "tsx scripts/backfill-school-payment-notifications.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.8",
