@@ -161,8 +161,6 @@ Sentry provides error monitoring and performance tracking for production deploym
 - User impact tracking
 - Release tracking
 
-## Deployment Platforms
-
 ### Option 4: Managed PostgreSQL
 
 For platforms like **AWS RDS**, **Google Cloud SQL**, or **Azure Database**:
