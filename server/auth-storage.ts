@@ -48,7 +48,7 @@ export class AuthStorage {
             phone: profileData.phone,
           } as InsertViewer).returning();
           profileId = viewer.id;
-          profile = { ...viewer, role: 'viewer', profilePicUrl: viewer.profilePicUrl ?? undefined };
+          profile = { ...viewer, role: 'viewer', profilePicUrl: viewer.profilePicUrl ?? undefined, bio: viewer.bio ?? undefined, phone: viewer.phone ?? undefined };
           break;
           
         case 'student':
@@ -84,7 +84,7 @@ export class AuthStorage {
           } as InsertStudent).returning();
           console.log('Student created:', student);
           profileId = student.id;
-          profile = { ...student, role: 'student', profilePicUrl: student.profilePicUrl ?? undefined };
+          profile = { ...student, role: 'student', profilePicUrl: student.profilePicUrl ?? undefined, bio: student.bio ?? undefined, phone: student.phone ?? undefined };
           break;
           
         case 'school_admin':
@@ -97,7 +97,7 @@ export class AuthStorage {
             position: profileData.position,
           } as InsertSchoolAdmin).returning();
           profileId = schoolAdmin.id;
-          profile = { ...schoolAdmin, role: 'school_admin', profilePicUrl: schoolAdmin.profilePicUrl ?? undefined };
+          profile = { ...schoolAdmin, role: 'school_admin', profilePicUrl: schoolAdmin.profilePicUrl ?? undefined, bio: schoolAdmin.bio ?? undefined, phone: schoolAdmin.phone ?? undefined };
           break;
           
         case 'system_admin':
@@ -109,7 +109,7 @@ export class AuthStorage {
             permissions: profileData.permissions || [],
           } as InsertSystemAdmin).returning();
           profileId = systemAdmin.id;
-          profile = { ...systemAdmin, role: 'system_admin', profilePicUrl: systemAdmin.profilePicUrl ?? undefined };
+          profile = { ...systemAdmin, role: 'system_admin', profilePicUrl: systemAdmin.profilePicUrl ?? undefined, bio: systemAdmin.bio ?? undefined, phone: systemAdmin.phone ?? undefined };
           break;
           
         default:
@@ -232,9 +232,9 @@ export class AuthStorage {
           email: user.email,
           role: user.role,
           schoolId: finalSchoolId,
-          profilePicUrl: null,
-          bio: null,
-          phone: null
+          profilePicUrl: undefined,
+          bio: undefined,
+          phone: undefined
         };
         
         // Get updated user with potentially fixed linkedId
@@ -384,9 +384,9 @@ export class AuthStorage {
           email: user.email,
           role: user.role,
           schoolId: finalSchoolId,
-          profilePicUrl: null,
-          bio: null,
-          phone: null
+          profilePicUrl: undefined,
+          bio: undefined,
+          phone: undefined
         };
         
         return { user: userWithSchoolId, profile: minimalProfile, requiresPasswordReset: user.isOneTimePassword || false };

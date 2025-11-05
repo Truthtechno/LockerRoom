@@ -97,6 +97,9 @@ import {
   schoolPaymentRecords,
   // Payment Transactions (for Xen Watch)
   paymentTransactions,
+  // Legacy submissions tables
+  submissions,
+  submissionReviews,
   // Evaluation Forms
   evaluationFormTemplates,
   evaluationFormFields,
@@ -2500,7 +2503,7 @@ export class PostgresStorage implements IStorage {
           sql`${posts.status} != 'processing' OR ${posts.status} IS NULL`,
           or(
             and(eq(posts.scope, 'global'), sql`${posts.schoolId} IS NULL`),
-            and(eq(posts.scope, 'school'), eq(posts.schoolId, schoolId))
+            schoolId ? and(eq(posts.scope, 'school'), eq(posts.schoolId, schoolId)) : sql`1=0`
           )
         ))
         .orderBy(desc(posts.createdAt))
@@ -2558,6 +2561,7 @@ export class PostgresStorage implements IStorage {
     
     for (const announcement of announcementQuery) {
       // Get admin who created the announcement
+      if (!announcement.createdByAdminId) continue;
       const adminResult = await db
         .select({
           user: users
@@ -2633,7 +2637,7 @@ export class PostgresStorage implements IStorage {
         effectiveMediaType,
         effectiveStatus,
         isAnnouncement: true,
-        announcementScope: announcement.scope,
+        announcementScope: announcement.scope || undefined,
         announcementSchool: schoolInfo
       });
     }
@@ -2927,7 +2931,7 @@ export class PostgresStorage implements IStorage {
           })
           .from(students)
           .innerJoin(users, eq(students.userId, users.id))
-          .where(eq(students.id, post.studentId))
+          .where(post.studentId ? eq(students.id, post.studentId) : sql`1=0`)
           .limit(1);
         
         if (!studentResult[0]) {
@@ -3167,6 +3171,7 @@ export class PostgresStorage implements IStorage {
     // Handle announcements vs regular posts
     if (post.type === 'announcement') {
       // For announcements, get admin user info
+      if (!post.createdByAdminId) throw new Error('Announcement missing createdByAdminId');
       const adminUserResult = await db.select().from(users)
         .where(eq(users.id, post.createdByAdminId))
         .limit(1);
@@ -3208,7 +3213,7 @@ export class PostgresStorage implements IStorage {
     } else {
       // For regular posts, get student and user info
       const studentResult = await db.select().from(students)
-        .where(eq(students.id, post.studentId))
+        .where(post.studentId ? eq(students.id, post.studentId) : sql`1=0`)
         .limit(1);
       
       if (studentResult.length === 0) throw new Error('Student not found');
@@ -3280,7 +3285,7 @@ export class PostgresStorage implements IStorage {
       isSaved: !!userSave,
       // Add announcement-specific fields
       isAnnouncement: post.type === 'announcement',
-      announcementScope: post.type === 'announcement' ? post.scope : undefined,
+      announcementScope: post.type === 'announcement' ? (post.scope || undefined) : undefined,
       announcementSchool: post.type === 'announcement' ? school : undefined,
     };
   }
@@ -3308,11 +3313,12 @@ export class PostgresStorage implements IStorage {
     
     if (savedPostIds.length === 0) return [];
     
-    const savedPosts = await db.select().from(posts).where(inArray(posts.id, savedPostIds));
+    const savedPostsData = await db.select().from(posts).where(inArray(posts.id, savedPostIds));
     
     const postsWithDetails: PostWithDetails[] = [];
     
-    for (const post of savedPosts) {
+    for (const post of savedPostsData) {
+      if (!post.studentId) continue;
       const student = await db.select().from(students).where(eq(students.id, post.studentId)).limit(1);
       if (!student[0]) continue;
       
@@ -3351,6 +3357,7 @@ export class PostgresStorage implements IStorage {
         likesCount: likes.length,
         commentsCount: comments.length,
         savesCount: saves.length,
+        viewCount: views.length,
         isLiked: !!userLike,
         isSaved: !!userSave,
       });
@@ -3371,6 +3378,7 @@ export class PostgresStorage implements IStorage {
     // Check if user owns the post
     const post = await db.select().from(posts).where(eq(posts.id, postId)).limit(1);
     if (!post[0]) throw new Error('Post not found');
+    if (!post[0].studentId) throw new Error('Post has no student');
     
     const student = await db.select().from(students).where(eq(students.id, post[0].studentId)).limit(1);
     if (!student[0] || student[0].userId !== userId) {
@@ -5124,7 +5132,7 @@ export class PostgresStorage implements IStorage {
         console.log('🔢 Scout count rows:', scoutCount.rows);
         console.log('🔢 Scout count first row:', scoutCount.rows?.[0]);
         
-        totalScouts = parseInt(scoutCount.rows?.[0]?.count || '0');
+        totalScouts = parseInt(String(scoutCount.rows?.[0]?.count || '0'));
         console.log('🔢 Scout count from scout_profiles:', totalScouts);
       } catch (error) {
         console.error('❌ Error getting scout count:', error);
@@ -5187,9 +5195,9 @@ export class PostgresStorage implements IStorage {
         
         if (revenueResult.rows && revenueResult.rows[0]) {
           revenueStats = {
-            total_paid_submissions: parseInt(revenueResult.rows[0].total_paid_submissions || '0'),
-            total_revenue: parseFloat(revenueResult.rows[0].total_revenue || '0'),
-            avg_submission_value: parseFloat(revenueResult.rows[0].avg_submission_value || '0')
+            total_paid_submissions: parseInt(String(revenueResult.rows[0].total_paid_submissions || '0')),
+            total_revenue: parseFloat(String(revenueResult.rows[0].total_revenue || '0')),
+            avg_submission_value: parseFloat(String(revenueResult.rows[0].avg_submission_value || '0'))
           };
         }
       } catch (revenueError) {
@@ -5206,9 +5214,9 @@ export class PostgresStorage implements IStorage {
           `);
           if (legacyRevenueResult.rows?.[0]) {
             revenueStats = {
-              total_paid_submissions: parseInt(legacyRevenueResult.rows[0].total_paid_submissions || '0'),
-              total_revenue: parseFloat(legacyRevenueResult.rows[0].total_revenue || '0'),
-              avg_submission_value: parseFloat(legacyRevenueResult.rows[0].avg_submission_value || '0')
+              total_paid_submissions: parseInt(String(legacyRevenueResult.rows[0].total_paid_submissions || '0')),
+              total_revenue: parseFloat(String(legacyRevenueResult.rows[0].total_revenue || '0')),
+              avg_submission_value: parseFloat(String(legacyRevenueResult.rows[0].avg_submission_value || '0'))
             };
           }
         } catch (legacyError) {
@@ -5218,11 +5226,11 @@ export class PostgresStorage implements IStorage {
 
       return {
         totals: {
-          total_submissions: parseInt(totals.rows?.[0]?.total_submissions || '0'),
+          total_submissions: parseInt(String(totals.rows?.[0]?.total_submissions || '0')),
           paid: revenueStats.total_paid_submissions, // Use actual paid count from transactions
-          reviewed: parseInt(totals.rows?.[0]?.in_review || '0'),
-          feedback_sent: parseInt(totals.rows?.[0]?.finalized || '0'), // Map finalized to feedback_sent
-          avg_rating: parseFloat(totals.rows?.[0]?.avg_rating || '0'),
+          reviewed: parseInt(String(totals.rows?.[0]?.in_review || '0')),
+          feedback_sent: parseInt(String(totals.rows?.[0]?.finalized || '0')), // Map finalized to feedback_sent
+          avg_rating: parseFloat(String(totals.rows?.[0]?.avg_rating || '0')),
           total_scouts: totalScouts,
           total_revenue: revenueStats.total_revenue, // Add actual revenue
           avg_submission_value: revenueStats.avg_submission_value // Add average submission value
@@ -5230,14 +5238,14 @@ export class PostgresStorage implements IStorage {
         topStudents: (topStudents.rows || []).map(row => ({
           student_id: row.student_id,
           name: row.name || 'Unknown Student',
-          avg_rating: parseFloat(row.avg_rating || '0'),
-          total_submissions: parseInt(row.total_submissions || '0')
+          avg_rating: parseFloat(String(row.avg_rating || '0')),
+          total_submissions: parseInt(String(row.total_submissions || '0'))
         })),
         topSchools: (topSchools.rows || []).map(row => ({
           school_id: row.school_id,
           name: row.name || 'Unknown School',
-          avg_rating: parseFloat(row.avg_rating || '0'),
-          total_submissions: parseInt(row.total_submissions || '0')
+          avg_rating: parseFloat(String(row.avg_rating || '0')),
+          total_submissions: parseInt(String(row.total_submissions || '0'))
         }))
       };
     } catch (error) {
@@ -5266,7 +5274,7 @@ export class PostgresStorage implements IStorage {
       FROM users 
       WHERE role IN ('xen_scout', 'scout_admin')
     `);
-    const count = parseInt(result.rows[0]?.count || '0');
+    const count = parseInt(String(result.rows[0]?.count || '0'));
     console.log('🔢 Scout count query result:', count, 'scouts found');
     return count;
   }
@@ -5342,9 +5350,9 @@ export class PostgresStorage implements IStorage {
         
         if (revenueResult.rows && revenueResult.rows[0]) {
           revenueStats = {
-            total_paid_submissions: parseInt(revenueResult.rows[0].total_paid_submissions || '0'),
-            total_revenue: parseFloat(revenueResult.rows[0].total_revenue || '0'),
-            avg_submission_value: parseFloat(revenueResult.rows[0].avg_submission_value || '0')
+            total_paid_submissions: parseInt(String(revenueResult.rows[0].total_paid_submissions || '0')),
+            total_revenue: parseFloat(String(revenueResult.rows[0].total_revenue || '0')),
+            avg_submission_value: parseFloat(String(revenueResult.rows[0].avg_submission_value || '0'))
           };
         }
       } catch (revenueError) {
@@ -5362,9 +5370,9 @@ export class PostgresStorage implements IStorage {
           `);
           if (legacyRevenueResult.rows?.[0]) {
             revenueStats = {
-              total_paid_submissions: parseInt(legacyRevenueResult.rows[0].total_paid_submissions || '0'),
-              total_revenue: parseFloat(legacyRevenueResult.rows[0].total_revenue || '0'),
-              avg_submission_value: parseFloat(legacyRevenueResult.rows[0].avg_submission_value || '0')
+              total_paid_submissions: parseInt(String(legacyRevenueResult.rows[0].total_paid_submissions || '0')),
+              total_revenue: parseFloat(String(legacyRevenueResult.rows[0].total_revenue || '0')),
+              avg_submission_value: parseFloat(String(legacyRevenueResult.rows[0].avg_submission_value || '0'))
             };
           }
         } catch (legacyError) {
@@ -7692,12 +7700,12 @@ export class PostgresStorage implements IStorage {
           id: postViews.id,
           postId: postViews.postId,
           userId: postViews.userId,
-          createdAt: postViews.createdAt,
+          viewedAt: postViews.viewedAt,
         })
         .from(postViews);
 
       if (startDate) {
-        viewsQuery = viewsQuery.where(sql`${postViews.createdAt} >= ${startDate}`) as any;
+        viewsQuery = viewsQuery.where(sql`${postViews.viewedAt} >= ${startDate}`) as any;
       }
       if (postId) {
         viewsQuery = viewsQuery.where(sql`${postViews.postId} = ${postId}`) as any;
