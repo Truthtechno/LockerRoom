@@ -194,18 +194,21 @@ export function useNotificationToast() {
         } : null,
       });
       
+      // For form_submitted notifications, always use icon instead of avatar
+      const useIcon = !notification.relatedUser || notification.type === 'form_submitted';
+      
       toast({
         title: notification.title,
         description: notification.message,
         variant,
-        avatar: notification.relatedUser
+        avatar: !useIcon && notification.relatedUser
           ? {
               src: notification.relatedUser.profilePicUrl || undefined, // Let AvatarWithFallback handle null/undefined
               alt: notification.relatedUser.name || 'User',
               fallbackText: notification.relatedUser.name || 'User',
             }
           : undefined,
-        icon: !notification.relatedUser ? (
+        icon: useIcon ? (
           React.createElement(Icon, { className: "h-5 w-5" })
         ) : undefined,
         onClick: route

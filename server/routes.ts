@@ -327,6 +327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           token,
           user: {
             id: userId,
+            name: admin.name,
             email: admin.email,
             role: admin.role,
             schoolId: null,
@@ -423,6 +424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           token,
           user: {
             id: userId,
+            name: admin.name,
             email: admin.email,
             role: admin.role,
             schoolId: null,
@@ -495,6 +497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           token,
           user: {
             id: user.id,
+            name: user.name || profile?.name || null,
             email: user.email,
             role: user.role,
             schoolId: user.schoolId || null,
@@ -593,7 +596,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ 
         token,
         user: { 
-          id: user.id, 
+          id: user.id,
+          name: user.name || profile?.name || null,
           email: user.email, 
           role: user.role,
           schoolId: user.schoolId || null,

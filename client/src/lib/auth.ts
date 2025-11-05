@@ -35,6 +35,7 @@ export async function login(email: string, password: string): Promise<LoginResul
   // Merge user with profile data to include profilePicUrl and schoolId
   const userWithProfile = {
     ...user,
+    name: user.name || profile?.name || null,
     profilePicUrl: profile?.profilePicUrl || null,
     schoolId: profile?.schoolId || user.schoolId || null
   };
@@ -91,6 +92,7 @@ export async function register(userData: {
   // Merge user with profile data to include profilePicUrl and schoolId
   const userWithProfile = {
     ...user,
+    name: user.name || profile?.name || null,
     profilePicUrl: profile?.profilePicUrl || null,
     schoolId: profile?.schoolId || user.schoolId || null
   };

@@ -5851,11 +5851,20 @@ export class PostgresStorage implements IStorage {
             }
             
             // 3. If still no profile picture, check if users table has one (some scouts might not have scoutProfiles)
-            if (!profilePicUrl && row.relatedUser?.profilePicUrl && row.relatedUser.profilePicUrl !== '') {
-              profilePicUrl = row.relatedUser.profilePicUrl;
-              console.log(`✅ Using profile picture from users table: ${profilePicUrl}`);
-            } else if (!profilePicUrl && user.linkedId) {
-              // 4. Final fallback to admins table
+            // Re-query users table to get the latest profilePicUrl value
+            if (!profilePicUrl) {
+              const userResult = await db.select({ profilePicUrl: users.profilePicUrl })
+                .from(users)
+                .where(eq(users.id, user.id))
+                .limit(1);
+              if (userResult[0]?.profilePicUrl && userResult[0].profilePicUrl !== '') {
+                profilePicUrl = userResult[0].profilePicUrl;
+                console.log(`✅ Using profile picture from users table: ${profilePicUrl}`);
+              }
+            }
+            
+            // 4. Final fallback to admins table
+            if (!profilePicUrl && user.linkedId) {
               const adminResult = await db.select({ profilePicUrl: admins.profilePicUrl })
                 .from(admins)
                 .where(eq(admins.id, user.linkedId))

@@ -481,14 +481,15 @@ export default function Notifications() {
                       <div className="flex items-start space-x-4">
                         {/* Icon */}
                         <div className={`flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center ${iconColor}`}>
-                          {notification.relatedUser?.profilePicUrl ? (
+                          {/* For form_submitted notifications, always use icon instead of avatar */}
+                          {notification.type === 'form_submitted' || !notification.relatedUser?.profilePicUrl ? (
+                            <Icon className="w-5 h-5" />
+                          ) : (
                             <AvatarWithFallback
                               src={notification.relatedUser.profilePicUrl}
                               alt={notification.relatedUser.name}
                               size="sm"
                             />
-                          ) : (
-                            <Icon className="w-5 h-5" />
                           )}
                         </div>
                         
