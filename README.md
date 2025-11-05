@@ -46,15 +46,19 @@
 - **🔍 Student Search** - Quick search and filter capabilities for students
 - **⚙️ School Settings** - Configure school profile, subscription plans, and student limits
 - **📋 Live Reports** - View and manage reported content and user issues
+- **💳 Subscription Management** - View subscription status, expiration dates, and payment history
+- **📈 Student Limit Management** - Monitor and manage student enrollment limits
 
 #### 🔧 **System Admin Portal**
-- **🏫 School Management** - Approve/reject school applications, manage subscriptions
-- **👥 User Management** - Manage all platform users and administrators
-- **📊 Platform Analytics** - Global statistics and insights across all schools
+- **🏫 School Management** - Approve/reject school applications, manage subscriptions, view all schools
+- **👥 User Management** - Manage all platform users and administrators with freeze/unfreeze capabilities
+- **📊 Platform Analytics** - Global statistics and insights across all schools with export functionality
 - **⚙️ System Configuration** - Platform-wide settings, branding, appearance customization
 - **🔐 Admin Management** - Create and assign admin roles with granular permissions
 - **📢 Global Announcements** - Create announcements visible to all schools or specific schools
-- **💳 Payment Configuration** - Configure Stripe payment settings and XEN Watch pricing
+- **💳 Payment Configuration** - Configure Stripe payment settings, XEN Watch pricing, and subscription pricing
+- **🏷️ Banner Management** - Create and manage dashboard-level banners for targeted communications
+- **📋 Evaluation Forms** - Create and manage evaluation form templates for scouts
 
 #### ⭐ **XEN Watch - Professional Scouting System**
 - **📤 Student Submissions** - Students submit highlight videos for professional review
@@ -62,7 +66,26 @@
 - **📝 Draft Reviews** - Scouts can save draft reviews before final submission
 - **🎯 Final Feedback** - Scout admins compile reviews and send final feedback to students
 - **📊 Analytics** - Track submission statistics, average ratings, and scout activity
-- **💳 Payment Integration** - Optional payment processing for submission reviews
+- **💳 Payment Integration** - Optional payment processing for submission reviews (Stripe or mock mode)
+- **🔄 Real-time Updates** - Live status updates and notifications for submissions
+
+#### 📋 **Evaluation Forms System**
+- **🎨 Dynamic Form Builder** - System admins create customizable evaluation forms with 8+ field types
+- **📝 Field Types** - Short text, paragraph, star rating, multiple choice, multiple selection, number, date, dropdown
+- **👥 Student Auto-population** - Auto-fill student profiles from database or manual entry
+- **💾 Draft & Submit** - Save drafts and submit final evaluations
+- **📊 Submission Management** - View, filter, and search all submissions
+- **📤 Excel Export** - Export evaluation data for analysis
+- **🔐 Role-based Access** - System admin full access, scout admin read all, XEN scout own submissions
+- **📈 Statistics** - Track form usage and submission metrics
+
+#### 🔔 **Notification System**
+- **📬 Real-time Notifications** - Instagram/TikTok-style pop-up notifications
+- **🎨 Rich Content** - Notifications with avatars, icons, and custom styling
+- **🔔 20+ Notification Types** - Post likes, comments, follows, announcements, XEN Watch feedback, and more
+- **📱 Smart Polling** - Automatic polling with duplicate prevention
+- **👆 Click Navigation** - Navigate to related content directly from notifications
+- **📋 Notification Center** - Full-featured notifications page with filtering and read/unread status
 
 ### 🛠️ Technical Capabilities
 - **📱 Responsive Design** - Mobile-first approach with seamless cross-device experience
@@ -92,6 +115,15 @@
 - **👔 Staff Announcements** - Admin-only announcements (hidden from student feeds)
 - **📎 Media Support** - Attach images or videos to announcements
 - **🎨 Visual Distinction** - Special styling to distinguish announcements from regular posts
+- **📢 Banner System** - Dashboard-level banners for targeted role-based communications
+
+#### Subscription & Payment System
+- **💳 Flexible Subscriptions** - Monthly or annual payment options per school
+- **📅 Expiration Tracking** - Automatic tracking of subscription expiration dates
+- **🔔 Notifications** - Automatic notifications for expiring and expired subscriptions
+- **📊 Payment Records** - Complete audit trail of all school payments
+- **⚙️ Configuration** - Configurable subscription pricing via system settings
+- **🔄 Auto-deactivation** - Automatic deactivation of expired subscriptions
 
 ## 🛠️ Tech Stack
 
@@ -159,6 +191,9 @@
    # Stripe Configuration (Optional - for XEN Watch payments)
    STRIPE_SECRET_KEY="sk_test_your_stripe_secret_key"
    STRIPE_PUBLISHABLE_KEY="pk_test_your_stripe_publishable_key"
+   
+   # Session Storage (Required for authentication)
+   SESSION_SECRET="your-session-secret-key"
    ```
 
 4. **🗄️ Database Setup**
@@ -283,13 +318,28 @@ The application uses PostgreSQL with the following main entities:
 - **submission_reviews** - Scout reviews and ratings
 - **submission_final_feedback** - Final compiled feedback
 - **scout_profiles** - Scout profile information
+- **payment_transactions** - Payment transaction records for XEN Watch submissions
+
+### Evaluation Forms Tables
+- **evaluation_form_templates** - Form template definitions
+- **evaluation_form_fields** - Field definitions for each form
+- **evaluation_submissions** - Individual form submissions
+- **evaluation_submission_responses** - Field responses for each submission
+- **evaluation_form_access** - Role-based form access control
+
+### Notification & Communication Tables
+- **notifications** - User notifications with rich metadata
+- **banners** - Dashboard-level banner communications
 
 ### System Tables
 - **system_settings** - Platform-wide configuration
-- **system_branding** - Customizable branding assets
-- **system_appearance** - Theme and appearance settings
-- **system_payment** - Payment gateway configuration
+- **system_branding** - Customizable branding assets (logo, company info, social links)
+- **system_appearance** - Theme and appearance settings (colors, fonts, dark/light mode)
+- **system_payment** - Payment gateway configuration (Stripe, PayPal, mock mode)
 - **school_applications** - School registration requests
+- **school_payment_records** - Audit trail of all school payments
+- **admin_roles** - Admin role assignments and permissions
+- **analytics_logs** - Platform analytics event logging
 
 ## 🔐 Security Features
 
@@ -303,6 +353,8 @@ The application uses PostgreSQL with the following main entities:
 - **CORS Configuration** for controlled cross-origin access
 - **Secure Password Hashing** with bcrypt
 - **Session Management** with PostgreSQL-backed sessions
+- **Account Freezing** - System admins can freeze/deactivate accounts instantly
+- **Frozen Account Protection** - JWT tokens invalidated for frozen accounts on every request
 
 ## 📈 Performance Optimizations
 

@@ -209,6 +209,17 @@ npm run test:phase1
 
 **Note**: The test suite will pass even if Redis/Sentry are not configured, as these are optional optimizations with graceful fallbacks.
 
+### 9. Verify System Features
+
+After setup, test the following features:
+
+- ✅ **Authentication**: Login with demo accounts
+- ✅ **Posts**: Create posts with images/videos
+- ✅ **Notifications**: Check notification system
+- ✅ **XEN Watch**: Submit a video (if configured)
+- ✅ **Evaluation Forms**: Create a form (as system admin)
+- ✅ **Admin Features**: Test admin portal features
+
 ## Project Structure
 
 ```
@@ -217,14 +228,33 @@ lockerroom/
 │   ├── src/
 │   │   ├── pages/         # Page components
 │   │   │   ├── admin/     # Admin portal pages
+│   │   │   │   ├── evaluation-forms.tsx
+│   │   │   │   ├── evaluation-submissions.tsx
+│   │   │   │   ├── platform-analytics.tsx
+│   │   │   │   ├── system-config.tsx
+│   │   │   │   └── admin-management.tsx
 │   │   │   ├── profile/   # Profile pages
+│   │   │   ├── school-admin/ # School admin pages
+│   │   │   ├── system-admin/ # System admin pages
+│   │   │   ├── scouts/    # Scout admin pages
 │   │   │   └── xen-watch/ # XEN Watch pages
 │   │   ├── components/    # Reusable components
-│   │   │   ├── ui/        # shadcn/ui components
+│   │   │   ├── ui/        # shadcn/ui components (60+ components)
 │   │   │   ├── posts/     # Post-related components
-│   │   │   └── admin/     # Admin components
+│   │   │   ├── admin/     # Admin components
+│   │   │   ├── school/    # School components
+│   │   │   ├── xen-watch/ # XEN Watch components
+│   │   │   └── payment/   # Payment components
 │   │   ├── hooks/         # Custom React hooks
+│   │   │   ├── use-auth.ts
+│   │   │   ├── use-toast.ts
+│   │   │   ├── use-notification-toast.ts
+│   │   │   └── use-theme.tsx
 │   │   ├── lib/           # Utility functions
+│   │   │   ├── auth.ts
+│   │   │   ├── cloudinary.ts
+│   │   │   ├── queryClient.ts
+│   │   │   └── utils.ts
 │   │   └── main.tsx       # Application entry point
 │   └── index.html
 │
@@ -232,37 +262,57 @@ lockerroom/
 │   ├── routes/            # API route handlers
 │   │   ├── admin.ts       # Admin routes
 │   │   ├── posts.ts       # Post routes
+│   │   ├── profile.ts     # Profile routes
 │   │   ├── school-admin.ts # School admin routes
 │   │   ├── system-admin.ts # System admin routes
+│   │   ├── scout-admin.ts # Scout admin routes
 │   │   ├── xen-watch.ts   # XEN Watch routes
-│   │   └── ...
+│   │   ├── evaluation-forms.ts # Evaluation forms routes
+│   │   ├── search.ts      # Search routes
+│   │   └── upload.ts      # Upload routes
 │   ├── middleware/        # Express middleware
-│   │   └── auth.ts        # Authentication middleware
+│   │   ├── auth.ts        # Authentication middleware
+│   │   └── rate-limit.ts  # Rate limiting middleware
+│   ├── utils/             # Utility functions
+│   │   └── notification-helpers.ts # Notification system
 │   ├── db.ts              # Database connection
-│   ├── storage.ts         # Database operations
+│   ├── storage.ts         # Database operations (PostgresStorage)
 │   ├── auth-storage.ts    # Auth-related operations
+│   ├── cache.ts           # Redis caching layer
+│   ├── cloudinary.ts      # Cloudinary configuration
 │   └── index.ts           # Server entry point
 │
 ├── shared/                 # Shared code between frontend/backend
-│   ├── schema.ts          # Drizzle schema definitions
+│   ├── schema.ts          # Drizzle schema definitions (all tables)
 │   └── types/             # TypeScript type definitions
+│       └── roles.ts       # Role type definitions
 │
 ├── migrations/             # Database migration files
+│   ├── *.sql              # SQL migration files
+│   └── ...
+│
 ├── scripts/                # Utility scripts
 │   ├── seed.ts            # Database seeding
+│   ├── reseed-demo.ts     # Reset and reseed demo data
+│   ├── ensure-sysadmin.ts # Ensure system admin exists
 │   └── ...
 │
 ├── tests/                  # Test files
 │   ├── api/               # API integration tests
-│   ├── e2e/               # End-to-end tests
+│   ├── e2e/               # End-to-end tests (Playwright)
 │   └── fixtures/          # Test data and fixtures
 │
 ├── docs/                   # Documentation
+│   ├── demo_credentials.md
+│   ├── system_inputs_and_actions.md
+│   └── ...
+│
 ├── dist/                   # Build output
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
-└── drizzle.config.ts
+├── drizzle.config.ts
+└── playwright.config.ts    # Playwright E2E test config
 ```
 
 ## Development Workflow
@@ -354,7 +404,7 @@ Use Drizzle ORM for all database operations:
 ```typescript
 import { db } from '../db';
 import { users, posts } from '@shared/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, or } from 'drizzle-orm';
 
 // Query example
 const userPosts = await db
@@ -362,7 +412,44 @@ const userPosts = await db
   .from(posts)
   .where(eq(posts.studentId, studentId))
   .orderBy(desc(posts.createdAt));
+
+// Complex query example
+const activePosts = await db
+  .select()
+  .from(posts)
+  .where(
+    and(
+      eq(posts.status, 'ready'),
+      or(
+        eq(posts.type, 'post'),
+        eq(posts.type, 'announcement')
+      )
+    )
+  );
 ```
+
+### Using Storage Layer
+
+The `storage.ts` file provides a high-level abstraction for common database operations:
+
+```typescript
+import { storage } from '../server/storage';
+
+// Get user profile
+const user = await storage.getUserProfile(userId);
+
+// Get feed with caching
+const feed = await storage.getFeed(userId, limit, offset);
+
+// Create post
+const post = await storage.createPost(postData);
+```
+
+**Benefits of using storage layer**:
+- Automatic caching integration (Redis)
+- Consistent error handling
+- Type safety
+- Optimized queries
 
 ## API Development
 
@@ -395,14 +482,33 @@ registerPostRoutes(app);
 ### Authentication Middleware
 
 ```typescript
-import { requireAuth, requireRole } from './middleware/auth';
+import { 
+  requireAuth, 
+  requireRole, 
+  requireRoles,
+  requireSystemAdmin,
+  requireScoutAdmin,
+  requireScoutOrAdmin,
+  requireSelfByParam
+} from './middleware/auth';
 
 // Require authentication
 app.get('/api/protected', requireAuth, handler);
 
 // Require specific role
 app.get('/api/admin', requireAuth, requireRole('system_admin'), handler);
+
+// Require multiple roles
+app.get('/api/scout', requireAuth, requireRoles(['scout_admin', 'xen_scout']), handler);
+
+// Require self access (user accessing their own resource)
+app.get('/api/users/:userId/profile', requireAuth, requireSelfByParam('userId'), handler);
+
+// System admin specific
+app.get('/api/system/stats', requireAuth, requireSystemAdmin, handler);
 ```
+
+**Important**: All protected routes must use `requireAuth` first, then role-specific middleware.
 
 ### Error Handling
 
@@ -671,6 +777,174 @@ const db = drizzle(pool, {
 });
 ```
 
+## Key System Features Development
+
+### Notification System
+
+The notification system automatically creates notifications for various events:
+
+```typescript
+import { notifyFollowersOfNewPost } from '../utils/notification-helpers';
+
+// Automatically called when post is created
+await notifyFollowersOfNewPost(postId, studentId);
+```
+
+**Notification Types**:
+- `post_like`, `post_comment`, `post_save`
+- `user_follow`, `announcement`
+- `xen_watch_feedback`, `submission_review`
+- `school_created`, `student_enrolled`
+- And 20+ more types
+
+### Caching System
+
+Use the cache layer for frequently accessed data:
+
+```typescript
+import { cacheGet, cacheInvalidate } from '../cache';
+
+// Get cached data or fetch fresh
+const feed = await cacheGet(
+  `feed:${userId}:${page}`,
+  () => storage.getFeed(userId, limit, offset),
+  300 // 5 minute TTL
+);
+
+// Invalidate cache when data changes
+await cacheInvalidate(`feed:${userId}:*`);
+```
+
+### Evaluation Forms System
+
+Creating evaluation forms programmatically:
+
+```typescript
+// Create form template
+const form = await storage.createEvaluationFormTemplate({
+  name: 'Player Evaluation',
+  description: 'Tournament evaluation form',
+  createdBy: adminId
+});
+
+// Add fields
+await storage.createEvaluationFormField({
+  formTemplateId: form.id,
+  fieldType: 'star_rating',
+  label: 'Overall Rating',
+  required: true,
+  orderIndex: 0
+});
+```
+
+## API Route Patterns
+
+### Standard CRUD Route
+
+```typescript
+// GET /api/resource/:id
+app.get('/api/resource/:id', requireAuth, async (req, res) => {
+  try {
+    const resource = await storage.getResource(req.params.id);
+    if (!resource) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    res.json(resource);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+```
+
+### Create Route with Validation
+
+```typescript
+import { z } from 'zod';
+
+const createSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional()
+});
+
+app.post('/api/resource', requireAuth, async (req, res) => {
+  try {
+    const data = createSchema.parse(req.body);
+    const resource = await storage.createResource(data);
+    res.status(201).json(resource);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+```
+
+## Testing Patterns
+
+### API Test Example
+
+```typescript
+import request from 'supertest';
+import { app } from '../../server';
+
+describe('POST /api/posts', () => {
+  let authToken: string;
+
+  beforeAll(async () => {
+    // Login and get token
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'test@example.com', password: 'password' });
+    authToken = res.body.token;
+  });
+
+  it('should create a post', async () => {
+    const response = await request(app)
+      .post('/api/posts/create')
+      .set('Authorization', `Bearer ${authToken}`)
+      .attach('file', 'test-image.jpg')
+      .field('caption', 'Test post');
+    
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('id');
+  });
+});
+```
+
+## Common Development Tasks
+
+### Adding a New Feature
+
+1. **Update Schema** (`shared/schema.ts`)
+   - Add new table or fields
+   - Run `npm run db:push`
+
+2. **Create Storage Methods** (`server/storage.ts`)
+   - Add methods for CRUD operations
+   - Include caching where appropriate
+
+3. **Create API Routes** (`server/routes/`)
+   - Add route handlers
+   - Include authentication and validation
+
+4. **Create Frontend Components** (`client/src/`)
+   - Create page or component
+   - Add routing if needed
+
+5. **Test**
+   - Write API tests
+   - Test manually
+   - Run E2E tests if applicable
+
+### Debugging Tips
+
+1. **Check Server Logs**: All API requests are logged with timing
+2. **Database Queries**: Enable query logging in `db.ts` for development
+3. **Redis Cache**: Check cache hit/miss rates in logs
+4. **Sentry**: Check Sentry dashboard for errors (if configured)
+5. **Browser DevTools**: Use React DevTools and Network tab
+
 ## Additional Resources
 
 - [React Documentation](https://react.dev/)
@@ -679,10 +953,14 @@ const db = drizzle(pool, {
 - [Drizzle ORM Documentation](https://orm.drizzle.team/)
 - [TailwindCSS Documentation](https://tailwindcss.com/docs)
 - [shadcn/ui Components](https://ui.shadcn.com/)
+- [TanStack Query](https://tanstack.com/query/latest)
+- [Zod Validation](https://zod.dev/)
+- [Cloudinary Documentation](https://cloudinary.com/documentation)
 
 ## Getting Help
 
 - Check existing documentation in `/docs`
+- Review implementation summaries in root directory (`*.md` files)
 - Search GitHub issues
 - Ask in team chat/slack
 - Create a new issue with detailed description
