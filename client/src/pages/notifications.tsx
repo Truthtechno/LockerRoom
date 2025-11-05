@@ -89,6 +89,8 @@ const getNotificationIcon = (type: string) => {
     school_limit_increase: TrendingUp, // System/School admin: student limit increased
     school_limit_decrease: TrendingUp, // System/School admin: student limit decreased
     school_frequency_change: Settings, // System/School admin: payment frequency changed
+    form_created: FileText, // System/Scout admin/XEN Scout: evaluation form created
+    form_submitted: FileText, // System/Scout admin: evaluation form submitted by scout
   };
   return iconMap[type] || Bell;
 };
@@ -127,6 +129,8 @@ const getNotificationColor = (type: string) => {
     school_limit_increase: "text-blue-500", // System/School admin: student limit increased
     school_limit_decrease: "text-orange-500", // System/School admin: student limit decreased
     school_frequency_change: "text-purple-500", // System/School admin: payment frequency changed
+    form_created: "text-blue-500", // System/Scout admin/XEN Scout: evaluation form created
+    form_submitted: "text-green-500", // System/Scout admin: evaluation form submitted by scout
   };
   return colorMap[type] || "text-gray-500";
 };
@@ -201,30 +205,26 @@ export default function Notifications() {
       await queryClient.cancelQueries({ queryKey: ["/api/notifications", user?.id] });
       await queryClient.cancelQueries({ queryKey: ["/api/notifications/unread-count", user?.id] });
 
-      // Snapshot the previous values
+      // Snapshot the previous values for rollback
       const previousNotifications = queryClient.getQueryData<Notification[]>(["/api/notifications", user?.id, filter]);
       const previousUnreadCount = queryClient.getQueryData<{ count: number }>(["/api/notifications/unread-count", user?.id]);
 
-      // Optimistically update the unread count to 0
+      // Optimistically update the unread count to 0 immediately
       queryClient.setQueryData<{ count: number }>(["/api/notifications/unread-count", user?.id], { count: 0 });
 
-      // Optimistically update notifications to mark all as read
-      // For "all" filter, mark all notifications as read
-      queryClient.setQueryData<Notification[]>(["/api/notifications", user?.id, "all"], (old) => {
-        if (!old) return old;
-        return old.map(notif => ({ ...notif, isRead: true }));
-      });
-
-      // For "unread" filter, set to empty array since all will be read
-      queryClient.setQueryData<Notification[]>(["/api/notifications", user?.id, "unread"], []);
-
-      // Update current filter view
-      if (filter !== "unread") {
-        queryClient.setQueryData<Notification[]>(["/api/notifications", user?.id, filter], (old) => {
+      // Optimistically update all notification queries to mark all as read
+      // This ensures instant UI update regardless of which filter is active
+      queryClient.setQueriesData<Notification[]>(
+        { queryKey: ["/api/notifications", user?.id] },
+        (old) => {
           if (!old) return old;
+          // Mark all notifications as read
           return old.map(notif => ({ ...notif, isRead: true }));
-        });
-      }
+        }
+      );
+
+      // For "unread" filter specifically, set to empty array since all will be read
+      queryClient.setQueryData<Notification[]>(["/api/notifications", user?.id, "unread"], []);
 
       return { previousNotifications, previousUnreadCount };
     },
@@ -236,15 +236,37 @@ export default function Notifications() {
       if (context?.previousUnreadCount) {
         queryClient.setQueryData(["/api/notifications/unread-count", user?.id], context.previousUnreadCount);
       }
+      toast({
+        title: "Error",
+        description: "Failed to mark all notifications as read. Please try again.",
+        variant: "destructive",
+      });
     },
     onSuccess: () => {
-      // Invalidate queries to ensure consistency (this will trigger refetch on next access)
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count", user?.id] });
+      // Instead of invalidating (which triggers slow refetch), directly update cache
+      // This ensures the UI stays updated instantly without showing stale data
+      queryClient.setQueryData<{ count: number }>(["/api/notifications/unread-count", user?.id], { count: 0 });
+      
+      // Update all notification queries to ensure they're marked as read
+      queryClient.setQueriesData<Notification[]>(
+        { queryKey: ["/api/notifications", user?.id] },
+        (old) => {
+          if (!old) return old;
+          return old.map(notif => ({ ...notif, isRead: true }));
+        }
+      );
+      
+      // Set unread filter to empty
+      queryClient.setQueryData<Notification[]>(["/api/notifications", user?.id, "unread"], []);
+
+      // Show success toast
       toast({
         title: "All notifications marked as read",
         description: "All notifications have been marked as read.",
       });
+
+      // Note: We don't invalidate queries here to avoid triggering slow refetches
+      // The cache is already updated correctly, and the background polling will sync eventually
     },
   });
 

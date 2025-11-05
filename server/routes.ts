@@ -4216,6 +4216,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const { registerAdminRoutes } = await import('./routes/admin');
   registerAdminRoutes(app);
 
+  // Import and register evaluation forms routes
+  const { registerEvaluationFormsRoutes } = await import('./routes/evaluation-forms');
+  registerEvaluationFormsRoutes(app);
+
   // Import and register scout admin routes
   registerScoutAdminRoutes(app);
 

@@ -1,6 +1,6 @@
 import { storage } from '../storage';
 import { db } from '../db';
-import { students, users, notifications, submissions, submissionReviews, submissionFinalFeedback, schools, schoolAdmins, systemAdmins, paymentTransactions } from '@shared/schema';
+import { students, users, notifications, submissions, submissionReviews, submissionFinalFeedback, schools, schoolAdmins, systemAdmins, paymentTransactions, scoutProfiles } from '@shared/schema';
 import { eq, and, inArray, sql, lt, gte, lte } from 'drizzle-orm';
 
 /**
@@ -1200,6 +1200,212 @@ export async function notifySchoolPaymentRecorded(
     console.log(`✅ Created ${notificationCount} notification(s) for ${allRecipients.length} recipient(s)`);
   } catch (error: any) {
     console.error('❌ Error in notifySchoolPaymentRecorded:', error?.message || error);
+  }
+}
+
+/**
+ * Notify system admin, scouts admin, and xen scouts when a form is created
+ */
+export async function notifyFormCreated(formTemplateId: string, formName: string, createdByUserId: string): Promise<void> {
+  try {
+    console.log(`🔔 Creating notifications for form ${formTemplateId} created by ${createdByUserId}`);
+    
+    // Get all system admins, scout admins, and xen scouts
+    const recipients = await db
+      .select()
+      .from(users)
+      .where(inArray(users.role, ['system_admin', 'scout_admin', 'xen_scout']));
+
+    console.log(`📋 Found ${recipients.length} recipient(s) to notify`);
+
+    if (recipients.length === 0) {
+      console.log(`ℹ️ No recipients found, skipping notifications`);
+      return;
+    }
+
+    let notificationCount = 0;
+
+    for (const recipient of recipients) {
+      try {
+        // Skip the creator of the form
+        if (recipient.id === createdByUserId) {
+          continue;
+        }
+
+        // Check if notification already exists
+        const existingNotifications = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.userId, recipient.id),
+              eq(notifications.entityType, 'evaluation_form_template'),
+              eq(notifications.entityId, formTemplateId),
+              eq(notifications.type, 'form_created')
+            )
+          )
+          .limit(1);
+
+        if (existingNotifications.length > 0) {
+          continue;
+        }
+
+        console.log(`📬 Creating notification for user: ${recipient.name} (${recipient.id})`);
+        
+        await storage.createNotification({
+          userId: recipient.id,
+          type: 'form_created',
+          title: 'New Evaluation Form Created',
+          message: `A new evaluation form "${formName}" has been created and is available for use`,
+          entityType: 'evaluation_form_template',
+          entityId: formTemplateId,
+          relatedUserId: createdByUserId,
+        });
+
+        notificationCount++;
+        console.log(`✅ Notification created for ${recipient.name}`);
+      } catch (e: any) {
+        console.error(`❌ Error creating notification for user ${recipient.id}: ${e?.message || e}`);
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for ${recipients.length} recipient(s)`);
+  } catch (error: any) {
+    console.error('❌ Error in notifyFormCreated:', error?.message || error);
+  }
+}
+
+/**
+ * Notify scout admin, system admin, and the scout who submitted when a form is submitted
+ */
+export async function notifyFormSubmitted(submissionId: string, formTemplateId: string, formName: string, submittedByUserId: string, submittedByUserName: string, studentName: string | null): Promise<void> {
+  try {
+    console.log(`🔔 Creating notifications for form submission ${submissionId} by ${submittedByUserId}`);
+    console.log(`📋 Form details: ${formName} (${formTemplateId}), Student: ${studentName || 'N/A'}`);
+    
+    // Fetch submitter user info to ensure we have the name and profile picture
+    const submitterUser = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, submittedByUserId))
+      .limit(1);
+    
+    if (submitterUser.length === 0) {
+      console.error(`❌ Submitter user not found: ${submittedByUserId}`);
+      return;
+    }
+    
+    // Always use the name from the database, not the provided parameter
+    // The provided name might be undefined since req.user doesn't include name
+    let finalSubmittedByUserName = submitterUser[0].name;
+    
+    // If name is still missing, try to get it from scoutProfiles
+    if (!finalSubmittedByUserName && (submitterUser[0].role === 'xen_scout' || submitterUser[0].role === 'scout_admin')) {
+      const scoutProfile = await db
+        .select({ name: scoutProfiles.name })
+        .from(scoutProfiles)
+        .where(eq(scoutProfiles.userId, submittedByUserId))
+        .limit(1);
+      if (scoutProfile[0]?.name) {
+        finalSubmittedByUserName = scoutProfile[0].name;
+      }
+    }
+    
+    // Final fallback
+    if (!finalSubmittedByUserName) {
+      finalSubmittedByUserName = submittedByUserName || 'A scout';
+    }
+    
+    console.log(`📋 Submitter name: ${finalSubmittedByUserName} (from DB: ${submitterUser[0].name || 'none'}, provided: ${submittedByUserName || 'none'})`);
+    
+    // Get all system admins (need to join with systemAdmins table)
+    console.log('🔍 Fetching system admins...');
+    const systemAdminUsers = await db
+      .select({ id: users.id, name: users.name, role: users.role })
+      .from(users)
+      .innerJoin(systemAdmins, eq(users.linkedId, systemAdmins.id))
+      .where(eq(users.role, 'system_admin'));
+    console.log(`📋 Found ${systemAdminUsers.length} system admin(s):`, systemAdminUsers.map(u => ({ id: u.id, name: u.name })));
+
+    // Get all scout admins
+    console.log('🔍 Fetching scout admins...');
+    const scoutAdminUsers = await db
+      .select()
+      .from(users)
+      .where(eq(users.role, 'scout_admin'));
+    console.log(`📋 Found ${scoutAdminUsers.length} scout admin(s):`, scoutAdminUsers.map(u => ({ id: u.id, name: u.name })));
+
+    // Combine all recipients
+    const recipients = [...systemAdminUsers, ...scoutAdminUsers];
+    if (submitterUser[0] && (submitterUser[0].role === 'xen_scout' || submitterUser[0].role === 'scout_admin')) {
+      // Only add if not already in recipients list
+      if (!recipients.find(r => r.id === submitterUser[0].id)) {
+        recipients.push(submitterUser[0]);
+      }
+    }
+
+    console.log(`📋 Found ${recipients.length} recipient(s) to notify`);
+
+    if (recipients.length === 0) {
+      console.log(`ℹ️ No recipients found, skipping notifications`);
+      return;
+    }
+
+    let notificationCount = 0;
+
+    for (const recipient of recipients) {
+      try {
+        // Check if notification already exists
+        const existingNotifications = await db
+          .select()
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.userId, recipient.id),
+              eq(notifications.entityType, 'evaluation_form_submission'),
+              eq(notifications.entityId, submissionId),
+              eq(notifications.type, 'form_submitted')
+            )
+          )
+          .limit(1);
+
+        if (existingNotifications.length > 0) {
+          continue;
+        }
+
+        console.log(`📬 Creating notification for user: ${recipient.name} (${recipient.id})`);
+        
+        const studentInfo = studentName ? ` for ${studentName}` : '';
+        // Customize message for the submitter - use the final name we determined earlier
+        const message = recipient.id === submittedByUserId
+          ? `You have successfully submitted the evaluation form "${formName}"${studentInfo}`
+          : `${finalSubmittedByUserName} has submitted the evaluation form "${formName}"${studentInfo}`;
+        
+        await storage.createNotification({
+          userId: recipient.id,
+          type: 'form_submitted',
+          title: recipient.id === submittedByUserId ? 'Form Submission Confirmed' : 'New Form Submission',
+          message,
+          entityType: 'evaluation_form_submission',
+          entityId: submissionId,
+          relatedUserId: submittedByUserId,
+          metadata: JSON.stringify({
+            formTemplateId,
+            formName,
+            studentName,
+          }),
+        });
+
+        notificationCount++;
+        console.log(`✅ Notification created for ${recipient.name}`);
+      } catch (e: any) {
+        console.error(`❌ Error creating notification for user ${recipient.id}: ${e?.message || e}`);
+      }
+    }
+
+    console.log(`✅ Created ${notificationCount} notification(s) for ${recipients.length} recipient(s)`);
+  } catch (error: any) {
+    console.error('❌ Error in notifyFormSubmitted:', error?.message || error);
   }
 }
 

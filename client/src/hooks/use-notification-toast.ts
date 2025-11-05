@@ -79,12 +79,14 @@ const getNotificationIcon = (type: string) => {
     school_limit_increase: TrendingUp,
     school_limit_decrease: TrendingUp,
     school_frequency_change: Settings,
+    form_created: FileText, // System/Scout admin/XEN Scout: evaluation form created
+    form_submitted: FileText, // System/Scout admin: evaluation form submitted by scout
   };
   return iconMap[type] || Bell;
 };
 
 const getNotificationVariant = (type: string): "default" | "destructive" | "success" | "info" | "warning" | "social" => {
-  if (type.includes("payment") || type.includes("renewal") || type.includes("success")) {
+  if (type.includes("payment") || type.includes("renewal") || type.includes("success") || type.includes("submitted") || type.includes("confirmed")) {
     return "success";
   }
   if (type.includes("alert") || type.includes("expiring") || type.includes("error")) {
@@ -93,7 +95,7 @@ const getNotificationVariant = (type: string): "default" | "destructive" | "succ
   if (type.includes("like") || type.includes("follower") || type.includes("comment") || type.includes("posted")) {
     return "social";
   }
-  if (type.includes("announcement") || type.includes("news")) {
+  if (type.includes("announcement") || type.includes("news") || type.includes("form_created")) {
     return "info";
   }
   return "default";
@@ -108,6 +110,9 @@ const getNotificationRoute = (notification: Notification): string | null => {
   }
   if (notification.entityType === "submission" && notification.entityId) {
     return `/xen-watch`;
+  }
+  if (notification.entityType === "evaluation_form_submission" && notification.entityId) {
+    return `/admin/evaluation-submissions`;
   }
   if (notification.relatedUserId) {
     return `/profile/${notification.relatedUserId}`;
@@ -124,7 +129,8 @@ export function useNotificationToast() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const shownNotificationIds = useRef<Set<string>>(new Set());
-  const lastCheckTime = useRef<number>(Date.now());
+  const lastCheckTime = useRef<number>(0); // Start at 0, will be set on first check
+  const isFirstCheck = useRef<boolean>(true);
 
   // Poll for new notifications
   const { data: notifications } = useQuery<Notification[]>({
@@ -142,18 +148,29 @@ export function useNotificationToast() {
   });
 
   useEffect(() => {
-    if (!notifications || notifications.length === 0) return;
+    if (!notifications || notifications.length === 0) {
+      // On first check with no notifications, mark as checked but don't set time yet
+      if (isFirstCheck.current) {
+        isFirstCheck.current = false;
+      }
+      return;
+    }
 
-    // Only show notifications that were created after the last check
+    // On first check, show notifications from the last 5 minutes
+    // On subsequent checks, only show notifications created after the last check
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const cutoffTime = isFirstCheck.current ? fiveMinutesAgo : (lastCheckTime.current || fiveMinutesAgo);
+    
     const newNotifications = notifications.filter((notification) => {
       const notificationTime = new Date(notification.createdAt).getTime();
-      const isNew = notificationTime > lastCheckTime.current;
+      const isNew = notificationTime > cutoffTime;
       const notShown = !shownNotificationIds.current.has(notification.id);
       return isNew && notShown && !notification.isRead;
     });
 
     // Update last check time
     lastCheckTime.current = Date.now();
+    isFirstCheck.current = false;
 
     // Show toast for each new notification
     newNotifications.forEach((notification) => {
@@ -165,15 +182,27 @@ export function useNotificationToast() {
       const route = getNotificationRoute(notification);
 
       // Show toast notification
+      // Debug: Log notification data
+      console.log('🔔 Showing toast notification:', {
+        id: notification.id,
+        type: notification.type,
+        relatedUser: notification.relatedUser ? {
+          id: notification.relatedUser.id,
+          name: notification.relatedUser.name,
+          profilePicUrl: notification.relatedUser.profilePicUrl,
+          role: notification.relatedUser.role,
+        } : null,
+      });
+      
       toast({
         title: notification.title,
         description: notification.message,
         variant,
         avatar: notification.relatedUser
           ? {
-              src: notification.relatedUser.profilePicUrl,
-              alt: notification.relatedUser.name,
-              fallbackText: notification.relatedUser.name,
+              src: notification.relatedUser.profilePicUrl || undefined, // Let AvatarWithFallback handle null/undefined
+              alt: notification.relatedUser.name || 'User',
+              fallbackText: notification.relatedUser.name || 'User',
             }
           : undefined,
         icon: !notification.relatedUser ? (

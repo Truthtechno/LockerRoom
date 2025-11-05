@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users, Eye, Bot, Menu, X, LayoutDashboard, TrendingUp, UserPlus, Building2, Shield, Megaphone, Bell, Layers, ChevronDown } from "lucide-react";
+import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users, Eye, Bot, Menu, X, LayoutDashboard, TrendingUp, UserPlus, Building2, Shield, Megaphone, Bell, Layers, ChevronDown, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useBranding } from "@/hooks/use-branding";
 import { logout } from "@/lib/auth";
@@ -204,6 +204,8 @@ export default function MobileNav() {
         { name: "Platform Analytics", href: "/admin/platform-analytics", icon: TrendingUp },
         { name: "System Config", href: "/admin/system-config", icon: Settings },
         { name: "Manage Admins", href: "/admin/admin-management", icon: Shield },
+        { name: "Create Forms", href: "/admin/evaluation-forms", icon: FileText },
+        { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText },
         { name: "Settings", href: "/settings", icon: Settings },
       ];
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
@@ -214,6 +216,7 @@ export default function MobileNav() {
         { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye },
+        { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText },
       ];
       
       // Add Scout Admin Dashboard for scout_admin role

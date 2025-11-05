@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
-import { Home, User, BarChart3, Settings, LogOut, Bookmark, Users, Eye, Bot, LayoutDashboard, TrendingUp, UserPlus, Building2, Search, Shield, Megaphone, Bell, Layers, ChevronDown } from "lucide-react";
+import { Home, User, BarChart3, Settings, LogOut, Bookmark, Users, Eye, Bot, LayoutDashboard, TrendingUp, UserPlus, Building2, Search, Shield, Megaphone, Bell, Layers, ChevronDown, FileText } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useEffect, useRef } from "react";
@@ -211,6 +211,8 @@ export default function Sidebar() {
         { name: "Platform Analytics", href: "/admin/platform-analytics", icon: TrendingUp, active: location.startsWith("/admin/platform-analytics") },
         { name: "System Config", href: "/admin/system-config", icon: Settings, active: location.startsWith("/admin/system-config") },
         { name: "Manage Admins", href: "/admin/admin-management", icon: Shield, active: location.startsWith("/admin/admin-management") },
+        { name: "Create Forms", href: "/admin/evaluation-forms", icon: FileText, active: location.startsWith("/admin/evaluation-forms") },
+        { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText, active: location.startsWith("/admin/evaluation-submissions") },
         { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
@@ -221,6 +223,7 @@ export default function Sidebar() {
         { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye, active: location.startsWith("/xen-watch/scout-queue") },
+        { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText, active: location.startsWith("/admin/evaluation-submissions") },
       ];
       
       // Add Scout Admin Dashboard for scout_admin role

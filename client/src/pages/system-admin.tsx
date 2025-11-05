@@ -430,9 +430,56 @@ export default function SystemAdmin() {
                 <h2 className="text-lg font-semibold text-foreground">Top Schools</h2>
                 <p className="text-sm text-muted-foreground">Schools ranked by engagement and activity</p>
               </div>
-              <div className="overflow-x-auto">
-                {schoolAnalytics?.topSchools && schoolAnalytics.topSchools.length > 0 ? (
-                  <>
+              {schoolAnalytics?.topSchools && schoolAnalytics.topSchools.length > 0 ? (
+                <>
+                  {/* Mobile Card Layout */}
+                  <div className="lg:hidden divide-y divide-border">
+                    {paginatedTopSchools.map((school, index) => {
+                      const rank = (topSchoolsPage - 1) * topSchoolsPerPage + index + 1;
+                      const isTopThree = rank <= 3;
+                      return (
+                        <div 
+                          key={school.schoolId} 
+                          className={`p-4 ${isTopThree ? 'bg-muted/30' : ''} hover:bg-muted/50 transition-colors`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                                rank === 1 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                rank === 2 ? 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' :
+                                rank === 3 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
+                                'bg-muted text-muted-foreground'
+                              }`}>
+                                #{rank}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-semibold text-foreground text-sm truncate mb-1">
+                                  {school.name}
+                                </h3>
+                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                  <div>
+                                    <span className="text-muted-foreground block">Students</span>
+                                    <span className="font-medium text-foreground">{school.studentCount}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground block">Posts</span>
+                                    <span className="font-medium text-foreground">{school.postCount}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground block">Engagement</span>
+                                    <span className="font-medium text-foreground">{school.engagement.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop Table Layout */}
+                  <div className="hidden lg:block overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -457,75 +504,79 @@ export default function SystemAdmin() {
                         ))}
                       </TableBody>
                     </Table>
-                    {totalTopSchoolsPages > 1 && (
-                      <div className="px-4 sm:px-6 py-4 border-t border-border">
-                        <Pagination>
-                          <PaginationContent>
-                            <PaginationItem>
-                              <PaginationPrevious 
-                                href="#"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  if (topSchoolsPage > 1) setTopSchoolsPage(p => p - 1);
-                                }}
-                                className={topSchoolsPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                              />
-                            </PaginationItem>
-                            {Array.from({ length: totalTopSchoolsPages }, (_, i) => i + 1).map((page) => (
-                              <PaginationItem key={page}>
-                                <PaginationLink
-                                  href="#"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setTopSchoolsPage(page);
-                                  }}
-                                  isActive={topSchoolsPage === page}
-                                  className="cursor-pointer"
-                                >
-                                  {page}
-                                </PaginationLink>
-                              </PaginationItem>
-                            ))}
-                            <PaginationItem>
-                              <PaginationNext
-                                href="#"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  if (topSchoolsPage < totalTopSchoolsPages) setTopSchoolsPage(p => p + 1);
-                                }}
-                                className={topSchoolsPage === totalTopSchoolsPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                              />
-                            </PaginationItem>
-                          </PaginationContent>
-                        </Pagination>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="p-6 text-center text-muted-foreground">
-                    <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p>No school data available</p>
                   </div>
-                )}
-              </div>
+
+                  {totalTopSchoolsPages > 1 && (
+                    <div className="px-4 sm:px-6 py-4 border-t border-border">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious 
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (topSchoolsPage > 1) setTopSchoolsPage(p => p - 1);
+                              }}
+                              className={topSchoolsPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: totalTopSchoolsPages }, (_, i) => i + 1).map((page) => (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setTopSchoolsPage(page);
+                                }}
+                                isActive={topSchoolsPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+                          <PaginationItem>
+                            <PaginationNext
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (topSchoolsPage < totalTopSchoolsPages) setTopSchoolsPage(p => p + 1);
+                              }}
+                              className={topSchoolsPage === totalTopSchoolsPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="p-6 text-center text-muted-foreground">
+                  <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No school data available</p>
+                </div>
+              )}
             </div>
 
             {/* Recent School Registrations */}
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-              <div className="px-4 sm:px-6 py-4 border-b border-border flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">Recent School Registrations</h2>
-                  <p className="text-sm text-muted-foreground">Newest schools joining the platform</p>
+              <div className="px-4 sm:px-6 py-4 border-b border-border">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">Recent School Registrations</h2>
+                    <p className="text-sm text-muted-foreground">Newest schools joining the platform</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLocation("/system-admin/manage-schools")}
+                    className="text-primary hover:text-primary self-start sm:self-auto"
+                  >
+                    <span className="hidden sm:inline">Manage All Schools</span>
+                    <span className="sm:hidden">Manage All</span>
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setLocation("/system-admin/manage-schools")}
-                  className="text-primary hover:text-primary"
-                >
-                  Manage All Schools
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
               </div>
               <div className="divide-y divide-border">
                 {schoolsData?.schools?.length > 0 ? (
@@ -579,17 +630,58 @@ export default function SystemAdmin() {
                     
                     return (
                       <div key={school.id} className="p-4 sm:p-6 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
-                            <SchoolAvatar
-                              key={`${school.id}-${school.profilePicUrl || 'no-image'}`}
-                              src={school.profilePicUrl}
-                              name={school.name}
-                              className="h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0"
-                              clickable={true}
-                              onClick={() => handleSchoolAvatarClick(school.id)}
-                            />
-                            <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <SchoolAvatar
+                            key={`${school.id}-${school.profilePicUrl || 'no-image'}`}
+                            src={school.profilePicUrl}
+                            name={school.name}
+                            className="h-10 w-10 sm:h-14 sm:w-14 flex-shrink-0"
+                            clickable={true}
+                            onClick={() => handleSchoolAvatarClick(school.id)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            {/* Mobile Layout */}
+                            <div className="sm:hidden space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <h3 className="font-semibold text-foreground text-sm truncate flex-1">
+                                  {school.name}
+                                </h3>
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${planColor}`}>
+                                  {planType}
+                                </span>
+                              </div>
+                              {school.address && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                                  <span className="truncate">{school.address}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                                  {status}
+                                </span>
+                                <div className="flex items-center text-xs text-muted-foreground">
+                                  <Calendar className="w-3 h-3 mr-1 flex-shrink-0" />
+                                  <span>
+                                    {daysAgo !== null ? (
+                                      daysAgo === 0 ? 'Today' : 
+                                      daysAgo === 1 ? 'Yesterday' : 
+                                      `${daysAgo}d ago`
+                                    ) : (
+                                      registrationDate ? new Date(registrationDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Date unavailable'
+                                    )}
+                                  </span>
+                                </div>
+                                {school.paymentAmount && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ${parseFloat(school.paymentAmount || school.payment_amount || 0).toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Desktop Layout */}
+                            <div className="hidden sm:block">
                               <div className="flex items-center gap-2 mb-1">
                                 <h3 className="font-semibold text-foreground text-base sm:text-lg truncate">{school.name}</h3>
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${planColor}`}>

@@ -31,6 +31,8 @@ import ManageSchools from "./pages/system-admin/manage-schools";
 import PlatformAnalytics from "./pages/admin/platform-analytics";
 import SystemConfig from "./pages/admin/system-config";
 import AdminManagement from "./pages/admin/admin-management";
+import EvaluationForms from "./pages/admin/evaluation-forms";
+import EvaluationSubmissions from "./pages/admin/evaluation-submissions";
 import AddStudent from "./pages/school-admin/add-student";
 import EditProfile from "./pages/school-admin/edit-profile";
 import LiveReports from "./pages/school-admin/live-reports";
@@ -231,6 +233,18 @@ function Router() {
       <Route path="/admin/admin-management">
         <ProtectedRoute requiredRole="system_admin">
           <AdminManagement />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/admin/evaluation-forms">
+        <ProtectedRoute requiredRole="system_admin">
+          <EvaluationForms />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/admin/evaluation-submissions">
+        <ProtectedRoute requiredRole={["system_admin", "scout_admin", "xen_scout"]}>
+          <EvaluationSubmissions />
         </ProtectedRoute>
       </Route>
       

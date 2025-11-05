@@ -219,4 +219,42 @@ app.use((req, res, next) => {
       }
     }, 30000); // 30 seconds delay
   });
+
+  // Handle server errors, especially port already in use
+  server.on('error', async (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n❌ Error: Port ${port} is already in use.`);
+      
+      // Try to find the process using the port on Windows
+      if (isWindows) {
+        try {
+          const { execSync } = await import('child_process');
+          const netstatOutput = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf-8' });
+          const pidMatch = netstatOutput.match(/\s+(\d+)\s*$/m);
+          if (pidMatch) {
+            const pid = pidMatch[1];
+            console.error(`\n🔍 Found process ${pid} using port ${port}`);
+            console.error(`💡 To kill it, run: taskkill /PID ${pid} /F`);
+          }
+        } catch (e) {
+          // If we can't find the process, that's okay - just continue with generic message
+        }
+      }
+      
+      console.error(`\n💡 To fix this, try one of the following:`);
+      console.error(`   1. Kill the process using the port:`);
+      if (isWindows) {
+        console.error(`      netstat -ano | findstr :${port}`);
+        console.error(`      taskkill /PID <PID> /F`);
+      } else {
+        console.error(`      lsof -ti :${port} | xargs kill -9`);
+      }
+      console.error(`   2. Use a different port: PORT=5175 npm run dev`);
+      console.error(`   3. Wait a few seconds for the port to be released\n`);
+      process.exit(1);
+    } else {
+      console.error(`\n❌ Server error: ${err.message}\n`);
+      throw err;
+    }
+  });
 })();

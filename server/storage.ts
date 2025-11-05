@@ -96,7 +96,21 @@ import {
   // School Payment Records
   schoolPaymentRecords,
   // Payment Transactions (for Xen Watch)
-  paymentTransactions
+  paymentTransactions,
+  // Evaluation Forms
+  evaluationFormTemplates,
+  evaluationFormFields,
+  evaluationSubmissions,
+  evaluationSubmissionResponses,
+  evaluationFormAccess,
+  type EvaluationFormTemplateDB,
+  type EvaluationFormFieldDB,
+  type EvaluationSubmissionDB,
+  type EvaluationSubmissionResponseDB,
+  type InsertEvaluationFormTemplate,
+  type InsertEvaluationFormField,
+  type InsertEvaluationSubmission,
+  type InsertEvaluationSubmissionResponse
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -302,6 +316,24 @@ export interface IStorage {
   markNotificationAsRead(notificationId: string, userId: string): Promise<void>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
   getUnreadNotificationCount(userId: string): Promise<number>;
+  
+  // Evaluation Forms operations
+  createEvaluationFormTemplate(template: InsertEvaluationFormTemplate, fields: InsertEvaluationFormField[]): Promise<EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }>;
+  getEvaluationFormTemplate(id: string): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }) | undefined>;
+  getEvaluationFormTemplates(options?: { status?: string; createdBy?: string }): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] })[]>;
+  updateEvaluationFormTemplate(id: string, template: Partial<InsertEvaluationFormTemplate>, fields?: InsertEvaluationFormField[]): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }) | undefined>;
+  deleteEvaluationFormTemplate(id: string): Promise<void>;
+  publishEvaluationFormTemplate(id: string): Promise<EvaluationFormTemplateDB | undefined>;
+  archiveEvaluationFormTemplate(id: string): Promise<EvaluationFormTemplateDB | undefined>;
+  
+  createEvaluationSubmission(submission: InsertEvaluationSubmission, responses: Array<{ fieldId: string; responseValue: string }>): Promise<EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[] }>;
+  getEvaluationSubmission(id: string): Promise<(EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[]; formTemplate?: EvaluationFormTemplateDB }) | undefined>;
+  getEvaluationSubmissions(options?: { formTemplateId?: string; submittedBy?: string; status?: string; page?: number; limit?: number }): Promise<{ submissions: (EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[]; submittedByUser?: { id: string; name: string }; formTemplate?: EvaluationFormTemplateDB })[]; total: number; page: number; limit: number; totalPages: number }>;
+  updateEvaluationSubmission(id: string, submission: Partial<InsertEvaluationSubmission>, responses?: Array<{ fieldId: string; responseValue: string }>): Promise<(EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[] }) | undefined>;
+  deleteEvaluationSubmission(id: string): Promise<void>;
+  
+  searchStudentsForEvaluation(query: string, limit?: number): Promise<Array<{ id: string; name: string; profilePicUrl?: string | null; position?: string | null; height?: string | null; weight?: string | null; roleNumber?: string | null; sport?: string | null; schoolId?: string | null; schoolName?: string | null }>>;
+  getStudentProfileForEvaluation(studentId: string): Promise<{ id: string; name: string; profilePicUrl?: string | null; position?: string | null; height?: string | null; weight?: string | null; roleNumber?: string | null; sport?: string | null; schoolId?: string | null; schoolName?: string | null } | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -1814,6 +1846,84 @@ export class MemStorage implements IStorage {
   async getExportXenWatch(options?: any): Promise<any> {
     return { submissions: [], summary: { total: 0, totalRevenue: 0, byStatus: {} } };
   }
+
+  // Notification operations - MemStorage stubs
+  async createNotification(notification: InsertNotification): Promise<NotificationDB> {
+    throw new Error('Notification features require PostgreSQL');
+  }
+
+  async getNotifications(userId: string, options?: { limit?: number; offset?: number; unreadOnly?: boolean }): Promise<NotificationDB[]> {
+    throw new Error('Notification features require PostgreSQL');
+  }
+
+  async markNotificationAsRead(notificationId: string, userId: string): Promise<void> {
+    throw new Error('Notification features require PostgreSQL');
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    throw new Error('Notification features require PostgreSQL');
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    throw new Error('Notification features require PostgreSQL');
+  }
+
+  // Evaluation Forms operations - MemStorage stubs
+  async createEvaluationFormTemplate(template: InsertEvaluationFormTemplate, fields: InsertEvaluationFormField[]): Promise<EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async getEvaluationFormTemplate(id: string): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }) | undefined> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async getEvaluationFormTemplates(options?: { status?: string; createdBy?: string }): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] })[]> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async updateEvaluationFormTemplate(id: string, template: Partial<InsertEvaluationFormTemplate>, fields?: InsertEvaluationFormField[]): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }) | undefined> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async deleteEvaluationFormTemplate(id: string): Promise<void> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async publishEvaluationFormTemplate(id: string): Promise<EvaluationFormTemplateDB | undefined> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async archiveEvaluationFormTemplate(id: string): Promise<EvaluationFormTemplateDB | undefined> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async createEvaluationSubmission(submission: InsertEvaluationSubmission, responses: Array<{ fieldId: string; responseValue: string }>): Promise<EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[] }> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async getEvaluationSubmission(id: string): Promise<(EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[]; formTemplate?: EvaluationFormTemplateDB }) | undefined> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async getEvaluationSubmissions(options?: { formTemplateId?: string; submittedBy?: string; status?: string; page?: number; limit?: number }): Promise<{ submissions: (EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[]; submittedByUser?: { id: string; name: string }; formTemplate?: EvaluationFormTemplateDB })[]; total: number; page: number; limit: number; totalPages: number }> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async updateEvaluationSubmission(id: string, submission: Partial<InsertEvaluationSubmission>, responses?: Array<{ fieldId: string; responseValue: string }>): Promise<(EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[] }) | undefined> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async deleteEvaluationSubmission(id: string): Promise<void> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async searchStudentsForEvaluation(query: string, limit?: number): Promise<Array<{ id: string; name: string; profilePicUrl?: string | null; position?: string | null; height?: string | null; weight?: string | null; roleNumber?: string | null; sport?: string | null; schoolId?: string | null; schoolName?: string | null }>> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
+
+  async getStudentProfileForEvaluation(studentId: string): Promise<{ id: string; name: string; profilePicUrl?: string | null; position?: string | null; height?: string | null; weight?: string | null; roleNumber?: string | null; sport?: string | null; schoolId?: string | null; schoolName?: string | null } | undefined> {
+    throw new Error('Evaluation Forms features require PostgreSQL');
+  }
 }
 
 // Database connection is now handled by ./db.ts
@@ -2990,8 +3100,9 @@ export class PostgresStorage implements IStorage {
               .from(scoutProfiles)
               .where(eq(scoutProfiles.id, user.linkedId))
               .limit(1);
-            if (scoutProfileResult[0]?.profilePicUrl) {
+            if (scoutProfileResult[0]?.profilePicUrl && scoutProfileResult[0].profilePicUrl !== '') {
               profilePicUrl = scoutProfileResult[0].profilePicUrl;
+              console.log(`✅ Found scout profile picture via linkedId: ${profilePicUrl}`);
             } else {
               // 2. Check admins table using linkedId
               const adminResultById = await db.select({ profilePicUrl: admins.profilePicUrl })
@@ -5668,63 +5779,95 @@ export class PostgresStorage implements IStorage {
     
     // Transform to match expected format and fetch profile pictures from role-specific tables
     const notificationsWithProfilePics = await Promise.all(result.map(async (row) => {
+      // Check if profilePicUrl is null, undefined, or empty string
       let profilePicUrl = row.relatedUser?.profilePicUrl || null;
+      if (profilePicUrl === '') profilePicUrl = null;
       
       // If profile picture is missing and we have a related user, fetch from role-specific table
-      if (!profilePicUrl && row.relatedUser?.id && row.relatedUser?.role && row.relatedUser?.linkedId) {
-        const user = row.relatedUser;
+      // For scouts, always check scoutProfiles even if users table has a profilePicUrl
+      const user = row.relatedUser;
+      if (user?.id && user?.role) {
         try {
           if (user.role === 'student') {
-            const studentResult = await db.select({ profilePicUrl: students.profilePicUrl })
-              .from(students)
-              .where(eq(students.id, user.linkedId))
-              .limit(1);
-            if (studentResult[0]?.profilePicUrl) {
-              profilePicUrl = studentResult[0].profilePicUrl;
+            if (!profilePicUrl) {
+              const studentResult = await db.select({ profilePicUrl: students.profilePicUrl })
+                .from(students)
+                .where(eq(students.id, user.linkedId))
+                .limit(1);
+              if (studentResult[0]?.profilePicUrl) {
+                profilePicUrl = studentResult[0].profilePicUrl;
+              }
             }
           } else if (user.role === 'school_admin') {
-            const adminResult = await db.select({ profilePicUrl: schoolAdmins.profilePicUrl })
-              .from(schoolAdmins)
-              .where(eq(schoolAdmins.id, user.linkedId))
-              .limit(1);
-            if (adminResult[0]?.profilePicUrl) {
-              profilePicUrl = adminResult[0].profilePicUrl;
+            if (!profilePicUrl) {
+              const adminResult = await db.select({ profilePicUrl: schoolAdmins.profilePicUrl })
+                .from(schoolAdmins)
+                .where(eq(schoolAdmins.id, user.linkedId))
+                .limit(1);
+              if (adminResult[0]?.profilePicUrl) {
+                profilePicUrl = adminResult[0].profilePicUrl;
+              }
             }
           } else if (user.role === 'system_admin') {
-            const adminResult = await db.select({ profilePicUrl: systemAdmins.profilePicUrl })
-              .from(systemAdmins)
-              .where(eq(systemAdmins.id, user.linkedId))
-              .limit(1);
-            if (adminResult[0]?.profilePicUrl) {
-              profilePicUrl = adminResult[0].profilePicUrl;
+            if (!profilePicUrl) {
+              const adminResult = await db.select({ profilePicUrl: systemAdmins.profilePicUrl })
+                .from(systemAdmins)
+                .where(eq(systemAdmins.id, user.linkedId))
+                .limit(1);
+              if (adminResult[0]?.profilePicUrl) {
+                profilePicUrl = adminResult[0].profilePicUrl;
+              }
             }
           } else if (user.role === 'viewer' || user.role === 'public_viewer') {
-            const viewerResult = await db.select({ profilePicUrl: viewers.profilePicUrl })
-              .from(viewers)
-              .where(eq(viewers.id, user.linkedId))
-              .limit(1);
-            if (viewerResult[0]?.profilePicUrl) {
-              profilePicUrl = viewerResult[0].profilePicUrl;
+            if (!profilePicUrl) {
+              const viewerResult = await db.select({ profilePicUrl: viewers.profilePicUrl })
+                .from(viewers)
+                .where(eq(viewers.id, user.linkedId))
+                .limit(1);
+              if (viewerResult[0]?.profilePicUrl) {
+                profilePicUrl = viewerResult[0].profilePicUrl;
+              }
             }
           } else if (user.role === 'scout_admin' || user.role === 'xen_scout') {
-            // Try scoutProfiles first
-            if (user.linkedId) {
+            // For scouts, ALWAYS check scoutProfiles first (even if users table has a profilePicUrl)
+            // This is because scout profiles are the source of truth for scout profile pictures
+            const scoutProfileByUserId = await db.select({ profilePicUrl: scoutProfiles.profilePicUrl })
+              .from(scoutProfiles)
+              .where(eq(scoutProfiles.userId, user.id))
+              .limit(1);
+            if (scoutProfileByUserId[0]?.profilePicUrl && scoutProfileByUserId[0].profilePicUrl !== '') {
+              profilePicUrl = scoutProfileByUserId[0].profilePicUrl;
+              console.log(`✅ Found scout profile picture via userId: ${profilePicUrl}`);
+            } else if (user.linkedId) {
+              // 2. Try scoutProfiles using linkedId (scoutProfiles.id = users.linkedId)
               const scoutProfileResult = await db.select({ profilePicUrl: scoutProfiles.profilePicUrl })
                 .from(scoutProfiles)
                 .where(eq(scoutProfiles.id, user.linkedId))
                 .limit(1);
-              if (scoutProfileResult[0]?.profilePicUrl) {
+              if (scoutProfileResult[0]?.profilePicUrl && scoutProfileResult[0].profilePicUrl !== '') {
                 profilePicUrl = scoutProfileResult[0].profilePicUrl;
-              } else {
-                // Fallback to admins table
-                const adminResult = await db.select({ profilePicUrl: admins.profilePicUrl })
-                  .from(admins)
-                  .where(eq(admins.id, user.linkedId))
-                  .limit(1);
-                if (adminResult[0]?.profilePicUrl) {
-                  profilePicUrl = adminResult[0].profilePicUrl;
-                }
+                console.log(`✅ Found scout profile picture via linkedId: ${profilePicUrl}`);
               }
+            }
+            
+            // 3. If still no profile picture, check if users table has one (some scouts might not have scoutProfiles)
+            if (!profilePicUrl && row.relatedUser?.profilePicUrl && row.relatedUser.profilePicUrl !== '') {
+              profilePicUrl = row.relatedUser.profilePicUrl;
+              console.log(`✅ Using profile picture from users table: ${profilePicUrl}`);
+            } else if (!profilePicUrl && user.linkedId) {
+              // 4. Final fallback to admins table
+              const adminResult = await db.select({ profilePicUrl: admins.profilePicUrl })
+                .from(admins)
+                .where(eq(admins.id, user.linkedId))
+                .limit(1);
+              if (adminResult[0]?.profilePicUrl && adminResult[0].profilePicUrl !== '') {
+                profilePicUrl = adminResult[0].profilePicUrl;
+                console.log(`✅ Found scout profile picture via admins table: ${profilePicUrl}`);
+              }
+            }
+            
+            if (!profilePicUrl) {
+              console.log(`⚠️ No profile picture found for scout ${user.id} (role: ${user.role})`);
             }
           } else if (['moderator', 'finance', 'support', 'coach', 'analyst'].includes(user.role)) {
             const adminResult = await db.select({ profilePicUrl: admins.profilePicUrl })
@@ -5739,6 +5882,20 @@ export class PostgresStorage implements IStorage {
           console.error(`⚠️ Error fetching profile picture for user ${user.id} (role: ${user.role}):`, error);
           // Continue with null profilePicUrl if fetch fails
         }
+      }
+      
+      // Ensure profilePicUrl is not an empty string
+      const finalProfilePicUrl = profilePicUrl && profilePicUrl !== '' ? profilePicUrl : null;
+      
+      // Debug logging for form_submitted notifications
+      if (row.type === 'form_submitted' && row.relatedUser?.id) {
+        console.log(`📸 Notification profile picture debug for ${row.id}:`, {
+          userId: row.relatedUser.id,
+          role: row.relatedUser.role,
+          profilePicUrlFromDB: profilePicUrl,
+          finalProfilePicUrl: finalProfilePicUrl,
+          hasProfilePic: !!finalProfilePicUrl,
+        });
       }
       
       return {
@@ -5756,7 +5913,7 @@ export class PostgresStorage implements IStorage {
         relatedUser: row.relatedUser?.id ? {
           id: row.relatedUser.id,
           name: row.relatedUser.name,
-          profilePicUrl: profilePicUrl,
+          profilePicUrl: finalProfilePicUrl,
           role: row.relatedUser.role,
         } : null,
       };
@@ -7835,6 +7992,538 @@ export class PostgresStorage implements IStorage {
           return acc;
         }, {} as { [key: string]: number }),
       },
+    };
+  }
+
+  // Evaluation Forms Implementation
+  async createEvaluationFormTemplate(template: InsertEvaluationFormTemplate, fields: InsertEvaluationFormField[]): Promise<EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const [createdTemplate] = await db.insert(evaluationFormTemplates).values({
+      ...template,
+      updatedAt: new Date(),
+    }).returning();
+    
+    const createdFields: EvaluationFormFieldDB[] = [];
+    if (fields.length > 0) {
+      const fieldsToInsert = fields.map(field => ({
+        ...field,
+        formTemplateId: createdTemplate.id,
+      }));
+      const insertedFields = await db.insert(evaluationFormFields).values(fieldsToInsert).returning();
+      createdFields.push(...insertedFields);
+    }
+    
+    return { ...createdTemplate, fields: createdFields };
+  }
+
+  async getEvaluationFormTemplate(id: string): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }) | undefined> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const [template] = await db.select().from(evaluationFormTemplates).where(eq(evaluationFormTemplates.id, id)).limit(1);
+    if (!template) return undefined;
+    
+    const fields = await db.select().from(evaluationFormFields)
+      .where(eq(evaluationFormFields.formTemplateId, id))
+      .orderBy(evaluationFormFields.orderIndex);
+    
+    // Parse JSONB options if they're strings
+    const parsedFields = fields.map(field => ({
+      ...field,
+      options: field.options && typeof field.options === 'string' ? JSON.parse(field.options) : field.options,
+      validationRules: field.validationRules && typeof field.validationRules === 'string' ? JSON.parse(field.validationRules) : field.validationRules,
+    }));
+    
+    return { ...template, fields: parsedFields };
+  }
+
+  async getEvaluationFormTemplates(options?: { status?: string; createdBy?: string }): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] })[]> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    let query = db.select().from(evaluationFormTemplates);
+    const conditions = [];
+    
+    if (options?.status) {
+      conditions.push(eq(evaluationFormTemplates.status, options.status));
+    }
+    if (options?.createdBy) {
+      conditions.push(eq(evaluationFormTemplates.createdBy, options.createdBy));
+    }
+    
+    if (conditions.length > 0) {
+      query = db.select().from(evaluationFormTemplates).where(and(...conditions));
+    }
+    
+    const templates = await query.orderBy(desc(evaluationFormTemplates.createdAt));
+    
+    const templatesWithFields = await Promise.all(templates.map(async (template) => {
+      const fields = await db.select().from(evaluationFormFields)
+        .where(eq(evaluationFormFields.formTemplateId, template.id))
+        .orderBy(evaluationFormFields.orderIndex);
+      
+      // Parse JSONB options if they're strings
+      const parsedFields = fields.map(field => ({
+        ...field,
+        options: field.options && typeof field.options === 'string' ? JSON.parse(field.options) : field.options,
+        validationRules: field.validationRules && typeof field.validationRules === 'string' ? JSON.parse(field.validationRules) : field.validationRules,
+      }));
+      
+      return { ...template, fields: parsedFields };
+    }));
+    
+    return templatesWithFields;
+  }
+
+  async updateEvaluationFormTemplate(id: string, template: Partial<InsertEvaluationFormTemplate>, fields?: InsertEvaluationFormField[]): Promise<(EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] }) | undefined> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const [updatedTemplate] = await db.update(evaluationFormTemplates)
+      .set({ ...template, updatedAt: new Date() })
+      .where(eq(evaluationFormTemplates.id, id))
+      .returning();
+    
+    if (!updatedTemplate) return undefined;
+    
+    if (fields !== undefined) {
+      try {
+        // Get existing fields
+        const existingFields = await db.select()
+          .from(evaluationFormFields)
+          .where(eq(evaluationFormFields.formTemplateId, id))
+          .orderBy(evaluationFormFields.orderIndex);
+        
+        // Get field IDs that are referenced by submissions (CRITICAL: can't delete these)
+        const referencedFieldIds = await db.selectDistinct({ fieldId: evaluationSubmissionResponses.fieldId })
+          .from(evaluationSubmissionResponses)
+          .innerJoin(evaluationSubmissions, eq(evaluationSubmissionResponses.submissionId, evaluationSubmissions.id))
+          .where(eq(evaluationSubmissions.formTemplateId, id));
+        
+        const referencedFieldIdSet = new Set(referencedFieldIds.map(r => r.fieldId));
+        
+        // Track which existing fields have been matched/updated
+        const matchedExistingFieldIds = new Set<string>();
+        
+        // Strategy: Match fields intelligently to preserve foreign key integrity
+        // Priority: 1) label+type match, 2) position match for referenced fields, 3) position match for others
+        
+        for (let i = 0; i < fields.length; i++) {
+          const newField = fields[i];
+          
+          let existingField: typeof existingFields[0] | undefined;
+          
+          // First: Try to match by label + fieldType (most reliable when field properties unchanged)
+          existingField = existingFields.find(f => 
+            f.label === newField.label && 
+            f.fieldType === newField.fieldType &&
+            !matchedExistingFieldIds.has(f.id)
+          );
+          
+          // Second: If no label+type match, check if field at this position is referenced
+          // CRITICAL: Referenced fields MUST be matched to preserve foreign key integrity
+          // Match by position if the field at that position is referenced
+          if (!existingField && i < existingFields.length) {
+            const fieldAtIndex = existingFields[i];
+            if (!matchedExistingFieldIds.has(fieldAtIndex.id) && referencedFieldIdSet.has(fieldAtIndex.id)) {
+              // This field is referenced - we MUST match it to prevent FK violations
+              existingField = fieldAtIndex;
+            }
+          }
+          
+          // Third: If still no match and field counts match, try matching by position
+          // This handles cases where label/type changed but it's likely the same field
+          if (!existingField && fields.length === existingFields.length && i < existingFields.length) {
+            const fieldAtIndex = existingFields[i];
+            if (!matchedExistingFieldIds.has(fieldAtIndex.id)) {
+              existingField = fieldAtIndex;
+            }
+          }
+          
+          // Prepare field data
+          const fieldData = {
+            fieldType: newField.fieldType,
+            label: newField.label,
+            placeholder: newField.placeholder || null,
+            helpText: newField.helpText || null,
+            required: newField.required,
+            orderIndex: i,
+            options: newField.options ? (typeof newField.options === 'string' ? newField.options : JSON.stringify(newField.options)) as any : null,
+            validationRules: newField.validationRules ? (typeof newField.validationRules === 'string' ? newField.validationRules : JSON.stringify(newField.validationRules)) as any : null,
+          };
+          
+          if (existingField) {
+            // Update existing field in place - preserves field ID and foreign key integrity
+            await db.update(evaluationFormFields)
+              .set(fieldData)
+              .where(eq(evaluationFormFields.id, existingField.id));
+            matchedExistingFieldIds.add(existingField.id);
+          } else {
+            // Insert new field (no existing field to match)
+            await db.insert(evaluationFormFields).values({
+              ...fieldData,
+              formTemplateId: id,
+            });
+          }
+        }
+        
+        // Handle unmatched existing fields
+        // CRITICAL: NEVER delete referenced fields, even if they don't match
+        for (const existingField of existingFields) {
+          if (!matchedExistingFieldIds.has(existingField.id)) {
+            if (referencedFieldIdSet.has(existingField.id)) {
+              // Field is referenced but not matched - this can happen if user removed it from form
+              // We MUST keep it to preserve foreign key integrity
+              // Optionally, we could mark it as "archived" or move it to the end
+              // For now, we'll keep it but move it to the end of the order
+              await db.update(evaluationFormFields)
+                .set({ orderIndex: fields.length + existingFields.indexOf(existingField) })
+                .where(eq(evaluationFormFields.id, existingField.id));
+            } else {
+              // Safe to delete - not referenced and not matched
+              await db.delete(evaluationFormFields)
+                .where(eq(evaluationFormFields.id, existingField.id));
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('Error updating evaluation form fields:', error);
+        // If it's a foreign key violation, provide a more helpful error message
+        if (error.message && error.message.includes('foreign key')) {
+          throw new Error('Cannot update form: One or more fields are referenced by existing submissions and cannot be deleted. Please ensure all fields are properly matched.');
+        }
+        throw error;
+      }
+    }
+    
+    return this.getEvaluationFormTemplate(id);
+  }
+
+  async deleteEvaluationFormTemplate(id: string): Promise<void> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    // Cascade delete will handle fields and submissions
+    await db.delete(evaluationFormTemplates).where(eq(evaluationFormTemplates.id, id));
+  }
+
+  async publishEvaluationFormTemplate(id: string): Promise<EvaluationFormTemplateDB | undefined> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const [updated] = await db.update(evaluationFormTemplates)
+      .set({ 
+        status: 'active',
+        publishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(evaluationFormTemplates.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async archiveEvaluationFormTemplate(id: string): Promise<EvaluationFormTemplateDB | undefined> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const [updated] = await db.update(evaluationFormTemplates)
+      .set({ 
+        status: 'archived',
+        updatedAt: new Date(),
+      })
+      .where(eq(evaluationFormTemplates.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async createEvaluationSubmission(submission: InsertEvaluationSubmission, responses: Array<{ fieldId: string; responseValue: string }>): Promise<EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[] }> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const submissionData = {
+      ...submission,
+      submittedAt: submission.status === 'submitted' ? new Date() : null,
+      updatedAt: new Date(),
+    };
+    
+    const [createdSubmission] = await db.insert(evaluationSubmissions).values(submissionData).returning();
+    
+    const createdResponses: EvaluationSubmissionResponseDB[] = [];
+    if (responses.length > 0) {
+      const responsesToInsert = responses.map(response => ({
+        submissionId: createdSubmission.id,
+        fieldId: response.fieldId,
+        responseValue: response.responseValue,
+        updatedAt: new Date(),
+      }));
+      const insertedResponses = await db.insert(evaluationSubmissionResponses).values(responsesToInsert).returning();
+      createdResponses.push(...insertedResponses);
+    }
+    
+    return { ...createdSubmission, responses: createdResponses };
+  }
+
+  async getEvaluationSubmission(id: string): Promise<(EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[]; formTemplate?: EvaluationFormTemplateDB & { fields: EvaluationFormFieldDB[] } }) | undefined> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const [submission] = await db.select().from(evaluationSubmissions).where(eq(evaluationSubmissions.id, id)).limit(1);
+    if (!submission) return undefined;
+    
+    const responses = await db.select().from(evaluationSubmissionResponses)
+      .where(eq(evaluationSubmissionResponses.submissionId, id));
+    
+    const [formTemplate] = await db.select().from(evaluationFormTemplates)
+      .where(eq(evaluationFormTemplates.id, submission.formTemplateId))
+      .limit(1);
+    
+    let formTemplateWithFields = undefined;
+    if (formTemplate) {
+      const fields = await db.select().from(evaluationFormFields)
+        .where(eq(evaluationFormFields.formTemplateId, formTemplate.id))
+        .orderBy(evaluationFormFields.orderIndex);
+      
+      // Parse JSONB options if they're strings
+      const parsedFields = fields.map(field => ({
+        ...field,
+        options: field.options && typeof field.options === 'string' ? JSON.parse(field.options) : field.options,
+        validationRules: field.validationRules && typeof field.validationRules === 'string' ? JSON.parse(field.validationRules) : field.validationRules,
+      }));
+      
+      formTemplateWithFields = { ...formTemplate, fields: parsedFields };
+    }
+    
+    // If studentId is present but student data is missing/null, fetch from students table
+    let finalSubmission = { ...submission };
+    if (submission.studentId && (!submission.studentName || !submission.studentSchoolName)) {
+      const studentProfile = await this.getStudentProfileForEvaluation(submission.studentId);
+      if (studentProfile) {
+        finalSubmission = {
+          ...submission,
+          studentName: submission.studentName || studentProfile.name,
+          studentProfilePicUrl: submission.studentProfilePicUrl || studentProfile.profilePicUrl || null,
+          studentPosition: submission.studentPosition || studentProfile.position || null,
+          studentHeight: submission.studentHeight || studentProfile.height || null,
+          studentWeight: submission.studentWeight || studentProfile.weight || null,
+          studentRoleNumber: submission.studentRoleNumber || studentProfile.roleNumber || null,
+          studentSport: submission.studentSport || studentProfile.sport || null,
+          studentSchoolId: submission.studentSchoolId || studentProfile.schoolId || null,
+          studentSchoolName: submission.studentSchoolName || studentProfile.schoolName || null,
+        };
+      }
+    }
+    
+    return { 
+      ...finalSubmission, 
+      responses,
+      formTemplate: formTemplateWithFields || undefined,
+    };
+  }
+
+  async getEvaluationSubmissions(options?: { formTemplateId?: string; submittedBy?: string; status?: string; page?: number; limit?: number }): Promise<{ submissions: (EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[]; submittedByUser?: { id: string; name: string }; formTemplate?: EvaluationFormTemplateDB })[]; total: number; page: number; limit: number; totalPages: number }> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const page = options?.page || 1;
+    const limit = options?.limit || 20;
+    const offset = (page - 1) * limit;
+    
+    const conditions = [];
+    if (options?.formTemplateId) {
+      conditions.push(eq(evaluationSubmissions.formTemplateId, options.formTemplateId));
+    }
+    if (options?.submittedBy) {
+      conditions.push(eq(evaluationSubmissions.submittedBy, options.submittedBy));
+    }
+    if (options?.status) {
+      conditions.push(eq(evaluationSubmissions.status, options.status));
+    }
+    
+    // Get total count
+    const countQuery = conditions.length > 0 
+      ? db.select({ count: sql<number>`count(*)` }).from(evaluationSubmissions).where(and(...conditions))
+      : db.select({ count: sql<number>`count(*)` }).from(evaluationSubmissions);
+    const [{ count: totalCount }] = await countQuery;
+    const total = Number(totalCount);
+    
+    // Get paginated submissions
+    const submissionsQuery = conditions.length > 0
+      ? db.select().from(evaluationSubmissions).where(and(...conditions)).orderBy(desc(evaluationSubmissions.createdAt)).limit(limit).offset(offset)
+      : db.select().from(evaluationSubmissions).orderBy(desc(evaluationSubmissions.createdAt)).limit(limit).offset(offset);
+    const submissions = await submissionsQuery;
+    
+    const submissionsWithDetails = await Promise.all(submissions.map(async (submission) => {
+      const responses = await db.select().from(evaluationSubmissionResponses)
+        .where(eq(evaluationSubmissionResponses.submissionId, submission.id));
+      
+      const [submittedByUser] = await db.select({ id: users.id, name: users.name })
+        .from(users)
+        .where(eq(users.id, submission.submittedBy))
+        .limit(1);
+      
+      // Get form template with fields
+      const [formTemplate] = await db.select().from(evaluationFormTemplates)
+        .where(eq(evaluationFormTemplates.id, submission.formTemplateId))
+        .limit(1);
+      
+      let formTemplateWithFields = undefined;
+      if (formTemplate) {
+        const fields = await db.select().from(evaluationFormFields)
+          .where(eq(evaluationFormFields.formTemplateId, formTemplate.id))
+          .orderBy(evaluationFormFields.orderIndex);
+        
+        // Parse JSONB options if they're strings
+        const parsedFields = fields.map(field => ({
+          ...field,
+          options: field.options && typeof field.options === 'string' ? JSON.parse(field.options) : field.options,
+          validationRules: field.validationRules && typeof field.validationRules === 'string' ? JSON.parse(field.validationRules) : field.validationRules,
+        }));
+        
+        formTemplateWithFields = { ...formTemplate, fields: parsedFields };
+      }
+      
+      // If studentId is present but student data is missing/null, fetch from students table
+      let finalSubmission = { ...submission };
+      if (submission.studentId && (!submission.studentName || !submission.studentSchoolName)) {
+        const studentProfile = await this.getStudentProfileForEvaluation(submission.studentId);
+        if (studentProfile) {
+          finalSubmission = {
+            ...submission,
+            studentName: submission.studentName || studentProfile.name,
+            studentProfilePicUrl: submission.studentProfilePicUrl || studentProfile.profilePicUrl || null,
+            studentPosition: submission.studentPosition || studentProfile.position || null,
+            studentHeight: submission.studentHeight || studentProfile.height || null,
+            studentWeight: submission.studentWeight || studentProfile.weight || null,
+            studentRoleNumber: submission.studentRoleNumber || studentProfile.roleNumber || null,
+            studentSport: submission.studentSport || studentProfile.sport || null,
+            studentSchoolId: submission.studentSchoolId || studentProfile.schoolId || null,
+            studentSchoolName: submission.studentSchoolName || studentProfile.schoolName || null,
+          };
+        }
+      }
+      
+      return {
+        ...finalSubmission,
+        responses,
+        submittedByUser: submittedByUser || undefined,
+        formTemplate: formTemplateWithFields || undefined,
+      };
+    }));
+    
+    return {
+      submissions: submissionsWithDetails,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async updateEvaluationSubmission(id: string, submission: Partial<InsertEvaluationSubmission>, responses?: Array<{ fieldId: string; responseValue: string }>): Promise<(EvaluationSubmissionDB & { responses: EvaluationSubmissionResponseDB[] }) | undefined> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const updateData: any = { ...submission, updatedAt: new Date() };
+    if (submission.status === 'submitted' && !submission.submittedAt) {
+      updateData.submittedAt = new Date();
+    }
+    
+    const [updatedSubmission] = await db.update(evaluationSubmissions)
+      .set(updateData)
+      .where(eq(evaluationSubmissions.id, id))
+      .returning();
+    
+    if (!updatedSubmission) return undefined;
+    
+    if (responses !== undefined) {
+      // Delete existing responses and insert new ones
+      await db.delete(evaluationSubmissionResponses).where(eq(evaluationSubmissionResponses.submissionId, id));
+      
+      if (responses.length > 0) {
+        const responsesToInsert = responses.map(response => ({
+          submissionId: id,
+          fieldId: response.fieldId,
+          responseValue: response.responseValue,
+          updatedAt: new Date(),
+        }));
+        await db.insert(evaluationSubmissionResponses).values(responsesToInsert);
+      }
+    }
+    
+    return this.getEvaluationSubmission(id);
+  }
+
+  async deleteEvaluationSubmission(id: string): Promise<void> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    // Cascade delete will handle responses
+    await db.delete(evaluationSubmissions).where(eq(evaluationSubmissions.id, id));
+  }
+
+  async searchStudentsForEvaluation(query: string, limit: number = 20): Promise<Array<{ id: string; name: string; profilePicUrl?: string | null; position?: string | null; height?: string | null; weight?: string | null; roleNumber?: string | null; sport?: string | null; schoolId?: string | null; schoolName?: string | null }>> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const searchTerm = `%${query.toLowerCase()}%`;
+    
+    const results = await db.select({
+      id: students.id,
+      name: students.name,
+      profilePicUrl: students.profilePicUrl,
+      position: students.position,
+      height: students.height,
+      weight: students.weight,
+      roleNumber: students.roleNumber,
+      sport: students.sport,
+      schoolId: students.schoolId,
+      schoolName: schools.name,
+    })
+      .from(students)
+      .leftJoin(schools, eq(students.schoolId, schools.id))
+      .where(
+        sql`LOWER(${students.name}) LIKE ${searchTerm} OR 
+            LOWER(${students.sport}) LIKE ${searchTerm} OR 
+            LOWER(${students.position}) LIKE ${searchTerm}`
+      )
+      .limit(limit);
+    
+    return results.map(r => ({
+      id: r.id,
+      name: r.name,
+      profilePicUrl: r.profilePicUrl || null,
+      position: r.position || null,
+      height: r.height || null,
+      weight: r.weight || null,
+      roleNumber: r.roleNumber || null,
+      sport: r.sport || null,
+      schoolId: r.schoolId || null,
+      schoolName: r.schoolName || null,
+    }));
+  }
+
+  async getStudentProfileForEvaluation(studentId: string): Promise<{ id: string; name: string; profilePicUrl?: string | null; position?: string | null; height?: string | null; weight?: string | null; roleNumber?: string | null; sport?: string | null; schoolId?: string | null; schoolName?: string | null } | undefined> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    const [result] = await db.select({
+      id: students.id,
+      name: students.name,
+      profilePicUrl: students.profilePicUrl,
+      position: students.position,
+      height: students.height,
+      weight: students.weight,
+      roleNumber: students.roleNumber,
+      sport: students.sport,
+      schoolId: students.schoolId,
+      schoolName: schools.name,
+    })
+      .from(students)
+      .leftJoin(schools, eq(students.schoolId, schools.id))
+      .where(eq(students.id, studentId))
+      .limit(1);
+    
+    if (!result) return undefined;
+    
+    return {
+      id: result.id,
+      name: result.name,
+      profilePicUrl: result.profilePicUrl || null,
+      position: result.position || null,
+      height: result.height || null,
+      weight: result.weight || null,
+      roleNumber: result.roleNumber || null,
+      sport: result.sport || null,
+      schoolId: result.schoolId || null,
+      schoolName: result.schoolName || null,
     };
   }
 }

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, unique, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, unique, decimal, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -481,6 +481,74 @@ export const banners = pgTable("banners", {
   updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
 });
 
+// Evaluation Forms System Tables
+export const evaluationFormTemplates = pgTable("evaluation_form_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("draft"), // 'draft', 'active', 'archived'
+  createdBy: varchar("created_by").notNull(), // References users(id)
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+  publishedAt: timestamp("published_at"), // When form was published to scouts
+  version: integer("version").default(1), // For form versioning
+});
+
+export const evaluationFormFields = pgTable("evaluation_form_fields", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  formTemplateId: varchar("form_template_id").notNull(), // References evaluation_form_templates(id)
+  fieldType: text("field_type").notNull(), // 'short_text', 'paragraph', 'star_rating', 'multiple_choice', 'multiple_selection', 'number', 'date', 'dropdown'
+  label: text("label").notNull(),
+  placeholder: text("placeholder"),
+  helpText: text("help_text"),
+  required: boolean("required").default(false),
+  orderIndex: integer("order_index").notNull(), // For field ordering
+  options: jsonb("options"), // For multiple_choice/multiple_selection/dropdown: [{"value": "option1", "label": "Option 1"}]
+  validationRules: jsonb("validation_rules"), // For min/max length, numeric ranges, etc.
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
+export const evaluationSubmissions = pgTable("evaluation_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  formTemplateId: varchar("form_template_id").notNull(), // References evaluation_form_templates(id)
+  submittedBy: varchar("submitted_by").notNull(), // References users(id) - Scout who submitted
+  studentId: varchar("student_id"), // References students(id) - Nullable if student not in system
+  // Student info (for manual entries or snapshot at submission time)
+  studentName: text("student_name"),
+  studentProfilePicUrl: text("student_profile_pic_url"),
+  studentPosition: text("student_position"),
+  studentHeight: text("student_height"),
+  studentWeight: text("student_weight"),
+  studentRoleNumber: text("student_role_number"),
+  studentSport: text("student_sport"),
+  studentSchoolId: varchar("student_school_id"), // References schools(id)
+  studentSchoolName: text("student_school_name"),
+  // Submission metadata
+  status: text("status").default("draft"), // 'draft', 'submitted'
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+});
+
+export const evaluationSubmissionResponses = pgTable("evaluation_submission_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull(), // References evaluation_submissions(id)
+  fieldId: varchar("field_id").notNull(), // References evaluation_form_fields(id)
+  responseValue: text("response_value"), // JSON string for complex types (arrays, objects)
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
+}, (table) => [
+  unique("evaluation_submission_responses_submission_field_unique").on(table.submissionId, table.fieldId),
+]);
+
+export const evaluationFormAccess = pgTable("evaluation_form_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  formTemplateId: varchar("form_template_id").notNull(), // References evaluation_form_templates(id)
+  role: text("role").notNull(), // 'scout_admin', 'xen_scout', or specific user IDs
+  grantedAt: timestamp("granted_at").default(sql`now()`).notNull(),
+  grantedBy: varchar("granted_by"), // References users(id)
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -662,6 +730,35 @@ export const insertBannerSchema = createInsertSchema(banners).omit({
   updatedAt: true,
 });
 
+// Evaluation Forms Insert Schemas
+export const insertEvaluationFormTemplateSchema = createInsertSchema(evaluationFormTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEvaluationFormFieldSchema = createInsertSchema(evaluationFormFields).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEvaluationSubmissionSchema = createInsertSchema(evaluationSubmissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEvaluationSubmissionResponseSchema = createInsertSchema(evaluationSubmissionResponses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEvaluationFormAccessSchema = createInsertSchema(evaluationFormAccess).omit({
+  id: true,
+  grantedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type Viewer = typeof viewers.$inferSelect;
@@ -704,6 +801,13 @@ export type XenWatchFeedbackDB = typeof xenWatchFeedback.$inferSelect;
 export type NotificationDB = typeof notifications.$inferSelect;
 export type BannerDB = typeof banners.$inferSelect;
 
+// Evaluation Forms Types
+export type EvaluationFormTemplateDB = typeof evaluationFormTemplates.$inferSelect;
+export type EvaluationFormFieldDB = typeof evaluationFormFields.$inferSelect;
+export type EvaluationSubmissionDB = typeof evaluationSubmissions.$inferSelect;
+export type EvaluationSubmissionResponseDB = typeof evaluationSubmissionResponses.$inferSelect;
+export type EvaluationFormAccessDB = typeof evaluationFormAccess.$inferSelect;
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertViewer = z.infer<typeof insertViewerSchema>;
 export type InsertSchoolAdmin = z.infer<typeof insertSchoolAdminSchema>;
@@ -744,6 +848,13 @@ export type InsertXenWatchReview = z.infer<typeof insertXenWatchReviewSchema>;
 export type InsertXenWatchFeedback = z.infer<typeof insertXenWatchFeedbackSchema>;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type InsertBanner = z.infer<typeof insertBannerSchema>;
+
+// Evaluation Forms Insert Types
+export type InsertEvaluationFormTemplate = z.infer<typeof insertEvaluationFormTemplateSchema>;
+export type InsertEvaluationFormField = z.infer<typeof insertEvaluationFormFieldSchema>;
+export type InsertEvaluationSubmission = z.infer<typeof insertEvaluationSubmissionSchema>;
+export type InsertEvaluationSubmissionResponse = z.infer<typeof insertEvaluationSubmissionResponseSchema>;
+export type InsertEvaluationFormAccess = z.infer<typeof insertEvaluationFormAccessSchema>;
 
 // Extended types for joins  
 export type PostCommentWithUser = PostComment & {
