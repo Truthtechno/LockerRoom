@@ -8,7 +8,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-316192?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
 [![Express](https://img.shields.io/badge/Express-4.21-000000?style=for-the-badge&logo=express)](https://expressjs.com/)
 
-## 🎯 Goals
+## Goals
 
 - **Student-Athlete Empowerment** - Provide a platform for students to showcase their sports achievements and highlights
 - **Community Building** - Connect students, parents, coaches, and sports enthusiasts in a safe, school-managed environment
@@ -17,11 +17,11 @@
 - **Scalable Architecture** - Modern tech stack designed for performance and scalability
 - **Engagement & Analytics** - Track student engagement, views, likes, comments, and saves with detailed analytics
 
-## ✨ Features
+## Features
 
-### 🏫 Core Platform Modules
+### Core Platform Modules
 
-#### 👥 **User Roles & Permissions**
+#### **User Roles & Permissions**
 - **System Admin (XEN)** - Full platform control, school approvals, global analytics
 - **School Admin** - School-specific management, student enrollment, announcements
 - **Students** - Content creation, profile management, social interactions
@@ -29,103 +29,103 @@
 - **Scout Admin** - Manage scout assignments and review submissions
 - **XEN Scouts** - Professional scouts review and rate student submissions
 
-#### 📱 **Student Portal**
-- **📊 Dashboard** - Personalized feed with posts from followed students and school announcements
-- **📸 Content Creation** - Upload images and videos to Cloudinary with real-time processing
-- **👤 Profile Management** - Complete profile with bio, position, sport, role number, and cover photos
-- **📈 Statistics** - Track views, likes, comments, saves, and follower counts
-- **🔍 Discovery** - Search for students, schools, and content across the platform
-- **💾 Saved Posts** - Save favorite posts for later viewing
-- **📝 Following Feed** - Curated feed of content from followed students
-- **🏆 XEN Watch** - Submit videos for professional scout review and feedback
+#### **Student Portal**
+- **Dashboard** - Personalized feed with posts from followed students and school announcements
+- **Content Creation** - Upload images and videos to Cloudinary with real-time processing
+- **Profile Management** - Complete profile with bio, position, sport, role number, and cover photos
+- **Statistics** - Track views, likes, comments, saves, and follower counts
+- **Discovery** - Search for students, schools, and content across the platform
+- **Saved Posts** - Save favorite posts for later viewing
+- **Following Feed** - Curated feed of content from followed students
+- **XEN Watch** - Submit videos for professional scout review and feedback
 
-#### 🏛️ **School Admin Portal**
-- **👨‍🎓 Student Management** - Enroll students with OTP, manage profiles, view student analytics
-- **📢 Announcements** - Create school-wide announcements with media support
-- **📊 School Analytics** - Monitor student engagement, posts, likes, and activity metrics
-- **🔍 Student Search** - Quick search and filter capabilities for students
-- **⚙️ School Settings** - Configure school profile, subscription plans, and student limits
-- **📋 Live Reports** - View and manage reported content and user issues
-- **💳 Subscription Management** - View subscription status, expiration dates, and payment history
-- **📈 Student Limit Management** - Monitor and manage student enrollment limits
+#### **School Admin Portal**
+- **Student Management** - Enroll students with OTP, manage profiles, view student analytics
+- **Announcements** - Create school-wide announcements with media support
+- **School Analytics** - Monitor student engagement, posts, likes, and activity metrics
+- **Student Search** - Quick search and filter capabilities for students
+- **School Settings** - Configure school profile, subscription plans, and student limits
+- **Live Reports** - View and manage reported content and user issues
+- **Subscription Management** - View subscription status, expiration dates, and payment history
+- **Student Limit Management** - Monitor and manage student enrollment limits
 
-#### 🔧 **System Admin Portal**
-- **🏫 School Management** - Approve/reject school applications, manage subscriptions, view all schools
-- **👥 User Management** - Manage all platform users and administrators with freeze/unfreeze capabilities
-- **📊 Platform Analytics** - Global statistics and insights across all schools with export functionality
-- **⚙️ System Configuration** - Platform-wide settings, branding, appearance customization
-- **🔐 Admin Management** - Create and assign admin roles with granular permissions
-- **📢 Global Announcements** - Create announcements visible to all schools or specific schools
-- **💳 Payment Configuration** - Configure Stripe payment settings, XEN Watch pricing, and subscription pricing
-- **🏷️ Banner Management** - Create and manage dashboard-level banners for targeted communications
-- **📋 Evaluation Forms** - Create and manage evaluation form templates for scouts
+#### **System Admin Portal**
+- **School Management** - Approve/reject school applications, manage subscriptions, view all schools
+- **User Management** - Manage all platform users and administrators with freeze/unfreeze capabilities
+- **Platform Analytics** - Global statistics and insights across all schools with export functionality
+- **System Configuration** - Platform-wide settings, branding, appearance customization
+- **Admin Management** - Create and assign admin roles with granular permissions
+- **Global Announcements** - Create announcements visible to all schools or specific schools
+- **Payment Configuration** - Configure Stripe payment settings, XEN Watch pricing, and subscription pricing
+- **Banner Management** - Create and manage dashboard-level banners for targeted communications
+- **Evaluation Forms** - Create and manage evaluation form templates for scouts
 
-#### ⭐ **XEN Watch - Professional Scouting System**
-- **📤 Student Submissions** - Students submit highlight videos for professional review
-- **👀 Scout Review Queue** - Scouts review submissions and provide ratings (1-5) and feedback
-- **📝 Draft Reviews** - Scouts can save draft reviews before final submission
-- **🎯 Final Feedback** - Scout admins compile reviews and send final feedback to students
-- **📊 Analytics** - Track submission statistics, average ratings, and scout activity
-- **💳 Payment Integration** - Optional payment processing for submission reviews (Stripe or mock mode)
-- **🔄 Real-time Updates** - Live status updates and notifications for submissions
+#### **XEN Watch - Professional Scouting System**
+- **Student Submissions** - Students submit highlight videos for professional review
+- **Scout Review Queue** - Scouts review submissions and provide ratings (1-5) and feedback
+- **Draft Reviews** - Scouts can save draft reviews before final submission
+- **Final Feedback** - Scout admins compile reviews and send final feedback to students
+- **Analytics** - Track submission statistics, average ratings, and scout activity
+- **Payment Integration** - Optional payment processing for submission reviews (Stripe or mock mode)
+- **Real-time Updates** - Live status updates and notifications for submissions
 
-#### 📋 **Evaluation Forms System**
-- **🎨 Dynamic Form Builder** - System admins create customizable evaluation forms with 8+ field types
-- **📝 Field Types** - Short text, paragraph, star rating, multiple choice, multiple selection, number, date, dropdown
-- **👥 Student Auto-population** - Auto-fill student profiles from database or manual entry
-- **💾 Draft & Submit** - Save drafts and submit final evaluations
-- **📊 Submission Management** - View, filter, and search all submissions
-- **📤 Excel Export** - Export evaluation data for analysis
-- **🔐 Role-based Access** - System admin full access, scout admin read all, XEN scout own submissions
-- **📈 Statistics** - Track form usage and submission metrics
+#### **Evaluation Forms System**
+- **Dynamic Form Builder** - System admins create customizable evaluation forms with 8+ field types
+- **Field Types** - Short text, paragraph, star rating, multiple choice, multiple selection, number, date, dropdown
+- **Student Auto-population** - Auto-fill student profiles from database or manual entry
+- **Draft & Submit** - Save drafts and submit final evaluations
+- **Submission Management** - View, filter, and search all submissions
+- **Excel Export** - Export evaluation data for analysis
+- **Role-based Access** - System admin full access, scout admin read all, XEN scout own submissions
+- **Statistics** - Track form usage and submission metrics
 
-#### 🔔 **Notification System**
-- **📬 Real-time Notifications** - Instagram/TikTok-style pop-up notifications
-- **🎨 Rich Content** - Notifications with avatars, icons, and custom styling
-- **🔔 20+ Notification Types** - Post likes, comments, follows, announcements, XEN Watch feedback, and more
-- **📱 Smart Polling** - Automatic polling with duplicate prevention
-- **👆 Click Navigation** - Navigate to related content directly from notifications
-- **📋 Notification Center** - Full-featured notifications page with filtering and read/unread status
+#### **Notification System**
+- **Real-time Notifications** - Instagram/TikTok-style pop-up notifications
+- **Rich Content** - Notifications with avatars, icons, and custom styling
+- **20+ Notification Types** - Post likes, comments, follows, announcements, XEN Watch feedback, and more
+- **Smart Polling** - Automatic polling with duplicate prevention
+- **Click Navigation** - Navigate to related content directly from notifications
+- **Notification Center** - Full-featured notifications page with filtering and read/unread status
 
-### 🛠️ Technical Capabilities
-- **📱 Responsive Design** - Mobile-first approach with seamless cross-device experience
-- **⚡ Real-time Processing** - Cloudinary integration for automatic video/image optimization
-- **🔐 Secure Authentication** - JWT-based authentication with role-based access control
-- **💾 Advanced Database** - PostgreSQL with Drizzle ORM for type-safe database operations
-- **📊 Analytics Dashboard** - Comprehensive analytics with Recharts visualization
-- **🔔 Announcement System** - Multi-scope announcements (global, school, staff)
-- **🔍 Advanced Search** - Full-text search across students, schools, and content
-- **📸 Media Management** - Cloudinary CDN for fast, optimized media delivery
-- **🔄 Progressive Feed Loading** - Infinite scroll with optimized pagination
-- **🌓 Theme Support** - Light/dark mode with system appearance configuration
+### Technical Capabilities
+- **Responsive Design** - Mobile-first approach with seamless cross-device experience
+- **Real-time Processing** - Cloudinary integration for automatic video/image optimization
+- **Secure Authentication** - JWT-based authentication with role-based access control
+- **Advanced Database** - PostgreSQL with Drizzle ORM for type-safe database operations
+- **Analytics Dashboard** - Comprehensive analytics with Recharts visualization
+- **Announcement System** - Multi-scope announcements (global, school, staff)
+- **Advanced Search** - Full-text search across students, schools, and content
+- **Media Management** - Cloudinary CDN for fast, optimized media delivery
+- **Progressive Feed Loading** - Infinite scroll with optimized pagination
+- **Theme Support** - Light/dark mode with system appearance configuration
 
 ### нюансы Features
 
 #### Content Engagement
-- **❤️ Likes** - Express appreciation for student posts
-- **💬 Comments** - Engage in conversations on posts
-- **🔖 Saves** - Save posts to personal collections
-- **👁️ Views** - Automatic view tracking for analytics
-- **👥 Follow System** - Follow students and build your network
-- **📊 Post Statistics** - Real-time engagement metrics
+- **Likes** - Express appreciation for student posts
+- **Comments** - Engage in conversations on posts
+- **Saves** - Save posts to personal collections
+- **Views** - Automatic view tracking for analytics
+- **Follow System** - Follow students and build your network
+- **Post Statistics** - Real-time engagement metrics
 
 #### Announcement System
-- **🌍 Global Announcements** - System-wide announcements visible to all students
-- **🏫 School Announcements** - School-specific announcements managed by school admins
-- **👔 Staff Announcements** - Admin-only announcements (hidden from student feeds)
-- **📎 Media Support** - Attach images or videos to announcements
-- **🎨 Visual Distinction** - Special styling to distinguish announcements from regular posts
-- **📢 Banner System** - Dashboard-level banners for targeted role-based communications
+- **Global Announcements** - System-wide announcements visible to all students
+- **School Announcements** - School-specific announcements managed by school admins
+- **Staff Announcements** - Admin-only announcements (hidden from student feeds)
+- **Media Support** - Attach images or videos to announcements
+- **Visual Distinction** - Special styling to distinguish announcements from regular posts
+- **Banner System** - Dashboard-level banners for targeted role-based communications
 
 #### Subscription & Payment System
-- **💳 Flexible Subscriptions** - Monthly or annual payment options per school
-- **📅 Expiration Tracking** - Automatic tracking of subscription expiration dates
-- **🔔 Notifications** - Automatic notifications for expiring and expired subscriptions
-- **📊 Payment Records** - Complete audit trail of all school payments
-- **⚙️ Configuration** - Configurable subscription pricing via system settings
-- **🔄 Auto-deactivation** - Automatic deactivation of expired subscriptions
+- **Flexible Subscriptions** - Monthly or annual payment options per school
+- **Expiration Tracking** - Automatic tracking of subscription expiration dates
+- **Notifications** - Automatic notifications for expiring and expired subscriptions
+- **Payment Records** - Complete audit trail of all school payments
+- **Configuration** - Configurable subscription pricing via system settings
+- **Auto-deactivation** - Automatic deactivation of expired subscriptions
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Frontend**: React 18.3, TypeScript, Vite, TailwindCSS, shadcn/ui, Wouter
 - **Backend**: Node.js, Express.js, TypeScript, ES Modules
@@ -140,7 +140,7 @@
 - **Charts**: Recharts for analytics visualization
 - **UI Components**: Radix UI primitives via shadcn/ui
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - **Node.js** 18.0 or later
@@ -150,18 +150,18 @@
 
 ### Installation Steps
 
-1. **📥 Clone the Repository**
+1. **Clone the Repository**
    ```bash
    git clone https://github.com/Truthtechno/LockerRoom
    cd LockerRoom
    ```
 
-2. **📦 Install Dependencies**
+2. **Install Dependencies**
    ```bash
    npm install
    ```
 
-3. **⚙️ Environment Configuration**
+3. **Environment Configuration**
    
    Create a `.env` file in the root directory:
    ```env
@@ -196,7 +196,7 @@
    SESSION_SECRET="your-session-secret-key"
    ```
 
-4. **🗄️ Database Setup**
+4. **Database Setup**
    ```bash
    # Push schema to database
    npm run db:push
@@ -205,7 +205,7 @@
    npm run seed
    ```
 
-5. **🏃‍♂️ Start Development Server**
+5. **Start Development Server**
    ```bash
    # Start both frontend and backend
    npm run dev:both
@@ -215,26 +215,26 @@
    npm run dev:client # Frontend only (port 5173)
    ```
 
-6. **🌐 Access the Application**
+6. **Access the Application**
    Open your browser and navigate to [http://localhost:5174](http://localhost:5174)
 
-## 👥 Demo Accounts
+## Demo Accounts
 
 The system comes pre-configured with demo accounts for testing:
 
-### 🔧 System Administrator
+### System Administrator
 - **Email**: `admin@lockerroom.com`
 - **Password**: `admin123`
 - **Role**: System Admin
 - **Access**: Full platform control, school management, analytics
 
-### 🏫 School Administrator
+### School Administrator
 - **Email**: `principal@lincoln.edu`
 - **Password**: `principal123`
 - **School**: Lincoln High School
 - **Access**: Student management, announcements, school analytics
 
-### 👨‍🎓 Students
+### Students
 - **Email**: `marcus.rodriguez@student.com`
 - **Password**: `student123`
 - **Position**: Midfielder (#10)
@@ -244,16 +244,16 @@ The system comes pre-configured with demo accounts for testing:
 - **Password**: `student123`
 - **Position**: Forward (#7)
 
-### 👀 Viewers
+### Viewers
 - **Email**: `sarah.johnson@viewer.com`
 - **Password**: `viewer123`
 - **Access**: Browse content, follow students, comment on posts
 
 > **Note**: Run `npm run reseed` to reset demo data to default state
 
-## 🎨 Design System
+## Design System
 
-### 🎨 Color Palette
+### Color Palette
 - **Primary Colors**: Customizable via System Configuration
 - **Default Primary**: Gold (`#FFD700`) - Representing excellence and achievement
 - **Default Secondary**: Black - Professional contrast
@@ -261,19 +261,19 @@ The system comes pre-configured with demo accounts for testing:
 - **Warning**: Yellow/Orange - Announcements and important notices
 - **Error**: Red - Errors and destructive actions
 
-### 📝 Typography System
+### Typography System
 - **Font Family**: Inter (system fallback)
 - **Responsive Sizing**: Scales appropriately across devices
 - **Headings**: Bold weights for emphasis
 - **Body Text**: Optimized for readability
 
-### 🧩 Component Library
+### Component Library
 - **shadcn/ui** - Modern, accessible component primitives
 - **Radix UI** - Unstyled, accessible component primitives
 - **TailwindCSS** - Utility-first CSS framework
 - **Custom Components** - Sports-focused UI elements
 
-## 📱 Mobile Responsiveness
+## Mobile Responsiveness
 
 The application is fully responsive with:
 - **Mobile-first design** approach
@@ -282,15 +282,15 @@ The application is fully responsive with:
 - **Responsive media** display (images and videos)
 - **Progressive Web Appance** capabilities
 
-## 🔧 Development
+## Development
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) for detailed development setup, project structure, and coding guidelines.
 
-## 🚀 Deployment
+## Deployment
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for comprehensive deployment instructions for various platforms including Vercel, Railway, and self-hosted options.
 
-## 📊 Database Schema
+## Database Schema
 
 The application uses PostgreSQL with the following main entities:
 
@@ -341,7 +341,7 @@ The application uses PostgreSQL with the following main entities:
 - **admin_roles** - Admin role assignments and permissions
 - **analytics_logs** - Platform analytics event logging
 
-## 🔐 Security Features
+## Security Features
 
 - **JWT Authentication** with secure token handling and expiration
 - **Role-based Access Control** (RBAC) with granular permissions
@@ -356,38 +356,38 @@ The application uses PostgreSQL with the following main entities:
 - **Account Freezing** - System admins can freeze/deactivate accounts instantly
 - **Frozen Account Protection** - JWT tokens invalidated for frozen accounts on every request
 
-## 📈 Performance Optimizations
+## Performance Optimizations
 
 ### Phase 1 Optimizations (✅ Implemented)
 
 The platform includes comprehensive performance optimizations for production scale:
 
-#### 🚀 **Redis Caching Layer**
+#### **Redis Caching Layer**
 - **Server-side caching** for frequently accessed data (feed, user profiles)
 - **70-90% reduction** in database queries
 - **85-95% faster** API response times (cached: 10-50ms vs 300-800ms)
 - **Graceful fallback** when Redis is unavailable
 - Integrated into feed and user profile endpoints
 
-#### 💾 **Streaming Uploads**
+#### **Streaming Uploads**
 - **Direct streaming** to Cloudinary (no base64 encoding)
 - **50% memory reduction** for file uploads
 - **Faster uploads** with streaming vs buffering
 - Supports large files (up to 500MB) efficiently
 
-#### 🔐 **Distributed Rate Limiting**
+#### **Distributed Rate Limiting**
 - **Redis-based** rate limiting for horizontal scaling
 - **Works across multiple server instances**
 - **Persistent** across server restarts
 - **In-memory fallback** when Redis unavailable
 
-#### 📊 **Error Monitoring**
+#### **Error Monitoring**
 - **Sentry integration** for production error tracking
 - **Performance monitoring** with transaction tracing
 - **Automatic error capture** and alerting
 - **Optional configuration** (works without Sentry DSN)
 
-#### 📦 **Client-Side Optimizations**
+#### **Client-Side Optimizations**
 - **Progressive feed loading** (instant first load, infinite scroll)
 - **Client-side caching** with TTL (5-minute cache for user data)
 - **Optimistic rendering** for instant page loads
@@ -405,7 +405,7 @@ The platform includes comprehensive performance optimizations for production sca
 
 See [PHASE1_IMPLEMENTATION_SUMMARY.md](./PHASE1_IMPLEMENTATION_SUMMARY.md) for detailed implementation information.
 
-## 📈 Performance Optimizations (Legacy)
+## Performance Optimizations (Legacy)
 
 - **Cloudinary CDN** for optimized media delivery
 - **Progressive Image Loading** with lazy loading
@@ -416,7 +416,7 @@ See [PHASE1_IMPLEMENTATION_SUMMARY.md](./PHASE1_IMPLEMENTATION_SUMMARY.md) for d
 - **Caching Strategies** for frequently accessed data
 - **Compression Middleware** for API responses
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run API tests
@@ -432,14 +432,14 @@ npm run test:e2e:ui
 npm run test:all
 ```
 
-## 📚 Documentation
+## Documentation
 
 - **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Development setup and guidelines
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deployment instructions
 - **[docs/demo_credentials.md](./docs/demo_credentials.md)** - Demo account information
 - **[docs/system_inputs_and_actions.md](./docs/system_inputs_and_actions.md)** - API documentation
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -447,28 +447,28 @@ npm run test:all
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support & Contact
+## Support & Contact
 
-### 📞 Get Help
-- **📧 Email**: [support@xensportsarmoury.com](mailto:support@xensportsarmoury.com)
-- **📚 Documentation**: See [docs](./docs) folder
-- **🐛 Bug Reports**: [GitHub Issues](https://github.com/Truthtechno/LockerRoom/issues)
+### Get Help
+- **Email**: [brian.amooti@xen-hub.com](mailto:brian.amooti@xen-hub.com)
+- **Documentation**: See [docs](./docs) folder
+- **Bug Reports**: [GitHub Issues](https://github.com/Truthtechno/LockerRoom/issues)
 
-### 🤝 Business Inquiries
-- **Partnerships**: [partnerships@xensportsarmoury.com](mailto:partnerships@xensportsarmoury.com)
-- **School Onboarding**: [onboarding@xensportsarmoury.com](mailto:onboarding@xensportsarmoury.com)
+### Business Inquiries
+- **Partnerships**: [mohammed.mendah@xen-hub.com](mailto:mohammed.mendah@xen-hub.com)
+- **School Onboarding**: [whatsApp Us](tel:+256766704533)
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-### 🏆 Core Contributors
+### Core Contributors
 - **Bryan Amooti** - Lead Developer & System Architect
 - **XEN Sports Armoury Team** - Platform vision and requirements
 
-### 🛠️ Technology Partners
+### Technology Partners
 - **React Team** - Revolutionary UI framework
 - **Vercel** - Deployment and hosting platform
 - **Cloudinary** - Media optimization and CDN
@@ -480,8 +480,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-
-**🚀 Built with ❤️ for Student-Athletes**
 
 **LockerRoom - Empowering the Next Generation of Sports Stars**
 
