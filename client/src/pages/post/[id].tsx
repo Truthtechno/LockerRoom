@@ -19,6 +19,7 @@ import { Heart, MessageCircle, Bookmark, Send, ArrowLeft, Trash2, MoreHorizontal
 import { Loader2 } from "lucide-react";
 import type { PostWithDetails, PostCommentWithUser } from "@shared/schema";
 import { Link } from "wouter";
+import { getRoleDisplayName } from "@/lib/role-display";
 
 export default function PostDetail() {
   const { user } = useAuth();
@@ -219,7 +220,7 @@ export default function PostDetail() {
     if (user.role === "viewer") {
       toast({
         title: "Access Denied",
-        description: "Only students can comment on posts.",
+        description: "Only players can comment on posts.",
         variant: "destructive",
       });
       return;
@@ -329,7 +330,7 @@ export default function PostDetail() {
                     <Link href={`/profile/${post.student?.id}`}>
                       <AvatarWithFallback 
                         src={post.student?.profilePicUrl}
-                        alt={post.student?.name || "Student athlete"}
+                        alt={post.student?.name || "Player"}
                         size="lg"
                         className="cursor-pointer hover:opacity-80 transition-opacity"
                       />
@@ -486,7 +487,7 @@ export default function PostDetail() {
                       {user.role === "viewer" ? (
                         <div className="p-3 bg-muted rounded-lg text-center">
                           <p className="text-sm text-muted-foreground">
-                            Only students can comment on posts.
+                            Only players can comment on posts.
                           </p>
                         </div>
                       ) : (
@@ -527,18 +528,15 @@ export default function PostDetail() {
   );
 }
 
-// Helper function to format role names
+// Helper function to format role names (only for admin/scout roles shown in comments)
 function formatRoleName(role: string | null | undefined): string | null {
   if (!role) return null;
   
-  const roleMap: Record<string, string> = {
-    'school_admin': 'School Admin',
-    'system_admin': 'System Admin',
-    'scout_admin': 'Scout Admin',
-    'xen_scout': 'Scout',
-  };
+  // Only show role for admin/scout roles, not for students/viewers
+  const rolesToShow = ['school_admin', 'system_admin', 'scout_admin', 'xen_scout'];
+  if (!rolesToShow.includes(role)) return null;
   
-  return roleMap[role] || null;
+  return getRoleDisplayName(role);
 }
 
 // Post Comments Component

@@ -18,14 +18,14 @@ import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
 
 const createSchoolSchema = z.object({
-  name: z.string().min(1, "School name is required").max(200, "Name must be less than 200 characters"),
+  name: z.string().min(1, "Academy name is required").max(200, "Name must be less than 200 characters"),
   address: z.string().optional().refine((val) => !val || val.length <= 500, "Address must be less than 500 characters"),
   contactEmail: z.string().email("Valid email is required").max(255, "Email must be less than 255 characters"),
   contactPhone: z.string().optional().refine((val) => !val || /^[\+]?[1-9][\d]{0,15}$/.test(val), "Invalid phone number format"),
-  maxStudents: z.string().min(1, "Student limit is required").refine((val) => {
+  maxStudents: z.string().min(1, "Player limit is required").refine((val) => {
     const num = parseInt(val, 10);
     return !isNaN(num) && num >= 1 && num <= 10000;
-  }, "Student limit must be between 1 and 10,000"),
+  }, "Player limit must be between 1 and 10,000"),
   paymentAmount: z.string().min(1, "Payment amount is required").refine((val) => {
     const num = parseFloat(val);
     return !isNaN(num) && num >= 0;
@@ -92,14 +92,14 @@ export default function CreateSchool() {
       queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
       
       toast({
-        title: "School Created Successfully! 🎉",
+        title: "Academy Created Successfully! 🎉",
         description: `${data.school.name} has been registered in the system.`,
       });
     },
     onError: (error: any) => {
       console.log("💥 School creation error:", error);
       toast({
-        title: "School Creation Failed",
+        title: "Academy Creation Failed",
         description: error.message || "Failed to create school. Please try again.",
         variant: "destructive",
       });
@@ -146,21 +146,21 @@ export default function CreateSchool() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Plus className="w-5 h-5 mr-2" />
-                School Information
+                Academy Information
               </CardTitle>
               <CardDescription>
-                Enter the school details to create a new institution account
+                Enter the academy details to create a new institution account
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                {/* School Name */}
+                {/* Academy Name */}
                 <div className="space-y-2">
-                  <Label htmlFor="name">School Name *</Label>
+                  <Label htmlFor="name">Academy Name *</Label>
                   <Input
                     id="name"
                     {...form.register("name")}
-                    placeholder="e.g., St. Mary's High School"
+                    placeholder="e.g., St. Mary's Academy"
                     disabled={createSchoolMutation.isPending}
                   />
                   {form.formState.errors.name && (
@@ -225,7 +225,7 @@ export default function CreateSchool() {
                   <h3 className="text-lg font-semibold text-foreground mb-4">Student Limit</h3>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="maxStudents">Maximum Students *</Label>
+                    <Label htmlFor="maxStudents">Maximum Players *</Label>
                     <Input
                       id="maxStudents"
                       type="number"

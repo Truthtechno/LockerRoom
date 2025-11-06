@@ -28,6 +28,7 @@ import Header from "@/components/navigation/header";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { getRoleDisplayName } from "@/lib/role-display";
 import { exportCurrentTab, exportAllCategories } from "@/lib/export-service";
 
 type PlatformOverview = {
@@ -368,8 +369,8 @@ export default function PlatformAnalytics() {
     { name: 'Monthly', value: schoolAnalytics.byFrequency.monthly || 0 },
     { name: 'Annual', value: schoolAnalytics.byFrequency.annual || 0 },
   ] : [
-    { name: 'Premium Schools', value: schoolAnalytics?.byPlan?.premium || 0 },
-    { name: 'Standard Schools', value: schoolAnalytics?.byPlan?.standard || 0 },
+    { name: 'Premium Academies', value: schoolAnalytics?.byPlan?.premium || 0 },
+    { name: 'Standard Academies', value: schoolAnalytics?.byPlan?.standard || 0 },
   ];
   
   const formatEngagementTrends = () => {
@@ -493,7 +494,7 @@ export default function PlatformAnalytics() {
 
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold">Total Schools</CardTitle>
+                <CardTitle className="text-sm font-semibold">Total Academies</CardTitle>
                 <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center">
                   <Building2 className="h-4 w-4 text-purple-500" />
                 </div>
@@ -513,7 +514,7 @@ export default function PlatformAnalytics() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold mb-1">${(overview?.totals.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                <p className="text-xs text-muted-foreground">This {period} (Schools + Xen Watch)</p>
+                <p className="text-xs text-muted-foreground">This {period} (Academies + Xen Watch)</p>
               </CardContent>
             </Card>
 
@@ -536,7 +537,7 @@ export default function PlatformAnalytics() {
             <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="users">Users</TabsTrigger>
-              <TabsTrigger value="schools">Schools</TabsTrigger>
+              <TabsTrigger value="schools">Academies</TabsTrigger>
               <TabsTrigger value="revenue">Revenue</TabsTrigger>
               <TabsTrigger value="engagement">Engagement</TabsTrigger>
             </TabsList>
@@ -588,7 +589,7 @@ export default function PlatformAnalytics() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="users">Users</SelectItem>
-                          <SelectItem value="schools">Schools</SelectItem>
+                          <SelectItem value="schools">Academies</SelectItem>
                           <SelectItem value="posts">Posts</SelectItem>
                         </SelectContent>
                       </Select>
@@ -624,7 +625,7 @@ export default function PlatformAnalytics() {
                 {/* School Distribution */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>School Subscription Distribution</CardTitle>
+                    <CardTitle>Academy Subscription Distribution</CardTitle>
                     <CardDescription>Breakdown by payment frequency</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -700,7 +701,7 @@ export default function PlatformAnalytics() {
                     <div className="space-y-4">
                       {userAnalytics?.byRole && Object.entries(userAnalytics.byRole).map(([role, count]) => (
                         <div key={role} className="flex items-center justify-between">
-                          <span className="text-sm font-medium capitalize">{role.replace('_', ' ')}</span>
+                          <span className="text-sm font-medium">{getRoleDisplayName(role)}</span>
                           <div className="flex items-center gap-3">
                             <div className="w-32 bg-muted rounded-full h-2">
                               <div 
@@ -824,12 +825,12 @@ export default function PlatformAnalytics() {
                       await exportCurrentTab('schools', period, '/api/system/analytics/export/schools');
                       toast({
                         title: "Export Successful! 🎉",
-                        description: "Schools data exported to Excel",
+                        description: "Academies data exported to Excel",
                       });
                     } catch (error) {
                       toast({
                         title: "Export Failed",
-                        description: error instanceof Error ? error.message : "Failed to export schools data",
+                        description: error instanceof Error ? error.message : "Failed to export academies data",
                         variant: "destructive",
                       });
                     } finally {
@@ -846,8 +847,8 @@ export default function PlatformAnalytics() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Top Performing Schools</CardTitle>
-                    <CardDescription>Schools ranked by engagement</CardDescription>
+                    <CardTitle>Top Performing Academies</CardTitle>
+                    <CardDescription>Academies ranked by engagement</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
@@ -860,7 +861,7 @@ export default function PlatformAnalytics() {
                             <div>
                               <div className="font-medium">{school.name}</div>
                               <div className="text-xs text-muted-foreground">
-                                {school.studentCount} students • {school.postCount} posts
+                                {school.studentCount} players • {school.postCount} posts
                               </div>
                             </div>
                           </div>
@@ -873,17 +874,17 @@ export default function PlatformAnalytics() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>School Statistics</CardTitle>
-                    <CardDescription>Platform-wide school metrics</CardDescription>
+                    <CardTitle>Academy Statistics</CardTitle>
+                    <CardDescription>Platform-wide academy metrics</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm">Total Schools</span>
+                        <span className="text-sm">Total Academies</span>
                         <span className="text-lg font-bold">{schoolAnalytics?.total.toLocaleString() || 0}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm">Active Schools</span>
+                        <span className="text-sm">Active Academies</span>
                         <span className="text-lg font-bold">{(schoolAnalytics?.active ?? schoolAnalytics?.byPlan?.standard ?? 0).toLocaleString()}</span>
                       </div>
                       {schoolAnalytics?.byFrequency && (
@@ -1182,8 +1183,8 @@ export default function PlatformAnalytics() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Top Schools by Engagement</CardTitle>
-                    <CardDescription>Most engaged schools on the platform</CardDescription>
+                    <CardTitle>Top Academies by Engagement</CardTitle>
+                    <CardDescription>Most engaged academies on the platform</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">

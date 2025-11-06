@@ -207,8 +207,8 @@ export default function EvaluationSubmissions() {
     const exportData = filteredSubmissions.map((sub) => {
       const baseData: any = {
         'Form Name': sub.formTemplate?.name || 'N/A',
-        'Student Name': sub.studentName || 'N/A',
-        'School': sub.studentSchoolName || 'N/A',
+        'Player Name': sub.studentName || 'N/A',
+        'Academy': sub.studentSchoolName || 'N/A',
         'Position': sub.studentPosition || 'N/A',
         'Sport': sub.studentSport || 'N/A',
         'Height': sub.studentHeight || 'N/A',
@@ -339,7 +339,7 @@ export default function EvaluationSubmissions() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search by student, school..."
+                      placeholder="Search by player, academy..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-10 h-10 sm:h-11 text-sm"
@@ -411,7 +411,7 @@ export default function EvaluationSubmissions() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 flex-wrap">
                                 <CardTitle className="text-sm sm:text-base font-semibold truncate">
-                                  {submission.studentName || 'Unknown Student'}
+                                  {submission.studentName || 'Unknown Player'}
                                 </CardTitle>
                                 <div className="flex-shrink-0">
                                   {getStatusBadge(submission.status)}
@@ -573,14 +573,14 @@ export default function EvaluationSubmissions() {
 function SubmissionDetails({ submission }: { submission: Submission }) {
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Student Info */}
+      {/* Player Info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div>
-          <Label className="text-muted-foreground">Student Name</Label>
+          <Label className="text-muted-foreground">Player Name</Label>
           <p className="font-medium">{submission.studentName || 'N/A'}</p>
         </div>
         <div>
-          <Label className="text-muted-foreground">School</Label>
+          <Label className="text-muted-foreground">Academy</Label>
           <p className="font-medium">{submission.studentSchoolName || 'N/A'}</p>
         </div>
         <div>
@@ -910,7 +910,7 @@ function SubmissionFormDialog({
     if (manualEntry && !studentData.name) {
       toast({
         title: "Error",
-        description: "Student name is required for manual entry",
+        description: "Player name is required for manual entry",
         variant: "destructive",
       });
       return;
@@ -1075,7 +1075,7 @@ function SubmissionFormDialog({
           {/* Student Selection */}
           <div className="space-y-3 sm:space-y-4 border-t pt-3 sm:pt-4">
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm sm:text-base">Student Information</Label>
+              <Label className="text-sm sm:text-base">Player Information</Label>
               <div className="flex items-center space-x-1.5 sm:space-x-2">
                 <input
                   type="checkbox"
@@ -1095,7 +1095,7 @@ function SubmissionFormDialog({
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search for student by name, school, or position..."
+                    placeholder="Search for player by name, academy, or position..."
                     value={studentSearchQuery}
                     onChange={(e) => setStudentSearchQuery(e.target.value)}
                     className="pl-9"
@@ -1140,11 +1140,11 @@ function SubmissionFormDialog({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-1.5 sm:space-y-2 sm:col-span-2">
-                  <Label className="text-sm sm:text-base">Student Name *</Label>
+                  <Label className="text-sm sm:text-base">Player Name *</Label>
                   <Input
                     value={studentData.name}
                     onChange={(e) => setStudentData({ ...studentData, name: e.target.value })}
-                    placeholder="Student name"
+                    placeholder="Player name"
                     className="h-9 sm:h-10 text-sm"
                   />
                 </div>
@@ -1293,11 +1293,11 @@ function SubmissionFormDialog({
                   />
                 </div>
                 <div className="space-y-1.5 sm:space-y-2 sm:col-span-2">
-                  <Label className="text-sm sm:text-base">School Name</Label>
+                  <Label className="text-sm sm:text-base">Academy Name</Label>
                   <Input
                     value={studentData.school_name}
                     onChange={(e) => setStudentData({ ...studentData, school_name: e.target.value })}
-                    placeholder="School name"
+                    placeholder="Academy name"
                     className="h-9 sm:h-10 text-sm"
                   />
                 </div>

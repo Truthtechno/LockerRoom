@@ -177,7 +177,7 @@ export default function SystemAdmin() {
       
       toast({
         title: "Success",
-        description: "School profile picture updated successfully",
+        description: "Academy profile picture updated successfully",
       });
       
       // Refetch schools data to update the UI
@@ -320,7 +320,7 @@ export default function SystemAdmin() {
               <Card className="border-l-4 border-l-blue-500">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Schools</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Academies</CardTitle>
                     <Building2 className="h-4 w-4 text-blue-500" />
                   </div>
                 </CardHeader>
@@ -335,14 +335,14 @@ export default function SystemAdmin() {
               <Card className="border-l-4 border-l-green-500">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Active Students</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Active Players</CardTitle>
                     <Activity className="h-4 w-4 text-green-500" />
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{(systemStats?.activeStudents || 0).toLocaleString()}</div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Across all schools
+                    Across all academies
                     <span className="block mt-1">{period === "week" ? "Last 7 days" : period === "month" ? "Last 30 days" : "All time"}</span>
                   </p>
                 </CardContent>
@@ -424,11 +424,11 @@ export default function SystemAdmin() {
                 </div>
               </div>
             </div>
-            {/* Top Schools Table */}
+            {/* Top Academies Table */}
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
               <div className="px-4 sm:px-6 py-4 border-b border-border">
-                <h2 className="text-lg font-semibold text-foreground">Top Schools</h2>
-                <p className="text-sm text-muted-foreground">Schools ranked by engagement and activity</p>
+                <h2 className="text-lg font-semibold text-foreground">Top Academies</h2>
+                <p className="text-sm text-muted-foreground">Academies ranked by engagement and activity</p>
               </div>
               {schoolAnalytics?.topSchools && schoolAnalytics.topSchools.length > 0 ? (
                 <>
@@ -458,7 +458,7 @@ export default function SystemAdmin() {
                                 </h3>
                                 <div className="grid grid-cols-3 gap-2 text-xs">
                                   <div>
-                                    <span className="text-muted-foreground block">Students</span>
+                                    <span className="text-muted-foreground block">Players</span>
                                     <span className="font-medium text-foreground">{school.studentCount}</span>
                                   </div>
                                   <div>
@@ -484,8 +484,8 @@ export default function SystemAdmin() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Rank</TableHead>
-                          <TableHead>School Name</TableHead>
-                          <TableHead>Students</TableHead>
+                          <TableHead>Academy Name</TableHead>
+                          <TableHead>Players</TableHead>
                           <TableHead>Posts</TableHead>
                           <TableHead>Engagement</TableHead>
                         </TableRow>
@@ -553,18 +553,18 @@ export default function SystemAdmin() {
               ) : (
                 <div className="p-6 text-center text-muted-foreground">
                   <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No school data available</p>
+                  <p>No academy data available</p>
                 </div>
               )}
             </div>
 
-            {/* Recent School Registrations */}
+            {/* Recent Academy Registrations */}
             <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
               <div className="px-4 sm:px-6 py-4 border-b border-border">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Recent School Registrations</h2>
-                    <p className="text-sm text-muted-foreground">Newest schools joining the platform</p>
+                    <h2 className="text-lg font-semibold text-foreground">Recent Academy Registrations</h2>
+                    <p className="text-sm text-muted-foreground">Newest academies joining the platform</p>
                   </div>
                   <Button
                     variant="ghost"
@@ -572,7 +572,7 @@ export default function SystemAdmin() {
                     onClick={() => setLocation("/system-admin/manage-schools")}
                     className="text-primary hover:text-primary self-start sm:self-auto"
                   >
-                    <span className="hidden sm:inline">Manage All Schools</span>
+                    <span className="hidden sm:inline">Manage All Academies</span>
                     <span className="sm:hidden">Manage All</span>
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
@@ -730,7 +730,7 @@ export default function SystemAdmin() {
                 ) : (
                   <div className="p-6 text-center text-muted-foreground">
                     <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p>No schools registered yet</p>
+                    <p>No academies registered yet</p>
                   </div>
                 )}
               </div>
@@ -773,9 +773,9 @@ export default function SystemAdmin() {
 
           {/* System Management */}
           <div className="space-y-4 sm:space-y-6">
-            {/* At-Risk Schools */}
+            {/* At-Risk Academies */}
             <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground mb-4">At-Risk Schools</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-4">At-Risk Academies</h2>
               {schoolAnalytics?.atRisk && schoolAnalytics.atRisk.length > 0 ? (
                 <div className="space-y-3">
                   {schoolAnalytics.atRisk.slice(0, 5).map((s) => (
@@ -791,7 +791,7 @@ export default function SystemAdmin() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No schools at risk right now.</p>
+                <p className="text-sm text-muted-foreground">No academies at risk right now.</p>
               )}
             </div>
             {/* System Actions - Accordion on mobile */}
@@ -811,7 +811,7 @@ export default function SystemAdmin() {
                 >
                   <div className="flex items-center">
                     <Building2 className="w-5 h-5 mr-3" />
-                    Create New School
+                    Create New Academy
                   </div>
                 </Button>
 
@@ -821,7 +821,7 @@ export default function SystemAdmin() {
                 >
                   <div className="flex items-center">
                     <UserPlus className="w-5 h-5 mr-3" />
-                    Create School Admin
+                    Create Academy Admin
                   </div>
                 </Button>
 
@@ -831,7 +831,7 @@ export default function SystemAdmin() {
                 >
                   <div className="flex items-center">
                     <Building2 className="w-5 h-5 mr-3" />
-                    Manage Schools
+                    Manage Academies
                   </div>
                 </Button>
                 
@@ -884,11 +884,11 @@ export default function SystemAdmin() {
 
             {/* Subscription Overview */}
             <div className="bg-card border border-border rounded-xl p-4 sm:p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-foreground mb-4">School Subscriptions</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-4">Academy Subscriptions</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Active Schools</p>
+                    <p className="font-medium text-foreground">Active Academies</p>
                     <p className="text-sm text-muted-foreground">Currently active subscriptions</p>
                   </div>
                   <div className="text-right">
@@ -898,8 +898,8 @@ export default function SystemAdmin() {
                 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Total Schools</p>
-                    <p className="text-sm text-muted-foreground">All registered schools</p>
+                    <p className="font-medium text-foreground">Total Academies</p>
+                    <p className="text-sm text-muted-foreground">All registered academies</p>
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-foreground">{systemStats?.totalSchools || 0}</p>

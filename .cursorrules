@@ -1,0 +1,29 @@
+# Cursor AI Rules for LockerRoom Development
+
+## Terminology Standards
+
+**CRITICAL**: All user-facing text MUST use "Academy" and "Player" terminology, NOT "School" and "Student".
+
+### Rules:
+1. **UI Components**: Always use "Academy" and "Player" in:
+   - Labels, placeholders, error messages, success messages
+   - Toast notifications, page titles, table headers
+   - Form fields, button labels, dialog descriptions
+
+2. **Code Variables**: May use "school" and "student" for:
+   - Variable names, API endpoints, database queries
+   - Type definitions (for backend compatibility)
+
+3. **Role Display**: Always use `getRoleDisplayName()` from `@/lib/role-display` when displaying user roles.
+
+### Examples:
+- ✅ `<Label>Academy Name</Label>`
+- ✅ `toast({ title: "Player Added Successfully" })`
+- ✅ `<span>{getRoleDisplayName(user.role)}</span>`
+- ❌ `<Label>School Name</Label>`
+- ❌ `toast({ title: "Student Added" })`
+
+### Reference:
+- See `DEVELOPER_GUIDELINES.md` for complete standards
+- See `client/src/lib/role-display.ts` for role display utility
+

@@ -471,7 +471,7 @@ export default function ProfileById() {
     if (user.role === "viewer") {
       toast({
         title: "Access Denied",
-        description: "Only students can comment on posts.",
+        description: "Only players can comment on posts.",
         variant: "destructive",
       });
       return;

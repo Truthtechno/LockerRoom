@@ -9,6 +9,8 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("viewer"), // system_admin, school_admin, student, viewer, scout_admin, xen_scout
+  // NOTE: Role values use "school_admin" and "student" for database compatibility.
+  // In UI, always use getRoleDisplayName() to display: "Academy Admin" and "Player"
   linkedId: varchar("linked_id").notNull(), // References role-specific table
   name: text("name"), // User's display name
   schoolId: varchar("school_id"), // School ID for students and school admins
@@ -31,6 +33,18 @@ export const viewers = pgTable("viewers", {
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
+/**
+ * Academy Admins table (database table name: "school_admins" for backward compatibility)
+ * 
+ * IMPORTANT: All user-facing text MUST use "Academy Admin" terminology.
+ * This table is named "school_admins" for database compatibility only.
+ * 
+ * When displaying this role in the UI:
+ * - Use getRoleDisplayName() from @/lib/role-display
+ * - Example: getRoleDisplayName("school_admin") returns "Academy Admin"
+ * 
+ * See DEVELOPER_GUIDELINES.md for full terminology standards.
+ */
 export const schoolAdmins = pgTable("school_admins", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -52,6 +66,19 @@ export const systemAdmins = pgTable("system_admins", {
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
 });
 
+/**
+ * Academies table (database table name: "schools" for backward compatibility)
+ * 
+ * IMPORTANT: All user-facing text MUST use "Academy" terminology.
+ * This table is named "schools" for database compatibility only.
+ * 
+ * When displaying data from this table in the UI:
+ * - Use "Academy" (not "School") in all labels, messages, and text
+ * - Example: <Label>Academy Name</Label>
+ * - Example: toast({ title: "Academy Created" })
+ * 
+ * See DEVELOPER_GUIDELINES.md for full terminology standards.
+ */
 export const schools = pgTable("schools", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -70,6 +97,19 @@ export const schools = pgTable("schools", {
   updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
 });
 
+/**
+ * Players table (database table name: "students" for backward compatibility)
+ * 
+ * IMPORTANT: All user-facing text MUST use "Player" terminology.
+ * This table is named "students" for database compatibility only.
+ * 
+ * When displaying data from this table in the UI:
+ * - Use "Player" (not "Student") in all labels, messages, and text
+ * - Example: <Label>Player Name</Label>
+ * - Example: toast({ title: "Player Added Successfully" })
+ * 
+ * See DEVELOPER_GUIDELINES.md for full terminology standards.
+ */
 export const students = pgTable("students", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(), // Foreign key to users table

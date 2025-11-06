@@ -53,7 +53,7 @@ export default function SystemAdminAnnouncements() {
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">Announcements</h2>
                   <p className="text-muted-foreground text-sm">
-                    Create and manage announcements for all schools
+                    Create and manage announcements for all academies
                   </p>
                 </div>
                 <AnnouncementModal userRole="system_admin" schoolId={undefined}>
@@ -75,7 +75,7 @@ export default function SystemAdminAnnouncements() {
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">Banners</h2>
                   <p className="text-muted-foreground text-sm">
-                    Create dashboard banners for scouts, school admins, and scout admins
+                    Create dashboard banners for scouts, academy admins, and scout admins
                   </p>
                 </div>
                 <Button 

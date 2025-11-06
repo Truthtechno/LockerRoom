@@ -354,8 +354,8 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
     // Validate school selection if changing to school scope
     if (userRole === 'system_admin' && editFormData.scope === 'school' && editFormData.selectedSchoolIds.length === 0) {
       toast({
-        title: "Missing School Selection",
-        description: "Please select at least one school for the announcement.",
+        title: "Missing Academy Selection",
+        description: "Please select at least one academy for the announcement.",
         variant: "destructive",
       });
       return;
@@ -393,7 +393,7 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
   const getScopeLabel = (scope: string) => {
     switch (scope) {
       case 'global': return 'Global';
-      case 'school': return 'School';
+      case 'school': return 'Academy';
       case 'staff': return 'Staff Only';
       default: return 'Unknown';
     }
@@ -588,8 +588,8 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
                       <SelectValue placeholder="Select scope" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="global">All Schools</SelectItem>
-                      <SelectItem value="school">Specific Schools</SelectItem>
+                      <SelectItem value="global">All Academies</SelectItem>
+                      <SelectItem value="school">Specific Academies</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -597,7 +597,7 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
                 {editFormData.scope === 'school' && (
                   <div className="space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <Label className="text-sm font-medium">Select Schools *</Label>
+                      <Label className="text-sm font-medium">Select Academies *</Label>
                       {schools.length > 0 && (
                         <Button
                           type="button"
@@ -620,7 +620,7 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
                       {schools.length === 0 ? (
                         <div className="text-sm text-muted-foreground text-center py-4">
                           <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
-                          <p>Loading schools...</p>
+                          <p>Loading academies...</p>
                         </div>
                       ) : (
                         schools.map((school: any) => (
@@ -655,12 +655,12 @@ export function AnnouncementManagement({ userRole, schoolId }: AnnouncementManag
                     </div>
                     {editFormData.selectedSchoolIds.length > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        {editFormData.selectedSchoolIds.length} school{editFormData.selectedSchoolIds.length !== 1 ? 's' : ''} selected
+                        {editFormData.selectedSchoolIds.length} academ{editFormData.selectedSchoolIds.length !== 1 ? 'ies' : 'y'} selected
                       </p>
                     )}
                     {editFormData.selectedSchoolIds.length === 0 && editFormData.scope === 'school' && (
                       <p className="text-xs text-destructive">
-                        Please select at least one school
+                        Please select at least one academy
                       </p>
                     )}
                   </div>

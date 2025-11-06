@@ -23,6 +23,7 @@ import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
 import { logout } from "@/lib/auth";
 import { useLocation } from "wouter";
+import { getRoleDisplayName } from "@/lib/role-display";
 
 export default function Settings() {
   const { user, updateUser } = useAuth();
@@ -513,7 +514,7 @@ export default function Settings() {
                   <div>
                     <h3 className="font-medium">{user?.name}</h3>
                     <p className="text-sm text-muted-foreground">{user?.email}</p>
-                    <p className="text-sm text-muted-foreground capitalize">{user?.role}</p>
+                    <p className="text-sm text-muted-foreground">{getRoleDisplayName(user?.role)}</p>
                     {(isUploading || isUpdating) && (
                       <p className="text-xs text-muted-foreground mt-2">
                         {isUploading ? "Uploading..." : "Updating profile..."}

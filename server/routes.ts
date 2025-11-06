@@ -1815,7 +1815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const studentWithStats = await storage.getStudentWithStats(userId);
       
       if (!studentWithStats) {
-        return res.status(404).json({ message: "Student not found" });
+        return res.status(404).json({ message: "Player not found" });
       }
 
       res.json(studentWithStats);
@@ -1832,7 +1832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const student = await storage.getStudentByUserId(userId);
       
       if (!student) {
-        return res.status(404).json({ message: "Student not found" });
+        return res.status(404).json({ message: "Player not found" });
       }
 
       let updateData = { ...req.body };
@@ -1876,7 +1876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!studentWithStats) {
         console.warn(`⚠️ Student profile not found for user ${userId}`);
-        return res.status(404).json({ message: "Student profile not found" });
+        return res.status(404).json({ message: "Player profile not found" });
       }
 
       // Map DB fields to frontend expected field names
@@ -2125,7 +2125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ 
           error: {
             code: 'school_not_found',
-            message: 'School not found'
+            message: 'Academy not found'
           }
         });
       }
@@ -2191,7 +2191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const student = await storage.getStudentByUserId(userId);
       
       if (!student) {
-        return res.status(404).json({ message: "Student profile not found" });
+        return res.status(404).json({ message: "Player profile not found" });
       }
 
       // Get student stats
@@ -3539,7 +3539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const student = await storage.getStudentByUserId(userId);
       if (!student) {
         console.error('Student profile not found for user:', userId);
-        return res.status(403).json({ message: "Student profile not found. Please create your profile first." });
+        return res.status(403).json({ message: "Player profile not found. Please create your profile first." });
       }
       
       const studentId = student.id;
@@ -4048,7 +4048,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { schoolId } = req.params;
       const school = await storage.getSchool(schoolId);
       if (!school) {
-        return res.status(404).json({ message: "School not found" });
+        return res.status(404).json({ message: "Academy not found" });
       }
       res.json(school);
     } catch (error) {
@@ -4877,10 +4877,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const school = await storage.approveSchoolApplication(id, reviewerId);
       if (!school) {
-        return res.status(404).json({ message: "School application not found" });
+        return res.status(404).json({ message: "Academy application not found" });
       }
 
-      res.json({ school, message: "School application approved successfully" });
+      res.json({ school, message: "Academy application approved successfully" });
     } catch (error) {
       console.error('Approve school application error:', error);
       res.status(500).json({ message: "Failed to approve application" });
@@ -4898,10 +4898,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const application = await storage.rejectSchoolApplication(id, reviewerId, notes);
       if (!application) {
-        return res.status(404).json({ message: "School application not found" });
+        return res.status(404).json({ message: "Academy application not found" });
       }
 
-      res.json({ application, message: "School application rejected" });
+      res.json({ application, message: "Academy application rejected" });
     } catch (error) {
       console.error('Reject school application error:', error);
       res.status(500).json({ message: "Failed to reject application" });
@@ -6032,7 +6032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Mock sports performance data based on student's sport
       const student = await storage.getStudentById(studentId);
       if (!student) {
-        return res.status(404).json({ message: "Student not found" });
+        return res.status(404).json({ message: "Player not found" });
       }
 
       // Generate realistic performance data based on student's sport
@@ -6217,7 +6217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const student = await storage.getStudentWithStatsById(id);
       if (!student) {
-        return res.status(404).json({ message: "Student not found" });
+        return res.status(404).json({ message: "Player not found" });
       }
       
       // Check if current user is following this student
@@ -6264,7 +6264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const student = await storage.updateStudent(id, updates);
       if (!student) {
-        return res.status(404).json({ message: "Student not found" });
+        return res.status(404).json({ message: "Player not found" });
       }
       res.json(student);
     } catch (error) {
@@ -6277,7 +6277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       await storage.deleteStudent(id);
-      res.json({ message: "Student deleted successfully" });
+      res.json({ message: "Player deleted successfully" });
     } catch (error) {
       console.error('Delete student error:', error);
       res.status(500).json({ message: "Failed to delete student" });
@@ -6317,7 +6317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Verify student exists
       const student = await storage.getStudent(studentId);
       if (!student) {
-        return res.status(404).json({ message: "Student not found" });
+        return res.status(404).json({ message: "Player not found" });
       }
       
       // Get student posts - query directly from database to avoid filtering issues
@@ -6486,7 +6486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { schoolId, key } = req.params;
       await storage.deleteSchoolSetting(schoolId, key);
-      res.json({ message: "School setting deleted successfully" });
+      res.json({ message: "Academy setting deleted successfully" });
     } catch (error) {
       console.error('Delete school setting error:', error);
       res.status(500).json({ message: "Failed to delete school setting" });

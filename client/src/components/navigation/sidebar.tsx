@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useBranding } from "@/hooks/use-branding";
 import { logout } from "@/lib/auth";
+import { getRoleDisplayName } from "@/lib/role-display";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -174,12 +175,9 @@ export default function Sidebar() {
     } else if (user?.role === "viewer") {
       return [
         ...baseNav,
-        { name: "Profile", href: "/profile", icon: User, active: location.startsWith("/profile") },
         { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
         { name: "Following", href: "/following", icon: Users, active: location === "/following" },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
-        { name: "XEN Watch", href: "/xen-watch", icon: Eye, active: location === "/xen-watch" },
-        { name: "ScoutAI", href: "/scoutai", icon: Bot, active: location === "/scoutai" },
         { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "school_admin") {
@@ -187,13 +185,13 @@ export default function Sidebar() {
       const feedHref = "/school-admin/feed";
       const isActive = isStudentContentActive(feedHref);
       return [
-        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
+        { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Dashboard", href: "/school-admin", icon: LayoutDashboard, active: location === "/school-admin" },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Announcements", href: "/school-admin/announcements", icon: Megaphone, active: location.startsWith("/school-admin/announcements") },
-        { name: "Add Student", href: "/school-admin/add-student", icon: UserPlus, active: location.startsWith("/school-admin/add-student") },
+        { name: "Add Player", href: "/school-admin/add-student", icon: UserPlus, active: location.startsWith("/school-admin/add-student") },
         { name: "Live Reports", href: "/school-admin/live-reports", icon: BarChart3, active: location.startsWith("/school-admin/live-reports") },
-        { name: "Student Search", href: "/school-admin/student-search", icon: Search, active: location.startsWith("/school-admin/student-search") },
+        { name: "Player Search", href: "/school-admin/student-search", icon: Search, active: location.startsWith("/school-admin/student-search") },
         { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "system_admin") {
@@ -201,13 +199,13 @@ export default function Sidebar() {
       const feedHref = "/system-admin/feed";
       const isActive = isStudentContentActive(feedHref);
       return [
-        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
+        { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Dashboard", href: "/system-admin", icon: LayoutDashboard, active: location === "/system-admin" },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone, active: location.startsWith("/system-admin/announcements") },
-        { name: "Create School", href: "/system-admin/create-school", icon: Building2, active: location.startsWith("/system-admin/create-school") },
+        { name: "Create Academy", href: "/system-admin/create-school", icon: Building2, active: location.startsWith("/system-admin/create-school") },
         { name: "Create Admin", href: "/system-admin/create-school-admin", icon: UserPlus, active: location.startsWith("/system-admin/create-school-admin") },
-        { name: "Manage Schools", href: "/system-admin/manage-schools", icon: Building2, active: location.startsWith("/system-admin/manage-schools") },
+        { name: "Manage Academies", href: "/system-admin/manage-schools", icon: Building2, active: location.startsWith("/system-admin/manage-schools") },
         { name: "Platform Analytics", href: "/admin/platform-analytics", icon: TrendingUp, active: location.startsWith("/admin/platform-analytics") },
         { name: "System Config", href: "/admin/system-config", icon: Settings, active: location.startsWith("/admin/system-config") },
         { name: "Manage Admins", href: "/admin/admin-management", icon: Shield, active: location.startsWith("/admin/admin-management") },
@@ -220,7 +218,7 @@ export default function Sidebar() {
       const feedHref = "/feed";
       const isActive = isStudentContentActive(feedHref);
       const scoutNav = [
-        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
+        { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
         { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye, active: location.startsWith("/xen-watch/scout-queue") },
         { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText, active: location.startsWith("/admin/evaluation-submissions") },
@@ -286,7 +284,7 @@ export default function Sidebar() {
           {navigation.map((item) => {
             const showBadge = item.name === "Notifications" && unreadCount && unreadCount.count > 0;
             
-            // Render dropdown for Student Content
+            // Render dropdown for Player Content
             if ((item as any).isDropdown && (item as any).dropdownItems) {
               return (
                 <DropdownMenu key={item.name}>
@@ -368,22 +366,41 @@ export default function Sidebar() {
 
         {/* User Profile */}
         <div className="flex-shrink-0 flex bg-muted p-4">
-          <Link href="/profile" className="flex items-center w-full cursor-pointer hover:bg-muted/80 rounded-lg p-2 -m-2 transition-colors">
-            <AvatarWithFallback 
-              src={displayProfilePic}
-              alt={displayUser?.name || "Me"}
-              fallbackText={displayUser?.name?.slice(0, 2).toUpperCase() || "??"}
-              size="sm"
-            />
-            <div className="ml-3 min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground truncate">
-                {displayUser?.name || "User"}
-              </p>
-              <p className="text-xs font-medium text-muted-foreground capitalize">
-                {displayUser?.role?.replace("_", " ") || ""}
-              </p>
+          {user?.role === "viewer" ? (
+            <div className="flex items-center w-full rounded-lg p-2 -m-2">
+              <AvatarWithFallback 
+                src={displayProfilePic}
+                alt={displayUser?.name || "Me"}
+                fallbackText={displayUser?.name?.slice(0, 2).toUpperCase() || "??"}
+                size="sm"
+              />
+              <div className="ml-3 min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {displayUser?.name || "User"}
+                </p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {getRoleDisplayName(displayUser?.role)}
+                </p>
+              </div>
             </div>
-          </Link>
+          ) : (
+            <Link href="/profile" className="flex items-center w-full cursor-pointer hover:bg-muted/80 rounded-lg p-2 -m-2 transition-colors">
+              <AvatarWithFallback 
+                src={displayProfilePic}
+                alt={displayUser?.name || "Me"}
+                fallbackText={displayUser?.name?.slice(0, 2).toUpperCase() || "??"}
+                size="sm"
+              />
+              <div className="ml-3 min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {displayUser?.name || "User"}
+                </p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {getRoleDisplayName(displayUser?.role)}
+                </p>
+              </div>
+            </Link>
+          )}
         </div>
       </div>
     </div>

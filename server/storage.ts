@@ -2612,7 +2612,7 @@ export class PostgresStorage implements IStorage {
       } else if (announcement.scope === 'school' && schoolInfo) {
         displayName = schoolInfo.name;
       } else {
-        displayName = adminUser.name || 'School Administration';
+        displayName = adminUser.name || 'Academy Administration';
       }
 
       announcementsWithDetails.push({
@@ -2753,7 +2753,7 @@ export class PostgresStorage implements IStorage {
         student: {
           id: student.id,
           userId: student.userId,
-          name: user.name || student.name || 'Unknown Student',
+          name: user.name || student.name || 'Unknown Player',
           sport: student.sport || '',
           position: student.position || '',
           roleNumber: student.roleNumber || '',
@@ -2867,7 +2867,7 @@ export class PostgresStorage implements IStorage {
         student: {
           id: student.id,
           userId: student.userId,
-          name: user.name || student.name || 'Unknown Student',
+          name: user.name || student.name || 'Unknown Player',
           sport: student.sport || '',
           position: student.position || '',
           roleNumber: student.roleNumber || '',
@@ -2904,9 +2904,20 @@ export class PostgresStorage implements IStorage {
     if (!isDbConnected) return [];
     
     try {
-      // Get all regular posts (not announcements) for the specific student
-      // Only include posts with type='post' or type is NULL (legacy posts)
-      const studentPosts = await db.select().from(posts)
+      // Apply pagination at database level for better performance
+      const effectiveLimit = limit || 12;
+      const effectiveOffset = offset || 0;
+      
+      // Get posts with student and user data in a single query with pagination
+      const postsWithStudentData = await db
+        .select({
+          post: posts,
+          student: students,
+          user: users
+        })
+        .from(posts)
+        .innerJoin(students, eq(posts.studentId, students.id))
+        .innerJoin(users, eq(students.userId, users.id))
         .where(
           and(
             eq(posts.studentId, studentId),
@@ -2916,47 +2927,72 @@ export class PostgresStorage implements IStorage {
             sql`(${posts.status} != 'processing' OR ${posts.status} IS NULL)`
           )
         )
-        .orderBy(desc(posts.createdAt));
+        .orderBy(desc(posts.createdAt))
+        .limit(effectiveLimit)
+        .offset(effectiveOffset);
+
+      if (postsWithStudentData.length === 0) {
+        return [];
+      }
+
+      // Get all post IDs for batch queries
+      const postIds = postsWithStudentData.map(row => row.post.id);
       
-      console.log(`📊 Found ${studentPosts.length} posts for student ${studentId}`);
+      // Batch query for all likes, comments, saves, views, and user interactions in parallel
+      const [allLikes, allComments, allSaves, allViews, userLikes, userSaves, followStatuses] = await Promise.all([
+        // All likes for these posts
+        db.select().from(postLikes).where(inArray(postLikes.postId, postIds)),
+        // All comments for these posts
+        db.select().from(postComments).where(inArray(postComments.postId, postIds)),
+        // All saves for these posts
+        db.select().from(savedPosts).where(inArray(savedPosts.postId, postIds)),
+        // All views for these posts
+        db.select().from(postViews).where(inArray(postViews.postId, postIds)),
+        // User's likes for these posts
+        db.select().from(postLikes).where(
+          and(inArray(postLikes.postId, postIds), eq(postLikes.userId, userId))
+        ),
+        // User's saves for these posts
+        db.select().from(savedPosts).where(
+          and(inArray(savedPosts.postId, postIds), eq(savedPosts.userId, userId))
+        ),
+        // Follow statuses for the student (batch query)
+        this.getFollowStatusesForStudents(userId, [studentId])
+      ]);
+
+      // Create lookup maps for O(1) access
+      const likesMap = new Map<string, any[]>();
+      const commentsMap = new Map<string, any[]>();
+      const savesMap = new Map<string, any[]>();
+      const viewsMap = new Map<string, any[]>();
+      const userLikesSet = new Set(userLikes.map(like => like.postId));
+      const userSavesSet = new Set(userSaves.map(save => save.postId));
+
+      // Populate maps
+      allLikes.forEach(like => {
+        if (!likesMap.has(like.postId)) likesMap.set(like.postId, []);
+        likesMap.get(like.postId)!.push(like);
+      });
       
+      allComments.forEach(comment => {
+        if (!commentsMap.has(comment.postId)) commentsMap.set(comment.postId, []);
+        commentsMap.get(comment.postId)!.push(comment);
+      });
+      
+      allSaves.forEach(save => {
+        if (!savesMap.has(save.postId)) savesMap.set(save.postId, []);
+        savesMap.get(save.postId)!.push(save);
+      });
+      
+      allViews.forEach(view => {
+        if (!viewsMap.has(view.postId)) viewsMap.set(view.postId, []);
+        viewsMap.get(view.postId)!.push(view);
+      });
+
       const postsWithDetails: PostWithDetails[] = [];
-      
-      for (const post of studentPosts) {
-        // Get student with user information
-        const studentResult = await db
-          .select({
-            student: students,
-            user: users
-          })
-          .from(students)
-          .innerJoin(users, eq(students.userId, users.id))
-          .where(post.studentId ? eq(students.id, post.studentId) : sql`1=0`)
-          .limit(1);
-        
-        if (!studentResult[0]) {
-          console.warn(`⚠️ Post ${post.id} has no associated student`);
-          continue;
-        }
-        
-        const { student, user } = studentResult[0];
-        
-        const likes = await db.select().from(postLikes).where(eq(postLikes.postId, post.id));
-        const comments = await db.select().from(postComments).where(eq(postComments.postId, post.id));
-        const saves = await db.select().from(savedPosts).where(eq(savedPosts.postId, post.id));
-        const views = await getPostViews(post.id);
 
-        // Check if current user has liked/saved this post
-        const userLike = await db.select().from(postLikes).where(
-          and(eq(postLikes.postId, post.id), eq(postLikes.userId, userId))
-        ).limit(1);
-        
-        const userSave = await db.select().from(savedPosts).where(
-          and(eq(savedPosts.postId, post.id), eq(savedPosts.userId, userId))
-        ).limit(1);
-
+      for (const { post, student, user } of postsWithStudentData) {
         // Use new fields directly since legacy fields have been migrated
-        // Prefer mediaUrl (which contains secure_url from Cloudinary) with fallback
         const effectiveMediaUrl = post.mediaUrl || '';
         const effectiveMediaType = post.mediaType || 'image';
         const effectiveStatus = post.status || 'ready';
@@ -2971,8 +3007,11 @@ export class PostgresStorage implements IStorage {
           continue; // Skip posts with no content
         }
 
-        // Check if current user is following this student
-        const isFollowing = await this.isFollowingStudent(userId, student.id);
+        const likes = likesMap.get(post.id) || [];
+        const comments = commentsMap.get(post.id) || [];
+        const saves = savesMap.get(post.id) || [];
+        const views = viewsMap.get(post.id) || [];
+        const isFollowing = followStatuses.get(student.id) || false;
 
         postsWithDetails.push({
           ...post,
@@ -2982,7 +3021,7 @@ export class PostgresStorage implements IStorage {
           student: {
             id: student.id,
             userId: student.userId,
-            name: user.name || student.name || 'Unknown Student',
+            name: user.name || student.name || 'Unknown Player',
             sport: student.sport || '',
             position: student.position || '',
             roleNumber: student.roleNumber || '',
@@ -2993,17 +3032,12 @@ export class PostgresStorage implements IStorage {
           commentsCount: comments.length,
           savesCount: saves.length,
           viewCount: views.length,
-          isLiked: userLike.length > 0,
-          isSaved: userSave.length > 0,
+          isLiked: userLikesSet.has(post.id),
+          isSaved: userSavesSet.has(post.id),
         });
       }
       
-      console.log(`✅ Returning ${postsWithDetails.length} posts with details for student ${studentId}`);
-      
-      // Apply pagination if specified
-      if (limit && offset !== undefined) {
-        return postsWithDetails.slice(offset, offset + limit);
-      }
+      console.log(`✅ Returning ${postsWithDetails.length} posts with details for student ${studentId} (limit: ${effectiveLimit}, offset: ${effectiveOffset})`);
       
       return postsWithDetails;
     } catch (error) {
@@ -3196,7 +3230,7 @@ export class PostgresStorage implements IStorage {
       } else if (post.scope === 'school' && school) {
         displayName = school.name;
       } else {
-        displayName = user.name || 'School Administration';
+        displayName = user.name || 'Academy Administration';
       }
 
       // Create a mock student object for announcements
@@ -5143,7 +5177,7 @@ export class PostgresStorage implements IStorage {
       const topStudents = await db.execute(sql`
         SELECT 
           s.student_id,
-          COALESCE(st.name, 'Unknown Student') as name,
+          COALESCE(st.name, 'Unknown Player') as name,
           COALESCE(AVG(sr.rating) FILTER (WHERE sr.rating IS NOT NULL), 0) as avg_rating,
           COUNT(DISTINCT s.id) as total_submissions
         FROM submissions s
@@ -5160,7 +5194,7 @@ export class PostgresStorage implements IStorage {
       const topSchools = await db.execute(sql`
         SELECT 
           st.school_id,
-          COALESCE(sc.name, 'Unknown School') as name,
+          COALESCE(sc.name, 'Unknown Academy') as name,
           COALESCE(AVG(sr.rating) FILTER (WHERE sr.rating IS NOT NULL), 0) as avg_rating,
           COUNT(DISTINCT s.id) as total_submissions
         FROM submissions s
@@ -5237,13 +5271,13 @@ export class PostgresStorage implements IStorage {
         },
         topStudents: (topStudents.rows || []).map(row => ({
           student_id: row.student_id,
-          name: row.name || 'Unknown Student',
+          name: row.name || 'Unknown Player',
           avg_rating: parseFloat(String(row.avg_rating || '0')),
           total_submissions: parseInt(String(row.total_submissions || '0'))
         })),
         topSchools: (topSchools.rows || []).map(row => ({
           school_id: row.school_id,
-          name: row.name || 'Unknown School',
+          name: row.name || 'Unknown Academy',
           avg_rating: parseFloat(String(row.avg_rating || '0')),
           total_submissions: parseInt(String(row.total_submissions || '0'))
         }))

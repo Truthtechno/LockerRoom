@@ -29,7 +29,7 @@ export default function SchoolAdminAnnouncements() {
               <div>
                 <h1 className="text-2xl lg:text-3xl font-bold text-foreground mb-2">Announcements</h1>
                 <p className="text-muted-foreground text-sm lg:text-base">
-                  Create and manage announcements for your school
+                  Create and manage announcements for your academy
                 </p>
               </div>
               <AnnouncementModal userRole="school_admin" schoolId={user?.schoolId || undefined}>

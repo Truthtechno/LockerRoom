@@ -64,11 +64,11 @@ const getNotificationIcon = (type: string) => {
     scout_feedback: Award,
     submission_pending: FileText,
     submission_finalized: CheckCheck,
-    submission_created: FileText, // Scout: new student submission
+    submission_created: FileText, // Scout: new player submission
     review_submitted: MessageCircle, // Scout: review submitted
     scout_created: Users, // Scout admin: scout profile created
-    submission_received: FileText, // Student: submission received
-    submission_feedback_ready: CheckCheck, // Student: feedback ready
+    submission_received: FileText, // Player: submission received
+    submission_feedback_ready: CheckCheck, // Player: feedback ready
     rating_result: Star,
     student_signup: UserPlus,
     system_alert: AlertCircle,
@@ -80,15 +80,15 @@ const getNotificationIcon = (type: string) => {
     following_posted: Eye,
     xen_watch_payment: DollarSign, // System admin: XEN Watch payment received
     subscription_expiring: AlertCircle,
-    school_created: Building2, // System admin: new school created
-    school_admin_created: Shield, // System admin: new school admin created
+    school_created: Building2, // System admin: new academy created
+    school_admin_created: Shield, // System admin: new academy admin created
     xen_scout_created: Users, // System admin: new xen scout created
     scout_admin_created: Shield, // System admin: new scout admin created
-    school_payment_recorded: DollarSign, // System/School admin: school payment recorded
-    school_renewal: CheckCheck, // System/School admin: school subscription renewed
-    school_limit_increase: TrendingUp, // System/School admin: student limit increased
-    school_limit_decrease: TrendingUp, // System/School admin: student limit decreased
-    school_frequency_change: Settings, // System/School admin: payment frequency changed
+    school_payment_recorded: DollarSign, // System/Academy admin: academy payment recorded
+    school_renewal: CheckCheck, // System/Academy admin: academy subscription renewed
+    school_limit_increase: TrendingUp, // System/Academy admin: player limit increased
+    school_limit_decrease: TrendingUp, // System/Academy admin: player limit decreased
+    school_frequency_change: Settings, // System/Academy admin: payment frequency changed
     form_created: FileText, // System/Scout admin/XEN Scout: evaluation form created
     form_submitted: FileText, // System/Scout admin: evaluation form submitted by scout
   };
@@ -104,11 +104,11 @@ const getNotificationColor = (type: string) => {
     scout_feedback: "text-purple-500",
     submission_pending: "text-orange-500",
     submission_finalized: "text-green-500",
-    submission_created: "text-orange-500", // Scout: new student submission
+    submission_created: "text-orange-500", // Scout: new player submission
     review_submitted: "text-blue-500", // Scout: review submitted
     scout_created: "text-cyan-500", // Scout admin: scout profile created
-    submission_received: "text-blue-500", // Student: submission received
-    submission_feedback_ready: "text-green-500", // Student: feedback ready
+    submission_received: "text-blue-500", // Player: submission received
+    submission_feedback_ready: "text-green-500", // Player: feedback ready
     rating_result: "text-amber-500",
     student_signup: "text-blue-500",
     system_alert: "text-red-500",
@@ -120,15 +120,15 @@ const getNotificationColor = (type: string) => {
     following_posted: "text-blue-500",
     xen_watch_payment: "text-green-600", // System admin: XEN Watch payment received
     subscription_expiring: "text-orange-500",
-    school_created: "text-blue-600", // System admin: new school created
-    school_admin_created: "text-purple-600", // System admin: new school admin created
+    school_created: "text-blue-600", // System admin: new academy created
+    school_admin_created: "text-purple-600", // System admin: new academy admin created
     xen_scout_created: "text-cyan-500", // System admin: new xen scout created
     scout_admin_created: "text-indigo-600", // System admin: new scout admin created
-    school_payment_recorded: "text-green-600", // System/School admin: school payment recorded
-    school_renewal: "text-green-500", // System/School admin: school subscription renewed
-    school_limit_increase: "text-blue-500", // System/School admin: student limit increased
-    school_limit_decrease: "text-orange-500", // System/School admin: student limit decreased
-    school_frequency_change: "text-purple-500", // System/School admin: payment frequency changed
+    school_payment_recorded: "text-green-600", // System/Academy admin: academy payment recorded
+    school_renewal: "text-green-500", // System/Academy admin: academy subscription renewed
+    school_limit_increase: "text-blue-500", // System/Academy admin: player limit increased
+    school_limit_decrease: "text-orange-500", // System/Academy admin: player limit decreased
+    school_frequency_change: "text-purple-500", // System/Academy admin: payment frequency changed
     form_created: "text-blue-500", // System/Scout admin/XEN Scout: evaluation form created
     form_submitted: "text-green-500", // System/Scout admin: evaluation form submitted by scout
   };
@@ -292,15 +292,15 @@ export default function Notifications() {
         // For comment notifications, navigate to post and scroll to comments section
         window.location.href = `/post/${notification.entityId}?scrollToComments=true`;
       } else if (notification.type === "following_posted") {
-        // For new post notifications from followed students, navigate to the post
+        // For new post notifications from followed players, navigate to the post
         window.location.href = `/post/${notification.entityId}`;
       } else {
         // For other post-related notifications (like, etc.), navigate to the post
         window.location.href = `/post/${notification.entityId}`;
       }
     } else if (notification.type === "new_follower" && notification.relatedUserId) {
-      // For new_follower notifications, only navigate if the follower is a student
-      // (unclickable for viewers, scouts, scout admins, school admins, system admins)
+      // For new_follower notifications, only navigate if the follower is a player
+      // (unclickable for viewers, scouts, scout admins, academy admins, system admins)
       if (notification.relatedUser?.role === 'student') {
         window.location.href = `/profile/${notification.relatedUserId}`;
       }
@@ -462,7 +462,7 @@ export default function Notifications() {
                   if (notification.type === "scout_created") {
                     isClickable = false; // No destination
                   } else if (notification.type === "new_follower") {
-                    // Only clickable if the follower is a student
+                    // Only clickable if the follower is a player
                     isClickable = notification.relatedUser?.role === 'student';
                   }
 

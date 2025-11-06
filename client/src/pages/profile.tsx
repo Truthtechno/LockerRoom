@@ -136,7 +136,7 @@ export default function Profile() {
         position: "Player", // Default position
         roleNumber: "0", // Default role number
         phone: "",
-        bio: `Hello! I'm ${user.name}, a student athlete.`
+        bio: `Hello! I'm ${user.name}, a player.`
       };
 
       console.log("🚀 Creating student profile with final data:", profileData);
@@ -215,7 +215,7 @@ export default function Profile() {
       
       toast({
         title: "Profile Created Successfully! 🎉",
-        description: "Your student profile is now active. Welcome to LockerRoom!",
+        description: "Your player profile is now active. Welcome to LockerRoom!",
       });
     },
     onError: (error: any) => {
@@ -637,7 +637,7 @@ export default function Profile() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-destructive">Access denied. Student profile required.</p>
+          <p className="text-destructive">Access denied. Player profile required.</p>
         </div>
       </div>
     );
@@ -667,7 +667,7 @@ export default function Profile() {
           
           <h1 className="text-3xl font-bold text-foreground mb-4">Welcome to LockerRoom!</h1>
           <p className="text-lg text-muted-foreground mb-8">
-            Create your student athlete profile to start sharing your journey, connecting with teammates, and tracking your performance.
+            Create your player profile to start sharing your journey, connecting with teammates, and tracking your performance.
           </p>
           
           <div className="space-y-4">
@@ -815,7 +815,7 @@ export default function Profile() {
               <p className="text-lg text-muted-foreground mb-1">
                 {studentProfile?.sport && studentProfile?.roleNumber && studentProfile?.position 
                   ? `${studentProfile.sport} • #${studentProfile.roleNumber} • ${studentProfile.position}`
-                  : studentProfile?.sport || studentProfile?.position || 'Student Athlete'
+                  : studentProfile?.sport || studentProfile?.position || 'Player'
                 }
               </p>
               <p className="text-muted-foreground">

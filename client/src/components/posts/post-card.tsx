@@ -212,7 +212,7 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
     if (!user || !post.student?.id) {
       toast({
         title: "Login required",
-        description: "Please log in to follow student athletes.",
+        description: "Please log in to follow players.",
         variant: "destructive",
       });
       return;

@@ -112,7 +112,7 @@ export default function XenWatchAnalytics() {
         name: student.name.split(' ')[0], // First name only
         reviews: student.total_submissions,
         rating: student.avg_rating,
-        efficiency: 100 // All students have completed their submissions
+        efficiency: 100 // All players have completed their submissions
       }));
   }, [analytics]);
 

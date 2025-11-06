@@ -87,7 +87,7 @@ export default function AdminFinalize() {
     onSuccess: () => {
       toast({
         title: "Submission Finalized",
-        description: "Final feedback has been published to the student.",
+        description: "Final feedback has been published to the player.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/xen-watch/admin/submissions"] });
       closeFinalizeModal();
@@ -317,21 +317,21 @@ export default function AdminFinalize() {
           <DialogHeader>
             <DialogTitle>Finalize Submission</DialogTitle>
             <DialogDescription>
-              Review scout feedback and publish final results to the student.
+              Review scout feedback and publish final results to the player.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 overflow-y-auto max-h-[60vh]">
-            {/* Student Info */}
+            {/* Player Info */}
             {selectedSubmission && (
               <div className="bg-muted rounded-lg p-4">
-                <h4 className="font-semibold mb-2">Student: {selectedSubmission.student.name}</h4>
+                <h4 className="font-semibold mb-2">Player: {selectedSubmission.student.name}</h4>
                 <p className="text-sm text-muted-foreground">
                   Submission #{selectedSubmission.id.slice(-8)}
                 </p>
                 {selectedSubmission.notes && (
                   <p className="text-sm mt-2">
-                    <strong>Student Notes:</strong> {selectedSubmission.notes}
+                    <strong>Player Notes:</strong> {selectedSubmission.notes}
                   </p>
                 )}
               </div>

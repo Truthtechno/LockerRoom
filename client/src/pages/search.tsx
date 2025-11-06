@@ -62,8 +62,8 @@ export default function SearchPage() {
       toast({
         title: variables.action === 'follow' ? 'Following' : 'Unfollowed',
         description: variables.action === 'follow' 
-          ? 'You are now following this student athlete!'
-          : 'You have unfollowed this student athlete.',
+          ? 'You are now following this player!'
+          : 'You have unfollowed this player.',
       });
       
       // Invalidate search results to update follow status
@@ -82,7 +82,7 @@ export default function SearchPage() {
     if (!user) {
       toast({
         title: "Login Required",
-        description: "Please log in to follow student athletes.",
+        description: "Please log in to follow players.",
         variant: "destructive",
       });
       return;

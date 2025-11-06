@@ -411,9 +411,9 @@ export default function SchoolAdmin() {
         <div className="mb-8 px-4 sm:px-6 lg:px-8 pt-8">
           <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-foreground mb-2">School Dashboard</h1>
+              <h1 className="text-2xl lg:text-3xl font-bold text-foreground mb-2">Academy Dashboard</h1>
               <p className="text-muted-foreground text-sm lg:text-base">
-                {schoolLoading ? "Loading..." : schoolInfo?.name || "School Not Found"}
+                {schoolLoading ? "Loading..." : schoolInfo?.name || "Academy Not Found"}
               </p>
             </div>
             <div className="flex items-center space-x-2">
@@ -443,7 +443,7 @@ export default function SchoolAdmin() {
                 data-testid="button-add-student"
               >
                 <UserPlus className="w-4 h-4 mr-2" />
-                Add Student
+                Add Player
               </Button>
             </div>
           </div>
@@ -503,14 +503,14 @@ export default function SchoolAdmin() {
                 <Card className="border-l-4 border-l-green-500">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Active Students</CardTitle>
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Active Players</CardTitle>
                       <Activity className="h-4 w-4 text-green-500" />
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">{activeStudentPercentage}%</div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {studentEngagement?.activeStudents || 0} of {schoolStats?.totalStudents || 0} students
+                      {studentEngagement?.activeStudents || 0} of {schoolStats?.totalStudents || 0} players
                       <span className="block mt-1">{period === "week" ? "Last 7 days" : period === "month" ? "Last 30 days" : "All time"}</span>
                     </p>
                   </CardContent>
@@ -519,14 +519,14 @@ export default function SchoolAdmin() {
                 <Card className="border-l-4 border-l-purple-500">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Avg Engagement/Student</CardTitle>
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Avg Engagement/Player</CardTitle>
                       <Zap className="h-4 w-4 text-purple-500" />
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">{avgEngagementPerStudent}</div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Interactions per student
+                      Interactions per player
                       <span className="block mt-1">{period === "week" ? "Last 7 days" : period === "month" ? "Last 30 days" : "All time"}</span>
                     </p>
                   </CardContent>
@@ -535,13 +535,13 @@ export default function SchoolAdmin() {
                 <Card className="border-l-4 border-l-amber-500">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Students</CardTitle>
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Players</CardTitle>
                       <Users className="h-4 w-4 text-amber-500" />
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">{schoolStats?.totalStudents || 0}</div>
-                    <p className="text-xs text-muted-foreground mt-1">Registered to school</p>
+                    <p className="text-xs text-muted-foreground mt-1">Registered to academy</p>
                   </CardContent>
                 </Card>
               </div>

@@ -17,7 +17,7 @@ import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
 
 const createSchoolAdminSchema = z.object({
-  schoolId: z.string().min(1, "School is required"),
+  schoolId: z.string().min(1, "Academy is required"),
   name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
   email: z.string().email("Valid email is required").max(255, "Email must be less than 255 characters"),
 });
@@ -100,15 +100,15 @@ export default function CreateSchoolAdmin() {
       setShowSuccessModal(true);
       
       toast({
-        title: "School Admin Created Successfully! 🎉",
+        title: "Academy Admin Created Successfully! 🎉",
         description: `${data.schoolAdmin.name} can now manage ${data.schoolAdmin.schoolName}.`,
       });
     },
     onError: (error: any) => {
       console.log("💥 School admin creation error:", error);
       toast({
-        title: "School Admin Creation Failed",
-        description: error.message || "Failed to create school admin. Please try again.",
+        title: "Academy Admin Creation Failed",
+        description: error.message || "Failed to create academy admin. Please try again.",
         variant: "destructive",
       });
     }
@@ -161,8 +161,8 @@ export default function CreateSchoolAdmin() {
             <div className="flex items-center justify-between h-16">
               <div className="flex items-center">
                 <div>
-                  <h1 className="text-xl font-semibold text-foreground">Create School Admin</h1>
-                  <p className="text-sm text-muted-foreground">Create an administrator account for a school</p>
+                  <h1 className="text-xl font-semibold text-foreground">Create Academy Admin</h1>
+                  <p className="text-sm text-muted-foreground">Create an administrator account for an academy</p>
                 </div>
               </div>
             </div>
@@ -175,24 +175,24 @@ export default function CreateSchoolAdmin() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <UserPlus className="w-5 h-5 mr-2" />
-                School Admin Information
+                Academy Admin Information
               </CardTitle>
               <CardDescription>
-                Create a new administrator account for school management
+                Create a new administrator account for academy management
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                {/* School Selection */}
+                {/* Academy Selection */}
                 <div className="space-y-2">
-                  <Label htmlFor="schoolId">School *</Label>
+                  <Label htmlFor="schoolId">Academy *</Label>
                   <Select
                     value={form.watch('schoolId')}
                     onValueChange={(value) => form.setValue('schoolId', value)}
                     disabled={createSchoolAdminMutation.isPending || schoolsLoading}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a school" />
+                      <SelectValue placeholder="Select an academy" />
                     </SelectTrigger>
                     <SelectContent>
                       {schoolsData?.schools?.map((school: any) => (
@@ -212,7 +212,7 @@ export default function CreateSchoolAdmin() {
                   )}
                   {selectedSchool && (
                     <div className="text-sm text-muted-foreground">
-                      <p><strong>Selected School:</strong> {selectedSchool.name}</p>
+                      <p><strong>Selected Academy:</strong> {selectedSchool.name}</p>
                       {selectedSchool.address && (
                         <p><strong>Address:</strong> {selectedSchool.address}</p>
                       )}
@@ -299,7 +299,7 @@ export default function CreateSchoolAdmin() {
                     ) : (
                       <>
                         <UserPlus className="w-4 h-4 mr-2" />
-                        Create School Admin
+                        Create Academy Admin
                       </>
                     )}
                   </Button>
@@ -315,10 +315,10 @@ export default function CreateSchoolAdmin() {
             <DialogHeader>
               <DialogTitle className="flex items-center text-green-600">
                 <Check className="w-6 h-6 mr-2" />
-                School Admin Created Successfully!
+                Academy Admin Created Successfully!
               </DialogTitle>
               <DialogDescription>
-                The school administrator account has been created and is ready to use.
+                The academy administrator account has been created and is ready to use.
               </DialogDescription>
             </DialogHeader>
             
@@ -329,7 +329,7 @@ export default function CreateSchoolAdmin() {
                 <div className="space-y-1 text-sm">
                   <p><span className="font-medium">Name:</span> {createdAdmin?.name}</p>
                   <p><span className="font-medium">Email:</span> {createdAdmin?.email}</p>
-                  <p><span className="font-medium">School:</span> {createdAdmin?.schoolName}</p>
+                  <p><span className="font-medium">Academy:</span> {createdAdmin?.schoolName}</p>
                   <p><span className="font-medium">Position:</span> {createdAdmin?.position}</p>
                 </div>
               </div>
@@ -367,7 +367,7 @@ export default function CreateSchoolAdmin() {
                       Important Security Notice
                     </p>
                     <ul className="text-amber-700 dark:text-amber-300 space-y-1">
-                      <li>• Share this OTP securely with the school admin</li>
+                      <li>• Share this OTP securely with the academy admin</li>
                       <li>• Admin must reset password after first login</li>
                       <li>• This OTP can only be used once</li>
                       <li>• Store securely - it won't be shown again</li>
@@ -383,9 +383,9 @@ export default function CreateSchoolAdmin() {
                     Next Steps
                   </p>
                   <ul className="text-blue-700 dark:text-blue-300 space-y-1">
-                    <li>• School admin can now log in with their credentials</li>
-                    <li>• They can add students to their school</li>
-                    <li>• Students will receive OTP for first login</li>
+                    <li>• Academy admin can now log in with their credentials</li>
+                    <li>• They can add players to their academy</li>
+                    <li>• Players will receive OTP for first login</li>
                   </ul>
                 </div>
               </div>

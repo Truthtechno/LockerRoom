@@ -54,7 +54,7 @@ const renewSubscriptionSchema = z.object({
 });
 
 const updateSchoolSchema = z.object({
-  name: z.string().min(1, "School name is required").max(200),
+  name: z.string().min(1, "Academy name is required").max(200),
   address: z.string().optional(),
   contactEmail: z.string().email("Valid email is required").optional().or(z.literal("")),
   contactPhone: z.string().optional(),
@@ -160,7 +160,7 @@ export default function ManageSchools() {
     enabled: showDetailsModal && !!selectedSchool?.id && activeDetailsTab === "admins",
   });
 
-  // Fetch school students
+  // Fetch academy players
   const { data: studentsData, isLoading: studentsLoading } = useQuery({
     queryKey: ["/api/system-admin/schools", selectedSchool?.id, "students", studentSearchQuery],
     queryFn: async () => {
@@ -341,7 +341,7 @@ export default function ManageSchools() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error?.message || error.message || "Failed to update school");
+        throw new Error(error.error?.message || error.message || "Failed to update academy");
       }
 
       const result = await response.json();
@@ -350,7 +350,7 @@ export default function ManageSchools() {
     },
     onSuccess: async () => {
       toast({
-        title: "School Updated! 🎉",
+        title: "Academy Updated! 🎉",
         description: `${selectedSchool?.name} has been updated successfully.`,
       });
       setShowUpdateModal(false);
@@ -362,7 +362,7 @@ export default function ManageSchools() {
     onError: (error: any) => {
       toast({
         title: "Update Failed",
-        description: error.message || "Failed to update school. Please try again.",
+        description: error.message || "Failed to update academy. Please try again.",
         variant: "destructive",
       });
     }
@@ -512,8 +512,8 @@ export default function ManageSchools() {
       const result = await response.json();
       
       toast({
-        title: "School Disabled",
-        description: result.message || `"${schoolName}" has been disabled. School admins and students will see a deactivated message when logging in.`,
+        title: "Academy Disabled",
+        description: result.message || `"${schoolName}" has been disabled. Academy admins and players will see a deactivated message when logging in.`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
@@ -548,8 +548,8 @@ export default function ManageSchools() {
       const result = await response.json();
       
       toast({
-        title: "School Enabled",
-        description: result.message || `"${schoolName}" has been enabled. School admins and students can now log in again.`,
+        title: "Academy Enabled",
+        description: result.message || `"${schoolName}" has been enabled. Academy admins and players can now log in again.`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools"] });
@@ -584,7 +584,7 @@ export default function ManageSchools() {
       const result = await response.json();
       
       toast({
-        title: "School Deleted",
+        title: "Academy Deleted",
         description: result.message || `"${schoolName}" has been permanently deleted.`,
       });
 
@@ -638,7 +638,7 @@ export default function ManageSchools() {
     // Create worksheet
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'School Admins');
+    XLSX.utils.book_append_sheet(wb, ws, 'Academy Admins');
 
     // Set column widths
     ws['!cols'] = [
@@ -689,7 +689,7 @@ export default function ManageSchools() {
     if (!studentsData?.students || studentsData.students.length === 0) {
       toast({
         title: "No Data",
-        description: "No students to export",
+        description: "No players to export",
         variant: "destructive"
       });
       return;
@@ -705,7 +705,7 @@ export default function ManageSchools() {
     if (filtered.length === 0) {
       toast({
         title: "No Data",
-        description: "No students match your search criteria",
+        description: "No players match your search criteria",
         variant: "destructive"
       });
       return;
@@ -727,7 +727,7 @@ export default function ManageSchools() {
     // Create worksheet
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'School Students');
+    XLSX.utils.book_append_sheet(wb, ws, 'Academy Players');
 
     // Set column widths
     ws['!cols'] = [
@@ -767,8 +767,8 @@ export default function ManageSchools() {
     }
 
     // Format filename
-    const schoolName = selectedSchool?.name?.replace(/[^a-z0-9]/gi, '_') || 'school';
-    const filename = `${schoolName}_students_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const schoolName = selectedSchool?.name?.replace(/[^a-z0-9]/gi, '_') || 'academy';
+    const filename = `${schoolName}_players_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     // Export file
     XLSX.writeFile(wb, filename);
@@ -921,8 +921,8 @@ export default function ManageSchools() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Manage Schools</h1>
-                <p className="text-sm text-muted-foreground">Manage school subscriptions and payments</p>
+                <h1 className="text-xl font-semibold text-foreground">Manage Academies</h1>
+                <p className="text-sm text-muted-foreground">Manage academy subscriptions and payments</p>
               </div>
             </div>
           </div>
@@ -937,7 +937,7 @@ export default function ManageSchools() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                     <Input
-                      placeholder="Search schools by name..."
+                      placeholder="Search academies by name..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-10"
@@ -950,7 +950,7 @@ export default function ManageSchools() {
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Schools</SelectItem>
+                      <SelectItem value="all">All Academies</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="expiring">Expiring Soon</SelectItem>
                       <SelectItem value="expired">Expired</SelectItem>
@@ -964,17 +964,17 @@ export default function ManageSchools() {
           {/* Schools Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Schools ({filteredSchools.length})</CardTitle>
+              <CardTitle>Academies ({filteredSchools.length})</CardTitle>
               <CardDescription>
-                Manage subscriptions, view payment history, and monitor school status
+                Manage subscriptions, view payment history, and monitor academy status
               </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="text-center py-8">Loading schools...</div>
+                <div className="text-center py-8">Loading academies...</div>
               ) : filteredSchools.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No schools found matching your criteria.
+                  No academies found matching your criteria.
                 </div>
               ) : (
                 <>
@@ -1055,7 +1055,7 @@ export default function ManageSchools() {
                             <div className="flex items-center gap-4 pt-2 border-t border-border">
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Users className="w-3 h-3" />
-                                <span>{school.student_count || 0} students</span>
+                                <span>{school.student_count || 0} players</span>
                               </div>
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <UserPlus className="w-3 h-3" />
@@ -1091,19 +1091,19 @@ export default function ManageSchools() {
                                     onClick={() => handleViewDetails(school)}
                                   >
                                     <Eye className="w-4 h-4 mr-2" />
-                                    View School Details
+                                    View Academy Details
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handleUpdateSchool(school)}
                                   >
                                     <Edit className="w-4 h-4 mr-2" />
-                                    Update School Information
+                                    Update Academy Information
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handlePayments(school)}
                                   >
                                     <CreditCard className="w-4 h-4 mr-2" />
-                                    School Payments
+                                    Academy Payments
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handleRenewClick(school)}
@@ -1118,7 +1118,7 @@ export default function ManageSchools() {
                                       className="text-yellow-600 focus:text-yellow-600"
                                     >
                                       <Ban className="w-4 h-4 mr-2" />
-                                      Disable School
+                                      Disable Academy
                                     </DropdownMenuItem>
                                   ) : (
                                     <DropdownMenuItem
@@ -1126,7 +1126,7 @@ export default function ManageSchools() {
                                       className="text-green-600 focus:text-green-600"
                                     >
                                       <Power className="w-4 h-4 mr-2" />
-                                      Enable School
+                                      Enable Academy
                                     </DropdownMenuItem>
                                   )}
                                   <AlertDialog>
@@ -1136,14 +1136,14 @@ export default function ManageSchools() {
                                         className="text-red-600 focus:text-red-600"
                                       >
                                         <Trash2 className="w-4 h-4 mr-2" />
-                                        Delete School
+                                        Delete Academy
                                       </DropdownMenuItem>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
                                       <AlertDialogHeader>
                                         <AlertDialogTitle className="flex items-center">
                                           <AlertTriangle className="w-5 h-5 mr-2 text-red-500" />
-                                          Delete School Permanently
+                                          Delete Academy Permanently
                                         </AlertDialogTitle>
                                         <AlertDialogDescription>
                                           This action cannot be undone. This will permanently delete:
@@ -1182,7 +1182,7 @@ export default function ManageSchools() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>School Name</TableHead>
+                          <TableHead>Academy Name</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Payment</TableHead>
                           <TableHead>Frequency</TableHead>
@@ -1235,7 +1235,7 @@ export default function ManageSchools() {
                                 <div className="text-sm space-y-1">
                                   <div className="flex items-center gap-1">
                                     <Users className="w-3 h-3" />
-                                    {school.student_count || 0} students
+                                    {school.student_count || 0} players
                                   </div>
                                   <div className="flex items-center gap-1">
                                     <UserPlus className="w-3 h-3" />
@@ -1392,7 +1392,7 @@ export default function ManageSchools() {
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-2">
                           <p className="text-xs text-blue-800 dark:text-blue-200">
                             <strong>Note:</strong> This is a one-time payment subscription. One-time payments do not expire and cannot be renewed.
-                            To record additional one-time payments, use "School Payments" instead.
+                            To record additional one-time payments, use "Academy Payments" instead.
                           </p>
                         </div>
                       );
@@ -1400,7 +1400,7 @@ export default function ManageSchools() {
                     return (
                       <p className="text-xs text-muted-foreground mt-2">
                         Note: Renewal will restart the subscription timer from the renewal date using the current payment frequency.
-                        To record a payment or change frequency, use "School Payments" instead.
+                        To record a payment or change frequency, use "Academy Payments" instead.
                       </p>
                     );
                   })()}
@@ -1502,7 +1502,7 @@ export default function ManageSchools() {
                 <TabsList className="grid w-full grid-cols-3 h-auto text-xs sm:text-sm">
                   <TabsTrigger value="info" className="px-2 sm:px-3 py-1.5 sm:py-2">Basic Info</TabsTrigger>
                   <TabsTrigger value="admins" className="px-2 sm:px-3 py-1.5 sm:py-2 truncate">Admins ({schoolDetails?.school?.adminCount || 0})</TabsTrigger>
-                  <TabsTrigger value="students" className="px-2 sm:px-3 py-1.5 sm:py-2 truncate">Students ({schoolDetails?.school?.studentCount || 0})</TabsTrigger>
+                  <TabsTrigger value="students" className="px-2 sm:px-3 py-1.5 sm:py-2 truncate">Players ({schoolDetails?.school?.studentCount || 0})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="info" className="space-y-4 mt-4">
@@ -1510,16 +1510,16 @@ export default function ManageSchools() {
                     <div className="space-y-4">
                       <Card>
                         <CardHeader className="p-4 sm:p-6">
-                          <CardTitle className="text-base sm:text-lg">School Information</CardTitle>
+                          <CardTitle className="text-base sm:text-lg">Academy Information</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3 p-4 sm:p-6 pt-0">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <Label className="text-muted-foreground">School Name</Label>
+                              <Label className="text-muted-foreground">Academy Name</Label>
                               <p className="font-medium">{schoolDetails.school.name}</p>
                             </div>
                             <div>
-                              <Label className="text-muted-foreground">School ID</Label>
+                              <Label className="text-muted-foreground">Academy ID</Label>
                               <p className="font-mono text-xs">{schoolDetails.school.id}</p>
                             </div>
                             {schoolDetails.school.address && (
@@ -1574,12 +1574,12 @@ export default function ManageSchools() {
 
                       <Card>
                         <CardHeader className="p-4 sm:p-6">
-                          <CardTitle className="text-base sm:text-lg">Student Limit</CardTitle>
+                          <CardTitle className="text-base sm:text-lg">Player Limit</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 sm:p-6 pt-0">
                           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
-                              <Label className="text-muted-foreground">Maximum Students</Label>
+                              <Label className="text-muted-foreground">Maximum Players</Label>
                               <p className="text-2xl font-bold">{schoolDetails.school.maxStudents || schoolDetails.school.max_students || 10}</p>
                             </div>
                             <div>
@@ -1607,7 +1607,7 @@ export default function ManageSchools() {
                               <p className="text-xl font-semibold">{schoolDetails.school.adminCount || 0}</p>
                             </div>
                             <div>
-                              <Label className="text-muted-foreground">Total Students</Label>
+                              <Label className="text-muted-foreground">Total Players</Label>
                               <p className="text-xl font-semibold">{schoolDetails.school.studentCount || 0}</p>
                             </div>
                             <div>
@@ -1685,7 +1685,7 @@ export default function ManageSchools() {
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                       <Input
-                        placeholder="Search students..."
+                        placeholder="Search players..."
                         value={studentSearchQuery}
                         onChange={(e) => setStudentSearchQuery(e.target.value)}
                         className="w-full sm:max-w-sm"
@@ -1767,7 +1767,7 @@ export default function ManageSchools() {
                             {(!studentsData?.students || studentsData.students.length === 0) && (
                               <TableRow>
                                 <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                                  No students found
+                                  No players found
                                 </TableCell>
                               </TableRow>
                             )}
@@ -1787,7 +1787,7 @@ export default function ManageSchools() {
         <Dialog open={showUpdateModal} onOpenChange={setShowUpdateModal}>
           <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
             <DialogHeader className="flex-shrink-0">
-              <DialogTitle className="text-lg sm:text-xl">Update School Information</DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl">Update Academy Information</DialogTitle>
               <DialogDescription className="text-sm">
                 Update basic information for <span className="truncate">{selectedSchool?.name}</span>
               </DialogDescription>
@@ -1809,7 +1809,7 @@ export default function ManageSchools() {
                 updateSchoolMutation.mutate(submitData);
               })} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="update-name">School Name *</Label>
+                <Label htmlFor="update-name">Academy Name *</Label>
                 <Input
                   id="update-name"
                   {...updateForm.register("name")}
@@ -1882,7 +1882,7 @@ export default function ManageSchools() {
 
               <div className="bg-muted/50 p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Note:</strong> Student limit cannot be updated here. Use "School Payments" to change student limits.
+                  <strong>Note:</strong> Player limit cannot be updated here. Use "Academy Payments" to change player limits.
                 </p>
               </div>
 
@@ -1925,7 +1925,7 @@ export default function ManageSchools() {
             <DialogHeader className="flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-4">
               <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="truncate">School Payments - {selectedSchool?.name}</span>
+                <span className="truncate">Academy Payments - {selectedSchool?.name}</span>
               </DialogTitle>
               <DialogDescription className="text-sm">
                 View payment history and record new payments
@@ -2286,8 +2286,8 @@ export default function ManageSchools() {
                       <SelectContent>
                         <SelectItem value="initial">Initial Payment</SelectItem>
                         <SelectItem value="renewal">Renewal</SelectItem>
-                        <SelectItem value="student_limit_increase">Student Limit Increase</SelectItem>
-                        <SelectItem value="student_limit_decrease">Student Limit Decrease</SelectItem>
+                        <SelectItem value="student_limit_increase">Player Limit Increase</SelectItem>
+                        <SelectItem value="student_limit_decrease">Player Limit Decrease</SelectItem>
                         <SelectItem value="frequency_change">Frequency Change</SelectItem>
                       </SelectContent>
                     </Select>

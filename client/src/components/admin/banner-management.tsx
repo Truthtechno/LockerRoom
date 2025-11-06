@@ -10,6 +10,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { timeAgo } from "@/lib/timeAgo";
 import { Loader2, AlertCircle, Edit, Trash2, MoreHorizontal, CheckCircle, XCircle, Info, AlertTriangle, Megaphone } from "lucide-react";
 import { BannerModal } from "@/components/ui/banner-modal";
+import { getRoleDisplayName } from "@/lib/role-display";
 
 export type Banner = {
   id: string;
@@ -144,12 +145,7 @@ export function BannerManagement() {
   };
 
   const formatRoleName = (role: string) => {
-    switch (role) {
-      case 'scout_admin': return 'Scout Admin';
-      case 'school_admin': return 'School Admin';
-      case 'xen_scout': return 'XEN Scout';
-      default: return role;
-    }
+    return getRoleDisplayName(role);
   };
 
   const isCurrentlyActive = (banner: Banner) => {

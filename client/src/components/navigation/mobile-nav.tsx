@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Home, Search, Plus, BarChart3, User, LogOut, Settings, Bookmark, Users, Eye, Bot, Menu, X, LayoutDashboard, TrendingUp, UserPlus, Building2, Shield, Megaphone, Bell, Layers, ChevronDown, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { getRoleDisplayName } from "@/lib/role-display";
 import { useBranding } from "@/hooks/use-branding";
 import { logout } from "@/lib/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -171,8 +172,6 @@ export default function MobileNav() {
         { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
         { name: "Notifications", href: "/notifications", icon: Bell },
-        { name: "XEN Watch", href: "/xen-watch", icon: Eye },
-        { name: "ScoutAI", href: "/scoutai", icon: Bot },
         { name: "Settings", href: "/settings", icon: Settings },
       ];
     } else if (user?.role === "school_admin") {
@@ -180,13 +179,13 @@ export default function MobileNav() {
       const feedHref = "/school-admin/feed";
       const isActive = isStudentContentActive(feedHref);
       return [
-        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
+        { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Dashboard", href: "/school-admin", icon: LayoutDashboard },
         { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Announcements", href: "/school-admin/announcements", icon: Megaphone },
-        { name: "Add Student", href: "/school-admin/add-student", icon: UserPlus },
+        { name: "Add Player", href: "/school-admin/add-student", icon: UserPlus },
         { name: "Live Reports", href: "/school-admin/live-reports", icon: BarChart3 },
-        { name: "Student Search", href: "/school-admin/student-search", icon: Search },
+        { name: "Player Search", href: "/school-admin/student-search", icon: Search },
         { name: "Settings", href: "/settings", icon: Settings },
       ];
     } else if (user?.role === "system_admin") {
@@ -194,13 +193,13 @@ export default function MobileNav() {
       const feedHref = "/system-admin/feed";
       const isActive = isStudentContentActive(feedHref);
       return [
-        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
+        { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Dashboard", href: "/system-admin", icon: LayoutDashboard },
         { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone },
-        { name: "Create School", href: "/system-admin/create-school", icon: Building2 },
+        { name: "Create Academy", href: "/system-admin/create-school", icon: Building2 },
         { name: "Create Admin", href: "/system-admin/create-school-admin", icon: UserPlus },
-        { name: "Manage Schools", href: "/system-admin/manage-schools", icon: Building2 },
+        { name: "Manage Academies", href: "/system-admin/manage-schools", icon: Building2 },
         { name: "Platform Analytics", href: "/admin/platform-analytics", icon: TrendingUp },
         { name: "System Config", href: "/admin/system-config", icon: Settings },
         { name: "Manage Admins", href: "/admin/admin-management", icon: Shield },
@@ -213,7 +212,7 @@ export default function MobileNav() {
       const feedHref = "/feed";
       const isActive = isStudentContentActive(feedHref);
       const scoutNav = [
-        { name: "Student Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
+        { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
         { name: "Notifications", href: "/notifications", icon: Bell },
         { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye },
         { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText },
@@ -312,7 +311,7 @@ export default function MobileNav() {
             </div>
           </Link>
 
-          {/* Create - Floating Button (Only for Students) */}
+          {/* Create - Floating Button (Only for Players) */}
           {user?.role === "student" && (
             <Link href="/create">
               <div
@@ -330,35 +329,51 @@ export default function MobileNav() {
           )}
 
           {/* Profile/Dashboard */}
-          <Link href={getProfileLink()}>
+          {user?.role === "viewer" ? (
             <div
-              className={`flex flex-col items-center py-2 px-3 transition-all duration-200 cursor-pointer ${
-                (user?.role === "school_admin" && location.startsWith("/school-admin")) ||
-                (user?.role === "system_admin" && location.startsWith("/system-admin")) ||
-                (user?.role === "scout_admin" && location.startsWith("/scouts/admin")) ||
-                (user?.role === "xen_scout" && location.startsWith("/xen-watch/scout-queue")) ||
-                (user?.role !== "school_admin" && user?.role !== "system_admin" && user?.role !== "scout_admin" && user?.role !== "xen_scout" && location.startsWith("/profile"))
-                  ? "text-accent font-bold" 
-                  : "text-muted-foreground hover:text-accent"
-              }`}
+              className="flex flex-col items-center py-2 px-3 transition-all duration-200 text-muted-foreground"
               data-testid="mobile-nav-profile"
             >
-              {user?.role === "school_admin" || user?.role === "system_admin" || user?.role === "scout_admin" ? (
-                <LayoutDashboard className="w-6 h-6" />
-              ) : user?.role === "xen_scout" ? (
-                <Eye className="w-6 h-6" />
-              ) : (
-                <AvatarWithFallback 
-                  src={displayProfilePic}
-                  alt={displayUser?.name || "Profile"}
-                  fallbackText={displayUser?.name?.slice(0, 2).toUpperCase() || "??"}
-                  size="sm"
-                  className="w-6 h-6"
-                />
-              )}
-              <span className="text-xs mt-1">{getProfileLabel()}</span>
+              <AvatarWithFallback 
+                src={displayProfilePic}
+                alt={displayUser?.name || "Profile"}
+                fallbackText={displayUser?.name?.slice(0, 2).toUpperCase() || "??"}
+                size="sm"
+                className="w-6 h-6"
+              />
+              <span className="text-xs mt-1">{displayUser?.name || "Viewer"}</span>
             </div>
-          </Link>
+          ) : (
+            <Link href={getProfileLink()}>
+              <div
+                className={`flex flex-col items-center py-2 px-3 transition-all duration-200 cursor-pointer ${
+                  (user?.role === "school_admin" && location.startsWith("/school-admin")) ||
+                  (user?.role === "system_admin" && location.startsWith("/system-admin")) ||
+                  (user?.role === "scout_admin" && location.startsWith("/scouts/admin")) ||
+                  (user?.role === "xen_scout" && location.startsWith("/xen-watch/scout-queue")) ||
+                  (user?.role !== "school_admin" && user?.role !== "system_admin" && user?.role !== "scout_admin" && user?.role !== "xen_scout" && location.startsWith("/profile"))
+                    ? "text-accent font-bold" 
+                    : "text-muted-foreground hover:text-accent"
+                }`}
+                data-testid="mobile-nav-profile"
+              >
+                {user?.role === "school_admin" || user?.role === "system_admin" || user?.role === "scout_admin" ? (
+                  <LayoutDashboard className="w-6 h-6" />
+                ) : user?.role === "xen_scout" ? (
+                  <Eye className="w-6 h-6" />
+                ) : (
+                  <AvatarWithFallback 
+                    src={displayProfilePic}
+                    alt={displayUser?.name || "Profile"}
+                    fallbackText={displayUser?.name?.slice(0, 2).toUpperCase() || "??"}
+                    size="sm"
+                    className="w-6 h-6"
+                  />
+                )}
+                <span className="text-xs mt-1">{getProfileLabel()}</span>
+              </div>
+            </Link>
+          )}
 
           {/* Hamburger Menu */}
           <button
@@ -430,8 +445,8 @@ export default function MobileNav() {
               />
               <div>
                 <p className="font-medium text-foreground">{displayUser?.name || "User"}</p>
-                <p className="text-sm text-muted-foreground capitalize">
-                  {displayUser?.role?.replace("_", " ") || ""}
+                <p className="text-sm text-muted-foreground">
+                  {getRoleDisplayName(displayUser?.role)}
                 </p>
               </div>
             </div>
@@ -443,7 +458,7 @@ export default function MobileNav() {
               {drawerItems.map((item) => {
                 const showBadge = item.name === "Notifications" && unreadCount && unreadCount.count > 0;
                 
-                // Render dropdown for Student Content
+                // Render dropdown for Player Content
                 if ((item as any).isDropdown && (item as any).dropdownItems) {
                   return (
                     <div key={item.name}>

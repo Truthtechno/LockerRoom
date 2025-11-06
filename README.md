@@ -1,6 +1,6 @@
-# LockerRoom - School Sports Social Platform
+# LockerRoom - Academy Sports Social Platform
 
-**LockerRoom** is a comprehensive school-based sports social platform designed for XEN Sports Armoury. Built to empower student-athletes to showcase their skills, connect with their community, and receive professional scouting feedback through an Instagram-like social media experience tailored for sports.
+**LockerRoom** is a comprehensive academy-based sports social platform designed for XEN Sports Armoury. Built to empower player-athletes to showcase their skills, connect with their community, and receive professional scouting feedback through an Instagram-like social media experience tailored for sports.
 
 [![Node.js](https://img.shields.io/badge/Node.js-20-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
@@ -10,61 +10,61 @@
 
 ## Goals
 
-- **Student-Athlete Empowerment** - Provide a platform for students to showcase their sports achievements and highlights
-- **Community Building** - Connect students, parents, coaches, and sports enthusiasts in a safe, school-managed environment
-- **Professional Scouting** - XEN Watch system enables professional scouts to review and rate student submissions
-- **School Management** - Comprehensive admin tools for schools to manage students, content, alumnouncements
+- **Player-Athlete Empowerment** - Provide a platform for players to showcase their sports achievements and highlights
+- **Community Building** - Connect players, parents, coaches, and sports enthusiasts in a safe, academy-managed environment
+- **Professional Scouting** - XEN Watch system enables professional scouts to review and rate player submissions
+- **Academy Management** - Comprehensive admin tools for academies to manage players, content, announcements
 - **Scalable Architecture** - Modern tech stack designed for performance and scalability
-- **Engagement & Analytics** - Track student engagement, views, likes, comments, and saves with detailed analytics
+- **Engagement & Analytics** - Track player engagement, views, likes, comments, and saves with detailed analytics
 
 ## Features
 
 ### Core Platform Modules
 
 #### **User Roles & Permissions**
-- **System Admin (XEN)** - Full platform control, school approvals, global analytics
-- **School Admin** - School-specific management, student enrollment, announcements
-- **Students** - Content creation, profile management, social interactions
-- **Viewers** - Browse content, follow students, interact with posts
+- **System Admin (XEN)** - Full platform control, academy approvals, global analytics
+- **Academy Admin** - Academy-specific management, player enrollment, announcements
+- **Players** - Content creation, profile management, social interactions
+- **Viewers** - Browse content, follow players, interact with posts
 - **Scout Admin** - Manage scout assignments and review submissions
-- **XEN Scouts** - Professional scouts review and rate student submissions
+- **XEN Scouts** - Professional scouts review and rate player submissions
 
-#### **Student Portal**
-- **Dashboard** - Personalized feed with posts from followed students and school announcements
+#### **Player Portal**
+- **Dashboard** - Personalized feed with posts from followed players and academy announcements
 - **Content Creation** - Upload images and videos to Cloudinary with real-time processing
 - **Profile Management** - Complete profile with bio, position, sport, role number, and cover photos
 - **Statistics** - Track views, likes, comments, saves, and follower counts
-- **Discovery** - Search for students, schools, and content across the platform
+- **Discovery** - Search for players, academies, and content across the platform
 - **Saved Posts** - Save favorite posts for later viewing
-- **Following Feed** - Curated feed of content from followed students
+- **Following Feed** - Curated feed of content from followed players
 - **XEN Watch** - Submit videos for professional scout review and feedback
 
-#### **School Admin Portal**
-- **Student Management** - Enroll students with OTP, manage profiles, view student analytics
-- **Announcements** - Create school-wide announcements with media support
-- **School Analytics** - Monitor student engagement, posts, likes, and activity metrics
-- **Student Search** - Quick search and filter capabilities for students
-- **School Settings** - Configure school profile, subscription plans, and student limits
+#### **Academy Admin Portal**
+- **Player Management** - Enroll players with OTP, manage profiles, view player analytics
+- **Announcements** - Create academy-wide announcements with media support
+- **Academy Analytics** - Monitor player engagement, posts, likes, and activity metrics
+- **Player Search** - Quick search and filter capabilities for players
+- **Academy Settings** - Configure academy profile, subscription plans, and player limits
 - **Live Reports** - View and manage reported content and user issues
 - **Subscription Management** - View subscription status, expiration dates, and payment history
-- **Student Limit Management** - Monitor and manage student enrollment limits
+- **Player Limit Management** - Monitor and manage player enrollment limits
 
 #### **System Admin Portal**
-- **School Management** - Approve/reject school applications, manage subscriptions, view all schools
+- **Academy Management** - Approve/reject academy applications, manage subscriptions, view all academies
 - **User Management** - Manage all platform users and administrators with freeze/unfreeze capabilities
-- **Platform Analytics** - Global statistics and insights across all schools with export functionality
+- **Platform Analytics** - Global statistics and insights across all academies with export functionality
 - **System Configuration** - Platform-wide settings, branding, appearance customization
 - **Admin Management** - Create and assign admin roles with granular permissions
-- **Global Announcements** - Create announcements visible to all schools or specific schools
+- **Global Announcements** - Create announcements visible to all academies or specific academies
 - **Payment Configuration** - Configure Stripe payment settings, XEN Watch pricing, and subscription pricing
 - **Banner Management** - Create and manage dashboard-level banners for targeted communications
 - **Evaluation Forms** - Create and manage evaluation form templates for scouts
 
 #### **XEN Watch - Professional Scouting System**
-- **Student Submissions** - Students submit highlight videos for professional review
+- **Player Submissions** - Players submit highlight videos for professional review
 - **Scout Review Queue** - Scouts review submissions and provide ratings (1-5) and feedback
 - **Draft Reviews** - Scouts can save draft reviews before final submission
-- **Final Feedback** - Scout admins compile reviews and send final feedback to students
+- **Final Feedback** - Scout admins compile reviews and send final feedback to players
 - **Analytics** - Track submission statistics, average ratings, and scout activity
 - **Payment Integration** - Optional payment processing for submission reviews (Stripe or mock mode)
 - **Real-time Updates** - Live status updates and notifications for submissions
@@ -72,7 +72,7 @@
 #### **Evaluation Forms System**
 - **Dynamic Form Builder** - System admins create customizable evaluation forms with 8+ field types
 - **Field Types** - Short text, paragraph, star rating, multiple choice, multiple selection, number, date, dropdown
-- **Student Auto-population** - Auto-fill student profiles from database or manual entry
+- **Player Auto-population** - Auto-fill player profiles from database or manual entry
 - **Draft & Submit** - Save drafts and submit final evaluations
 - **Submission Management** - View, filter, and search all submissions
 - **Excel Export** - Export evaluation data for analysis
@@ -93,8 +93,8 @@
 - **Secure Authentication** - JWT-based authentication with role-based access control
 - **Advanced Database** - PostgreSQL with Drizzle ORM for type-safe database operations
 - **Analytics Dashboard** - Comprehensive analytics with Recharts visualization
-- **Announcement System** - Multi-scope announcements (global, school, staff)
-- **Advanced Search** - Full-text search across students, schools, and content
+- **Announcement System** - Multi-scope announcements (global, academy, staff)
+- **Advanced Search** - Full-text search across players, academies, and content
 - **Media Management** - Cloudinary CDN for fast, optimized media delivery
 - **Progressive Feed Loading** - Infinite scroll with optimized pagination
 - **Theme Support** - Light/dark mode with system appearance configuration
@@ -102,26 +102,26 @@
 ### нюансы Features
 
 #### Content Engagement
-- **Likes** - Express appreciation for student posts
+- **Likes** - Express appreciation for player posts
 - **Comments** - Engage in conversations on posts
 - **Saves** - Save posts to personal collections
 - **Views** - Automatic view tracking for analytics
-- **Follow System** - Follow students and build your network
+- **Follow System** - Follow players and build your network
 - **Post Statistics** - Real-time engagement metrics
 
 #### Announcement System
-- **Global Announcements** - System-wide announcements visible to all students
-- **School Announcements** - School-specific announcements managed by school admins
-- **Staff Announcements** - Admin-only announcements (hidden from student feeds)
+- **Global Announcements** - System-wide announcements visible to all players
+- **Academy Announcements** - Academy-specific announcements managed by academy admins
+- **Staff Announcements** - Admin-only announcements (hidden from player feeds)
 - **Media Support** - Attach images or videos to announcements
 - **Visual Distinction** - Special styling to distinguish announcements from regular posts
 - **Banner System** - Dashboard-level banners for targeted role-based communications
 
 #### Subscription & Payment System
-- **Flexible Subscriptions** - Monthly or annual payment options per school
+- **Flexible Subscriptions** - Monthly or annual payment options per academy
 - **Expiration Tracking** - Automatic tracking of subscription expiration dates
 - **Notifications** - Automatic notifications for expiring and expired subscriptions
-- **Payment Records** - Complete audit trail of all school payments
+- **Payment Records** - Complete audit trail of all academy payments
 - **Configuration** - Configurable subscription pricing via system settings
 - **Auto-deactivation** - Automatic deactivation of expired subscriptions
 
@@ -226,15 +226,15 @@ The system comes pre-configured with demo accounts for testing:
 - **Email**: `admin@lockerroom.com`
 - **Password**: `admin123`
 - **Role**: System Admin
-- **Access**: Full platform control, school management, analytics
+- **Access**: Full platform control, academy management, analytics
 
-### School Administrator
+### Academy Administrator
 - **Email**: `principal@lincoln.edu`
 - **Password**: `principal123`
-- **School**: Lincoln High School
-- **Access**: Student management, announcements, school analytics
+- **Academy**: Lincoln High Academy
+- **Access**: Player management, announcements, academy analytics
 
-### Students
+### Players
 - **Email**: `marcus.rodriguez@student.com`
 - **Password**: `student123`
 - **Position**: Midfielder (#10)
@@ -247,7 +247,7 @@ The system comes pre-configured with demo accounts for testing:
 ### Viewers
 - **Email**: `sarah.johnson@viewer.com`
 - **Password**: `viewer123`
-- **Access**: Browse content, follow students, comment on posts
+- **Access**: Browse content, follow players, comment on posts
 
 > **Note**: Run `npm run reseed` to reset demo data to default state
 
@@ -296,9 +296,9 @@ The application uses PostgreSQL with the following main entities:
 
 ### Core Tables
 - **users** - Central authentication table with role-based access
-- **students** - Student profiles with sports information
-- **schools** - School information and subscription management
-- **school_admins** - School administrator profiles
+- **students** - Player profiles with sports information (table name unchanged for database compatibility)
+- **schools** - Academy information and subscription management (table name unchanged for database compatibility)
+- **school_admins** - Academy administrator profiles (table name unchanged for database compatibility)
 - **system_admins** - System administrator profiles
 - **viewers** - Public viewer profiles
 
@@ -311,10 +311,10 @@ The application uses PostgreSQL with the following main entities:
 
 ### Social Tables
 - **user_follows** - User-to-user following relationships
-- **student_followers** - Student-specific follower tracking
+- **student_followers** - Player-specific follower tracking (table name unchanged for database compatibility)
 
 ### XEN Watch Tables
-- **submissions** - Student video submissions for review
+- **submissions** - Player video submissions for review
 - **submission_reviews** - Scout reviews and ratings
 - **submission_final_feedback** - Final compiled feedback
 - **scout_profiles** - Scout profile information
@@ -336,8 +336,8 @@ The application uses PostgreSQL with the following main entities:
 - **system_branding** - Customizable branding assets (logo, company info, social links)
 - **system_appearance** - Theme and appearance settings (colors, fonts, dark/light mode)
 - **system_payment** - Payment gateway configuration (Stripe, PayPal, mock mode)
-- **school_applications** - School registration requests
-- **school_payment_records** - Audit trail of all school payments
+- **school_applications** - Academy registration requests (table name unchanged for database compatibility)
+- **school_payment_records** - Audit trail of all academy payments (table name unchanged for database compatibility)
 - **admin_roles** - Admin role assignments and permissions
 - **analytics_logs** - Platform analytics event logging
 
@@ -460,7 +460,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Business Inquiries
 - **Partnerships**: [mohammed.mendah@xen-hub.com](mailto:mohammed.mendah@xen-hub.com)
-- **School Onboarding**: [whatsApp Us](tel:+256766704533)
+- **Academy Onboarding**: [whatsApp Us](tel:+256766704533)
 
 ## Acknowledgments
 

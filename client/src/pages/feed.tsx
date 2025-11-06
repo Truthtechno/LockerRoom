@@ -237,7 +237,7 @@ export default function Feed() {
                 <Input
                   value={searchQuery}
                   onChange={(e) => handleSearchChange(e.target.value)}
-                  placeholder="Search for student athletes..."
+                  placeholder="Search for players..."
                   className="pl-10 pr-4"
                   data-testid="search-input"
                 />
@@ -263,7 +263,7 @@ export default function Feed() {
                     </div>
                   ) : !searchResults || searchResults.length === 0 ? (
                     <div className="p-4 text-sm text-muted-foreground">
-                      No student athletes found matching "{searchQuery}"
+                      No players found matching "{searchQuery}"
                     </div>
                   ) : (
                     <div className="max-h-80 overflow-y-auto">
@@ -288,7 +288,7 @@ export default function Feed() {
                     </div>
                     <h3 className="text-lg font-medium text-foreground mb-2">Complete Your Profile</h3>
                     <p className="text-muted-foreground mb-4">
-                      You need to create your student profile before you can share posts.
+                      You need to create your player profile before you can share posts.
                     </p>
                     <Button 
                       onClick={() => setLocation("/profile")}

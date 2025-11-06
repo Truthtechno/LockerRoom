@@ -175,7 +175,7 @@ export default function ScoutSubmissionsManagement() {
     onSuccess: () => {
       toast({
         title: "Feedback Sent",
-        description: "The feedback has been sent to the student successfully.",
+        description: "The feedback has been sent to the player successfully.",
       });
       setShowFeedbackModal(false);
       setFeedbackMessage('');
@@ -414,7 +414,7 @@ export default function ScoutSubmissionsManagement() {
                       {/* Notes */}
                       {submission.caption && (
                         <div className="space-y-2">
-                          <Label className="text-sm font-medium">Student Notes</Label>
+                          <Label className="text-sm font-medium">Player Notes</Label>
                           <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
                             {submission.caption}
                           </p>
@@ -529,10 +529,10 @@ export default function ScoutSubmissionsManagement() {
                       </div>
                     </div>
                     
-                    {/* Student Notes */}
+                    {/* Player Notes */}
                     {selectedSubmission.caption && (
                       <div>
-                        <h4 className="font-medium mb-2">Student Notes</h4>
+                        <h4 className="font-medium mb-2">Player Notes</h4>
                         <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
                           {selectedSubmission.caption}
                         </p>
@@ -550,7 +550,7 @@ export default function ScoutSubmissionsManagement() {
               <DialogHeader>
                 <DialogTitle>Send Final Feedback</DialogTitle>
                 <DialogDescription>
-                  Send detailed feedback to the student for submission #{selectedSubmission?.id.slice(-8)}
+                  Send detailed feedback to the player for submission #{selectedSubmission?.id.slice(-8)}
                 </DialogDescription>
               </DialogHeader>
               
@@ -561,7 +561,7 @@ export default function ScoutSubmissionsManagement() {
                     id="feedback"
                     value={feedbackMessage}
                     onChange={(e) => setFeedbackMessage(e.target.value)}
-                    placeholder="Provide detailed feedback on the student's performance..."
+                    placeholder="Provide detailed feedback on the player's performance..."
                     rows={6}
                   />
                 </div>

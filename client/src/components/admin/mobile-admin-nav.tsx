@@ -88,16 +88,16 @@ export function MobileAdminNav({ userRole, schoolName, onRefreshData }: MobileAd
   };
 
   const navItems = userRole === 'system_admin' ? [
-    { icon: Building2, label: "Create New School", action: handleCreateSchool, variant: "default" as const },
-    { icon: UserPlus, label: "Create School Admin", action: handleCreateSchoolAdmin, variant: "default" as const },
-    { icon: Building2, label: "Manage Schools", action: handleManageSchools, variant: "secondary" as const },
+    { icon: Building2, label: "Create New Academy", action: handleCreateSchool, variant: "default" as const },
+    { icon: UserPlus, label: "Create Academy Admin", action: handleCreateSchoolAdmin, variant: "default" as const },
+    { icon: Building2, label: "Manage Academies", action: handleManageSchools, variant: "secondary" as const },
     { icon: BarChart3, label: "Platform Analytics", action: handlePlatformAnalytics, variant: "secondary" as const },
     { icon: Settings, label: "System Configuration", action: handleSystemConfig, variant: "secondary" as const },
     { icon: Shield, label: "Manage Administrators", action: handleManageAdmins, variant: "secondary" as const },
   ] : [
-    { icon: UserPlus, label: "Add New Student", action: handleAddStudent, variant: "default" as const },
+    { icon: UserPlus, label: "Add New Player", action: handleAddStudent, variant: "default" as const },
     { icon: BarChart3, label: "View Reports", action: handleViewReports, variant: "secondary" as const },
-    { icon: Search, label: "Student Search & Ratings", action: handleStudentSearch, variant: "secondary" as const },
+    { icon: Search, label: "Player Search & Ratings", action: handleStudentSearch, variant: "secondary" as const },
   ];
 
   return (
@@ -115,7 +115,7 @@ export function MobileAdminNav({ userRole, schoolName, onRefreshData }: MobileAd
           </div>
           <div className="ml-3">
             <h1 className="text-lg font-semibold text-foreground">
-              {userRole === 'system_admin' ? 'System Admin' : 'School Admin'}
+              {userRole === 'system_admin' ? 'System Admin' : 'Academy Admin'}
             </h1>
             {schoolName && (
               <p className="text-xs text-muted-foreground truncate max-w-32">{schoolName}</p>
@@ -168,7 +168,7 @@ export function MobileAdminNav({ userRole, schoolName, onRefreshData }: MobileAd
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">{user?.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {userRole === 'system_admin' ? 'System Administrator' : 'School Administrator'}
+                      {userRole === 'system_admin' ? 'System Administrator' : 'Academy Administrator'}
                     </p>
                   </div>
                   <DropdownMenu>

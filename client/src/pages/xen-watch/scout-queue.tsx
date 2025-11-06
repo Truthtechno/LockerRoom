@@ -197,7 +197,7 @@ export default function ScoutReviewQueue() {
     onSuccess: () => {
       toast({
         title: "Submission Finalized",
-        description: "The submission has been finalized and feedback sent to the student.",
+        description: "The submission has been finalized and feedback sent to the player.",
       });
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["/api/xen-watch/admin/submissions"] });
@@ -585,7 +585,7 @@ export default function ScoutReviewQueue() {
                 <p className="text-sm text-muted-foreground mt-1">
                   {user?.role === 'scout_admin' 
                     ? 'Manage all submissions and scout reviews across the platform' 
-                    : 'Review student submissions and provide professional feedback'
+                    : 'Review player submissions and provide professional feedback'
                   }
                 </p>
               </div>
@@ -683,7 +683,7 @@ export default function ScoutReviewQueue() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      placeholder="Student name, ID, school..."
+                      placeholder="Player name, ID, academy..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-10 border focus:border-blue-500 focus:ring-blue-500"
@@ -736,7 +736,7 @@ export default function ScoutReviewQueue() {
                         <SelectItem value="date">Date</SelectItem>
                         <SelectItem value="name">Name</SelectItem>
                         <SelectItem value="status">Status</SelectItem>
-                        <SelectItem value="school">School</SelectItem>
+                        <SelectItem value="school">Academy</SelectItem>
                       </SelectContent>
                     </Select>
                     <Button
@@ -770,9 +770,9 @@ export default function ScoutReviewQueue() {
                     <table className="w-full">
                       <thead className="bg-background border-b border">
                         <tr>
-                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Student</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Player</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Submission ID</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">School</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Academy</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Position</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Date</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Status</th>
@@ -891,7 +891,7 @@ export default function ScoutReviewQueue() {
                       
                       <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground mb-4">
                         <div>
-                          <span className="font-medium">School:</span> {submission.student.school?.name || 'N/A'}
+                          <span className="font-medium">Academy:</span> {submission.student.school?.name || 'N/A'}
                         </div>
                         <div>
                           <span className="font-medium">Position:</span> {submission.student.position || 'N/A'}
@@ -998,12 +998,12 @@ export default function ScoutReviewQueue() {
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 flex-shrink-0">
             <DialogTitle className="text-xl sm:text-2xl font-bold text-foreground">Submission Details</DialogTitle>
             <DialogDescription className="text-sm sm:text-base text-muted-foreground">
-              Review student submission and provide professional assessment. Your review will help determine their potential.
+              Review player submission and provide professional assessment. Your review will help determine their potential.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 space-y-6 sm:space-y-8 min-h-0 pb-4">
-            {/* Student Information */}
+            {/* Player Information */}
             {selectedSubmission && (
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 sm:p-6 border border-blue-200 dark:border-blue-800">
                 <div className="flex flex-col sm:flex-row sm:items-start space-y-4 sm:space-y-0 sm:space-x-4">
@@ -1028,7 +1028,7 @@ export default function ScoutReviewQueue() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                       {selectedSubmission.student.school && (
                         <div className="flex items-center space-x-2">
-                          <span className="font-semibold text-muted-foreground">School:</span>
+                          <span className="font-semibold text-muted-foreground">Academy:</span>
                           <span className="text-foreground">{selectedSubmission.student.school.name}</span>
                         </div>
                       )}
@@ -1068,7 +1068,7 @@ export default function ScoutReviewQueue() {
                     {selectedSubmission.notes && (
                       <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
                         <p className="text-sm text-foreground bg-card/50 rounded-lg p-3 border border-blue-100">
-                          <span className="font-semibold">Student Notes:</span> {selectedSubmission.notes}
+                          <span className="font-semibold">Player Notes:</span> {selectedSubmission.notes}
                         </p>
                       </div>
                     )}
@@ -1191,7 +1191,7 @@ export default function ScoutReviewQueue() {
                   ? 'This submission has been finalized. Your review cannot be modified.'
                   : selectedSubmission?.review?.isSubmitted && selectedSubmission?.status !== 'finalized'
                   ? 'You can update your submitted review until the submission is finalized by the scout admin.'
-                  : 'Your detailed feedback will help the student understand their performance and areas for development.'}
+                  : 'Your detailed feedback will help the player understand their performance and areas for development.'}
               </p>
             </div>
 

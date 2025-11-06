@@ -436,7 +436,7 @@ export async function notifyExpiringSubscriptions(): Promise<void> {
           await storage.createNotification({
             userId: admin.userId,
             type: 'subscription_expiring',
-            title: 'School Subscription Expiring',
+            title: 'Academy Subscription Expiring',
             message: `${school.name}'s ${school.paymentFrequency} subscription expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}. Please renew to avoid service interruption.`,
             entityType: 'school',
             entityId: school.id,
@@ -482,7 +482,7 @@ export async function notifyExpiringSubscriptions(): Promise<void> {
           });
           notificationCount++;
         } catch (error) {
-          console.error(`Error creating notification for school admin ${admin.userId}:`, error);
+          console.error(`Error creating notification for academy admin ${admin.userId}:`, error);
         }
       }
     }
@@ -833,8 +833,8 @@ export async function notifySystemAdminsOfNewSchool(schoolId: string, schoolName
         await storage.createNotification({
           userId: admin.userId,
           type: 'school_created',
-          title: 'New School Created',
-          message: `A new school "${schoolName}" has been added to the platform`,
+          title: 'New Academy Created',
+          message: `A new academy "${schoolName}" has been added to the platform`,
           entityType: 'school',
           entityId: schoolId,
           metadata: JSON.stringify({
@@ -860,7 +860,7 @@ export async function notifySystemAdminsOfNewSchool(schoolId: string, schoolName
  */
 export async function notifySystemAdminsOfNewSchoolAdmin(schoolAdminId: string, schoolAdminName: string, schoolId: string, schoolName: string): Promise<void> {
   try {
-    console.log(`🔔 Creating school admin creation notification for ${schoolAdminName} (${schoolAdminId})`);
+    console.log(`🔔 Creating academy admin creation notification for ${schoolAdminName} (${schoolAdminId})`);
     
     // Get all system admins
     const systemAdminUsers = await db
@@ -898,12 +898,12 @@ export async function notifySystemAdminsOfNewSchoolAdmin(schoolAdminId: string, 
           continue;
         }
 
-        console.log(`📬 Creating school admin creation notification for system admin: ${admin.userId}`);
+        console.log(`📬 Creating academy admin creation notification for system admin: ${admin.userId}`);
         
         await storage.createNotification({
           userId: admin.userId,
           type: 'school_admin_created',
-          title: 'New School Admin Created',
+          title: 'New Academy Admin Created',
           message: `${schoolAdminName} has been added as an admin for ${schoolName}`,
           entityType: 'user',
           entityId: schoolAdminId,
@@ -1111,18 +1111,18 @@ export async function notifySchoolPaymentRecorded(
 
     switch (paymentType) {
       case 'renewal':
-        title = 'School Subscription Renewed';
+        title = 'Academy Subscription Renewed';
         message = `${schoolName}'s ${paymentFrequency} subscription has been renewed for $${paymentAmount}`;
         notificationType = 'school_renewal';
         break;
       case 'student_limit_increase':
-        title = 'Student Limit Increased';
-        message = `${schoolName}'s student limit has been increased from ${studentLimitBefore} to ${studentLimitAfter} students (Payment: $${paymentAmount})`;
+        title = 'Player Limit Increased';
+        message = `${schoolName}'s player limit has been increased from ${studentLimitBefore} to ${studentLimitAfter} players (Payment: $${paymentAmount})`;
         notificationType = 'school_limit_increase';
         break;
       case 'student_limit_decrease':
-        title = 'Student Limit Decreased';
-        message = `${schoolName}'s student limit has been decreased from ${studentLimitBefore} to ${studentLimitAfter} students`;
+        title = 'Player Limit Decreased';
+        message = `${schoolName}'s player limit has been decreased from ${studentLimitBefore} to ${studentLimitAfter} players`;
         notificationType = 'school_limit_decrease';
         break;
       case 'frequency_change':
@@ -1132,14 +1132,14 @@ export async function notifySchoolPaymentRecorded(
         break;
       case 'initial':
       default:
-        title = 'School Payment Recorded';
+        title = 'Academy Payment Recorded';
         message = `Payment of $${paymentAmount} (${paymentFrequency}) recorded for ${schoolName}`;
         notificationType = 'school_payment_recorded';
         break;
     }
 
     const allRecipients = [...systemAdminUsers, ...schoolAdminUsers];
-    console.log(`📋 Found ${systemAdminUsers.length} system admin(s) and ${schoolAdminUsers.length} school admin(s) to notify`);
+    console.log(`📋 Found ${systemAdminUsers.length} system admin(s) and ${schoolAdminUsers.length} academy admin(s) to notify`);
 
     if (allRecipients.length === 0) {
       console.log(`ℹ️ No recipients found, skipping notifications`);

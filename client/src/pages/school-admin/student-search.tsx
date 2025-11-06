@@ -207,12 +207,12 @@ export default function StudentSearch() {
                 className="lg:hidden"
               >
                 <Menu className="w-4 h-4 mr-2" />
-                Browse Students
+                Browse Players
               </Button>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-foreground">Student Search</h1>
-              <p className="text-sm text-muted-foreground">Search students and view their profile statistics</p>
+              <h1 className="text-xl font-semibold text-foreground">Player Search</h1>
+              <p className="text-sm text-muted-foreground">Search players and view their profile statistics</p>
             </div>
           </div>
         </div>
@@ -222,8 +222,8 @@ export default function StudentSearch() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Student Search</h1>
-                <p className="text-sm text-muted-foreground">Search students and view their profile statistics</p>
+                <h1 className="text-xl font-semibold text-foreground">Player Search</h1>
+                <p className="text-sm text-muted-foreground">Search players and view their profile statistics</p>
               </div>
             </div>
           </div>
@@ -238,7 +238,7 @@ export default function StudentSearch() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center">
                   <Search className="w-5 h-5 mr-2 text-accent" />
-                  Search Students
+                  Search Players
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -259,7 +259,7 @@ export default function StudentSearch() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">
-                  {searchQuery ? `Search Results (${students?.length || 0})` : `All Students (${students?.length || 0})`}
+                  {searchQuery ? `Search Results (${students?.length || 0})` : `All Players (${students?.length || 0})`}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -372,7 +372,7 @@ export default function StudentSearch() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center">
                   <Search className="w-5 h-5 mr-2 text-accent" />
-                  Search Students
+                  Search Players
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -392,7 +392,7 @@ export default function StudentSearch() {
                     onClick={() => setIsMobileListOpen(true)}
                   >
                     <Menu className="w-4 h-4 mr-2" />
-                    Browse All Students
+                    Browse All Players
                   </Button>
                 )}
               </CardContent>
@@ -409,7 +409,7 @@ export default function StudentSearch() {
                     <CardTitle className="flex items-center justify-between">
                       <div className="flex items-center">
                         <User className="w-5 h-5 mr-2 text-accent" />
-                        Student Profile
+                        Player Profile
                       </div>
                       <Button
                         variant="outline"
@@ -418,7 +418,7 @@ export default function StudentSearch() {
                         className="lg:hidden"
                       >
                         <Menu className="w-4 h-4 mr-2" />
-                        Change Student
+                        Change Player
                       </Button>
                     </CardTitle>
                   </CardHeader>
@@ -511,10 +511,10 @@ export default function StudentSearch() {
                       <div>
                         <CardTitle className="flex items-center">
                           <BarChart3 className="w-5 h-5 mr-2 text-accent" />
-                          Student Statistics
+                          Player Statistics
                         </CardTitle>
                         <CardDescription>
-                          Overview of student's page activity and engagement metrics
+                          Overview of player's page activity and engagement metrics
                         </CardDescription>
                       </div>
                     </div>
@@ -634,10 +634,10 @@ export default function StudentSearch() {
                           </div>
                         </div>
 
-                        {/* Student Posts with Engagement */}
+                        {/* Player Posts with Engagement */}
                         {selectedStudent && (
                           <div className="pt-6 border-t border-border mt-6">
-                            <h4 className="font-medium text-sm mb-4">Student Posts & Engagement</h4>
+                            <h4 className="font-medium text-sm mb-4">Player Posts & Engagement</h4>
                             {postsLoading ? (
                               <div className="text-center py-8 text-muted-foreground">
                                 Loading posts...
@@ -695,7 +695,7 @@ export default function StudentSearch() {
                               </div>
                             ) : (
                               <div className="text-center py-8 text-muted-foreground">
-                                <p>No posts found for this student.</p>
+                                <p>No posts found for this player.</p>
                               </div>
                             )}
                           </div>
@@ -706,7 +706,7 @@ export default function StudentSearch() {
                         <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                         <h3 className="text-lg font-medium text-foreground mb-2">No Statistics Available</h3>
                         <p className="text-muted-foreground">
-                          Statistics will appear once the student starts posting content.
+                          Statistics will appear once the player starts posting content.
                         </p>
                       </div>
                     )}
@@ -716,9 +716,9 @@ export default function StudentSearch() {
             ) : (
               <div className="text-center py-20">
                 <Search className="w-16 h-16 text-muted-foreground mx-auto mb-6" />
-                <h3 className="text-xl font-medium text-foreground mb-4">Select a Student</h3>
+                <h3 className="text-xl font-medium text-foreground mb-4">Select a Player</h3>
                 <p className="text-muted-foreground mb-8">
-                  Search for a student on the left or select one from the list to view their profile and statistics.
+                  Search for a player on the left or select one from the list to view their profile and statistics.
                 </p>
               </div>
             )}
@@ -727,13 +727,13 @@ export default function StudentSearch() {
         </div>
       </div>
 
-      {/* Mobile Student List Sheet */}
+      {/* Mobile Player List Sheet */}
       <Sheet open={isMobileListOpen} onOpenChange={setIsMobileListOpen}>
         <SheetContent side="left" className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>Students</SheetTitle>
+            <SheetTitle>Players</SheetTitle>
             <SheetDescription>
-              {searchQuery ? `Search Results (${students?.length || 0})` : `All Students (${students?.length || 0})`}
+              {searchQuery ? `Search Results (${students?.length || 0})` : `All Players (${students?.length || 0})`}
             </SheetDescription>
           </SheetHeader>
           
@@ -839,12 +839,12 @@ export default function StudentSearch() {
               <div className="text-center py-8">
                 <User className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  {searchQuery ? "No results found" : "No students"}
+                  {searchQuery ? "No results found" : "No players"}
                 </h3>
                 <p className="text-muted-foreground">
                   {searchQuery 
                     ? "Try adjusting your search terms"
-                    : "No students have been registered yet"
+                    : "No players have been registered yet"
                   }
                 </p>
               </div>

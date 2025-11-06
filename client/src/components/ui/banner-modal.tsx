@@ -143,7 +143,7 @@ export function BannerModal({ banner, open, onOpenChange }: BannerModalProps) {
 
     setLoading(true);
     try {
-      // Note: School selection is optional - if no schools selected, banner targets all schools
+      // Note: Academy selection is optional - if no academies selected, banner targets all academies
 
       const payload: any = {
         title: formData.title.trim(),
@@ -306,7 +306,7 @@ export function BannerModal({ banner, open, onOpenChange }: BannerModalProps) {
                     />
                     <Label htmlFor={`role-${role}`} className="font-normal cursor-pointer">
                       {role === 'scout_admin' ? 'Scout Admin' : 
-                       role === 'school_admin' ? 'School Admin' : 
+                       role === 'school_admin' ? 'Academy Admin' : 
                        role === 'xen_scout' ? 'XEN Scout' : 
                        'XEN Watch Page'}
                     </Label>
@@ -316,11 +316,11 @@ export function BannerModal({ banner, open, onOpenChange }: BannerModalProps) {
               
             </div>
 
-            {/* School Selection - Only show when School Admin is selected */}
+            {/* Academy Selection - Only show when Academy Admin is selected */}
             {formData.targetRoles.includes('school_admin') && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Select Schools</Label>
+                  <Label>Select Academies</Label>
                   {schools.length > 0 && (
                     <Button
                       type="button"
@@ -337,7 +337,7 @@ export function BannerModal({ banner, open, onOpenChange }: BannerModalProps) {
                   {schools.length === 0 ? (
                     <div className="text-sm text-muted-foreground text-center py-4">
                       <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
-                      <p>Loading schools...</p>
+                      <p>Loading academies...</p>
                     </div>
                   ) : (
                     schools.map((school: any) => (
@@ -359,12 +359,12 @@ export function BannerModal({ banner, open, onOpenChange }: BannerModalProps) {
                 </div>
                 {formData.targetSchoolIds.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {formData.targetSchoolIds.length} school{formData.targetSchoolIds.length !== 1 ? 's' : ''} selected
+                    {formData.targetSchoolIds.length} academ{formData.targetSchoolIds.length !== 1 ? 'ies' : 'y'} selected
                   </p>
                 )}
                 {formData.targetSchoolIds.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    No schools selected - banner will appear for all school admins. Select specific schools to target them only.
+                    No academies selected - banner will appear for all academy admins. Select specific academies to target them only.
                   </p>
                 )}
               </div>

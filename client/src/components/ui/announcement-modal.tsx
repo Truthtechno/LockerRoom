@@ -165,8 +165,8 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
     // Validate school selection if scope is 'school'
     if (userRole === 'system_admin' && formData.scope === 'school' && formData.selectedSchoolIds.length === 0) {
       toast({
-        title: "Missing School Selection",
-        description: "Please select at least one school for the announcement.",
+        title: "Missing Academy Selection",
+        description: "Please select at least one academy for the announcement.",
         variant: "destructive",
       });
       return;
@@ -315,8 +315,8 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
           </DialogTitle>
           <DialogDescription>
             {userRole === 'system_admin' 
-              ? 'Create an announcement that can be sent to all schools or specific schools.'
-              : 'Create an announcement for students in your school.'
+              ? 'Create an announcement that can be sent to all academies or specific academies.'
+              : 'Create an announcement for players in your academy.'
             }
           </DialogDescription>
         </DialogHeader>
@@ -365,8 +365,8 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
                     <SelectValue placeholder="Select scope" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Schools</SelectItem>
-                    <SelectItem value="school">Specific Schools</SelectItem>
+                    <SelectItem value="all">All Academies</SelectItem>
+                    <SelectItem value="school">Specific Academies</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -374,7 +374,7 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
               {formData.scope === 'school' && (
                 <div className="space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <Label className="text-sm font-medium">Select Schools *</Label>
+                    <Label className="text-sm font-medium">Select Academies *</Label>
                     {schools.length > 0 && (
                       <Button
                         type="button"
@@ -391,7 +391,7 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
                     {schools.length === 0 ? (
                       <div className="text-sm text-muted-foreground text-center py-4">
                         <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
-                        <p>Loading schools...</p>
+                        <p>Loading academies...</p>
                       </div>
                     ) : (
                       schools.map((school: any) => (
@@ -414,12 +414,12 @@ export function AnnouncementModal({ children, userRole, schoolId }: Announcement
                   </div>
                   {formData.selectedSchoolIds.length > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {formData.selectedSchoolIds.length} school{formData.selectedSchoolIds.length !== 1 ? 's' : ''} selected
+                      {formData.selectedSchoolIds.length} academ{formData.selectedSchoolIds.length !== 1 ? 'ies' : 'y'} selected
                     </p>
                   )}
                   {formData.selectedSchoolIds.length === 0 && formData.scope === 'school' && (
                     <p className="text-xs text-destructive">
-                      Please select at least one school
+                      Please select at least one academy
                     </p>
                   )}
                 </div>

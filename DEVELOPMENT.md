@@ -1,4 +1,6 @@
-# Development Guide - LockerRoom
+# Development Guide
+
+> **⚠️ IMPORTANT TERMINOLOGY STANDARDS**: Before starting development, read [DEVELOPER_GUIDELINES.md](./DEVELOPER_GUIDELINES.md) for terminology standards. All user-facing text MUST use "Academy" and "Player" (not "School" and "Student"). - LockerRoom
 
 This guide provides comprehensive information for developers working on the LockerRoom platform, including setup instructions, project structure, coding standards, and development workflows.
 

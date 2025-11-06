@@ -77,12 +77,12 @@ export default function Following() {
       const student = followingStudents?.find(s => s.id === studentId);
       toast({
         title: "Unfollowed",
-        description: `You are no longer following ${student?.user?.name || student?.name || 'this student'}`,
+        description: `You are no longer following ${student?.user?.name || student?.name || 'this player'}`,
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Unable to unfollow student",
+        title: "Unable to unfollow player",
         description: error?.message || "Something went wrong. Please try again.",
         variant: "destructive",
       });

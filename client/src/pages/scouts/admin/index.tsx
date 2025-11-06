@@ -352,12 +352,12 @@ export default function ScoutAdminDashboard() {
 
           {/* Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Top Schools Chart */}
+            {/* Top Academies Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Top Schools by Average Rating</CardTitle>
+                <CardTitle>Top Academies by Average Rating</CardTitle>
                 <CardDescription>
-                  Schools with the highest average scout ratings
+                  Academies with the highest average scout ratings
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -382,7 +382,7 @@ export default function ScoutAdminDashboard() {
                     <div className="h-full flex items-center justify-center text-muted-foreground">
                       <div className="text-center">
                         <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No school data available</p>
+                        <p className="text-sm">No academy data available</p>
                       </div>
                     </div>
                   )}
@@ -390,12 +390,12 @@ export default function ScoutAdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* Top Students Chart */}
+            {/* Top Players Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Top Students by Average Rating</CardTitle>
+                <CardTitle>Top Players by Average Rating</CardTitle>
                 <CardDescription>
-                  Students with the highest average scout ratings
+                  Players with the highest average scout ratings
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -433,7 +433,7 @@ export default function ScoutAdminDashboard() {
                     <div className="h-full flex items-center justify-center text-muted-foreground">
                       <div className="text-center">
                         <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No student data available</p>
+                        <p className="text-sm">No player data available</p>
                       </div>
                     </div>
                   )}
@@ -444,14 +444,14 @@ export default function ScoutAdminDashboard() {
 
           {/* Performance Tables and Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Top Students Table */}
+            {/* Top Players Table */}
             <Card className="lg:col-span-2">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Top Performing Students</CardTitle>
+                    <CardTitle>Top Performing Players</CardTitle>
                     <CardDescription>
-                      Students with the highest ratings and most submissions
+                      Players with the highest ratings and most submissions
                     </CardDescription>
                   </div>
                   {analytics?.topStudents && analytics.topStudents.length > 5 && (
@@ -489,7 +489,7 @@ export default function ScoutAdminDashboard() {
                   {(!analytics?.topStudents || analytics.topStudents.length === 0) && (
                     <div className="text-center py-8 text-muted-foreground">
                       <Award className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No student data available</p>
+                      <p className="text-sm">No player data available</p>
                     </div>
                   )}
                 </div>
@@ -517,7 +517,7 @@ export default function ScoutAdminDashboard() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-foreground truncate">
-                                {item.student?.name || submission.student?.name || 'Unknown Student'}
+                                {item.student?.name || submission.student?.name || 'Unknown Player'}
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 {submission.status === 'finalized' ? 'Finalized' : 
@@ -544,14 +544,14 @@ export default function ScoutAdminDashboard() {
             </Card>
           </div>
 
-          {/* Top Schools Table */}
+          {/* Top Academies Table */}
           <Card className="mb-8">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Top Performing Schools</CardTitle>
+                  <CardTitle>Top Performing Academies</CardTitle>
                   <CardDescription>
-                    Schools with the highest average ratings and submission counts
+                    Academies with the highest average ratings and submission counts
                   </CardDescription>
                 </div>
                 {analytics?.topSchools && analytics.topSchools.length > 5 && (
@@ -571,7 +571,7 @@ export default function ScoutAdminDashboard() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Rank</TableHead>
-                      <TableHead>School Name</TableHead>
+                      <TableHead>Academy Name</TableHead>
                       <TableHead>Submissions</TableHead>
                       <TableHead>Avg Rating</TableHead>
                     </TableRow>
@@ -596,7 +596,7 @@ export default function ScoutAdminDashboard() {
                       <TableRow>
                         <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                           <Award className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">No school data available</p>
+                          <p className="text-sm">No academy data available</p>
                         </TableCell>
                       </TableRow>
                     )}

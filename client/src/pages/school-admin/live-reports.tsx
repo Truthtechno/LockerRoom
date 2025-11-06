@@ -283,7 +283,7 @@ export default function LiveReports() {
             <div className="space-y-3">
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Live Reports & Analytics</h1>
-                <p className="text-sm text-muted-foreground">Real-time insights into student performance and engagement</p>
+                <p className="text-sm text-muted-foreground">Real-time insights into player performance and engagement</p>
               </div>
               <div className="flex items-center space-x-2">
                 <Select value={period} onValueChange={setPeriod}>
@@ -312,7 +312,7 @@ export default function LiveReports() {
             <div className="flex items-center justify-between h-16">
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Live Reports & Analytics</h1>
-                <p className="text-sm text-muted-foreground">Real-time insights into student performance and engagement</p>
+                <p className="text-sm text-muted-foreground">Real-time insights into player performance and engagement</p>
               </div>
               
               <div className="flex items-center space-x-2">
@@ -341,12 +341,12 @@ export default function LiveReports() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 lg:gap-6 mb-4 sm:mb-8">
           <Card data-testid="stat-total-students">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Players</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-accent">{analytics?.totalStudents || 0}</div>
-              <p className="text-xs text-muted-foreground">Registered students</p>
+              <p className="text-xs text-muted-foreground">Registered players</p>
             </CardContent>
           </Card>
 
@@ -370,7 +370,7 @@ export default function LiveReports() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{schoolStats?.totalPosts || 0}</div>
-              <p className="text-xs text-muted-foreground">Student uploads</p>
+              <p className="text-xs text-muted-foreground">Player uploads</p>
             </CardContent>
           </Card>
 
@@ -393,7 +393,7 @@ export default function LiveReports() {
               <TabsTrigger value="overview" className="flex-shrink-0">Overview</TabsTrigger>
               <TabsTrigger value="engagement" className="flex-shrink-0">Engagement</TabsTrigger>
               <TabsTrigger value="posts" className="flex-shrink-0">Posts</TabsTrigger>
-              <TabsTrigger value="students" className="flex-shrink-0">Students</TabsTrigger>
+              <TabsTrigger value="students" className="flex-shrink-0">Players</TabsTrigger>
             </TabsList>
           </div>
 
@@ -407,7 +407,7 @@ export default function LiveReports() {
                 <GraduationCap className="w-5 h-5 mr-2 text-accent" />
                 Grade Distribution
               </CardTitle>
-              <CardDescription>Number of students per grade/class</CardDescription>
+              <CardDescription>Number of players per grade/class</CardDescription>
             </CardHeader>
             <CardContent>
                   <div className="w-full overflow-x-auto">
@@ -429,7 +429,7 @@ export default function LiveReports() {
           <Card data-testid="chart-gender-distribution">
             <CardHeader>
               <CardTitle>Gender Distribution</CardTitle>
-              <CardDescription>Student demographics breakdown</CardDescription>
+              <CardDescription>Player demographics breakdown</CardDescription>
             </CardHeader>
             <CardContent>
                   <div className="w-full overflow-x-auto">
@@ -525,7 +525,7 @@ export default function LiveReports() {
                   <div className="h-64 sm:h-96 flex flex-col items-center justify-center text-muted-foreground p-4">
                     <Activity className="w-12 h-12 mb-4 opacity-50" />
                     <p className="text-sm text-center">No posting activity data available</p>
-                    <p className="text-xs text-center mt-2">Activity will appear as students post content</p>
+                    <p className="text-xs text-center mt-2">Activity will appear as players post content</p>
                   </div>
                 )}
               </CardContent>
@@ -674,7 +674,7 @@ export default function LiveReports() {
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <Heart className="w-12 h-12 mb-4 opacity-50" />
                     <p className="text-sm text-center">No engagement breakdown data available</p>
-                    <p className="text-xs text-center mt-2">Data will appear as students post and engage</p>
+                    <p className="text-xs text-center mt-2">Data will appear as players post and engage</p>
                   </div>
                 </CardContent>
               </Card>
@@ -724,7 +724,7 @@ export default function LiveReports() {
                   <div className="flex flex-col items-center justify-center text-muted-foreground p-8">
                     <TrendingUp className="w-12 h-12 mb-4 opacity-50" />
                     <p className="text-sm text-center">No top posts data available</p>
-                    <p className="text-xs text-center mt-2">Posts will appear here as students engage</p>
+                    <p className="text-xs text-center mt-2">Posts will appear here as players engage</p>
                   </div>
                 )}
               </CardContent>
@@ -747,12 +747,12 @@ export default function LiveReports() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base sm:text-lg">Active Students</CardTitle>
+                      <CardTitle className="text-base sm:text-lg">Active Players</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl sm:text-3xl font-bold">{studentEngagement.activeStudents || 0}</div>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-2">
-                        {studentEngagement.activePercentage ? studentEngagement.activePercentage.toFixed(1) : '0.0'}% of total students
+                        {studentEngagement.activePercentage ? studentEngagement.activePercentage.toFixed(1) : '0.0'}% of total players
                       </p>
             </CardContent>
           </Card>
@@ -762,7 +762,7 @@ export default function LiveReports() {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg sm:text-xl">Engagement Distribution</CardTitle>
-                    <CardDescription className="text-xs sm:text-sm">Number of students by engagement level</CardDescription>
+                    <CardDescription className="text-xs sm:text-sm">Number of players by engagement level</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {studentEngagement.engagementDistribution && studentEngagement.engagementDistribution.length > 0 ? (
@@ -792,7 +792,7 @@ export default function LiveReports() {
                 <CardContent className="p-8">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <Users className="w-12 h-12 mb-4 opacity-50" />
-                    <p className="text-sm text-center">No student engagement data available</p>
+                    <p className="text-sm text-center">No player engagement data available</p>
                   </div>
                 </CardContent>
               </Card>
@@ -803,11 +803,11 @@ export default function LiveReports() {
         {/* Top Performers */}
         <Card data-testid="top-performers" className="mt-4 sm:mt-8">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center text-lg sm:text-xl">
+              <CardTitle className="flex items-center text-lg sm:text-xl">
               <Trophy className="w-5 h-5 mr-2 text-accent" />
-              Top Engaged Students
+              Top Engaged Players
               </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Students with highest engagement and platform activity</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Players with highest engagement and platform activity</CardDescription>
             </CardHeader>
             <CardContent>
             {analytics?.engagementStats && analytics.engagementStats.length > 0 ? (
@@ -854,7 +854,7 @@ export default function LiveReports() {
               <div className="flex flex-col items-center justify-center text-muted-foreground p-8">
                 <Trophy className="w-12 h-12 mb-4 opacity-50" />
                 <p className="text-sm text-center">No engagement data yet</p>
-                <p className="text-xs text-center mt-2">Top students will appear as they post and engage</p>
+                <p className="text-xs text-center mt-2">Top players will appear as they post and engage</p>
               </div>
             )}
             </CardContent>
@@ -906,7 +906,7 @@ export default function LiveReports() {
                       strengths.push(
                         <li key="posts" className="flex items-start">
                           <span className="mr-2 text-green-600">•</span>
-                          <span><strong className="text-foreground">{schoolStats.totalPosts}</strong> content {schoolStats.totalPosts === 1 ? 'post' : 'posts'} {periodLabel} {isStrongActivity ? 'showing strong content creation' : 'created by students'}</span>
+                          <span><strong className="text-foreground">{schoolStats.totalPosts}</strong> content {schoolStats.totalPosts === 1 ? 'post' : 'posts'} {periodLabel} {isStrongActivity ? 'showing strong content creation' : 'created by players'}</span>
                         </li>
                       );
 
@@ -943,14 +943,14 @@ export default function LiveReports() {
                         strengths.push(
                           <li key="high-engagement-rate" className="flex items-start">
                             <span className="mr-2 text-green-600">•</span>
-                            <span>High engagement rate with <strong className="text-foreground">{analytics.averageEngagementPerStudent.toFixed(1)}</strong> interactions per active student</span>
+                            <span>High engagement rate with <strong className="text-foreground">{analytics.averageEngagementPerStudent.toFixed(1)}</strong> interactions per active player</span>
                           </li>
                         );
                       } else {
                         strengths.push(
                           <li key="engagement-rate" className="flex items-start">
                             <span className="mr-2 text-green-600">•</span>
-                            <span>Average of <strong className="text-foreground">{analytics.averageEngagementPerStudent.toFixed(1)}</strong> engagement interactions per active student</span>
+                            <span>Average of <strong className="text-foreground">{analytics.averageEngagementPerStudent.toFixed(1)}</strong> engagement interactions per active player</span>
                           </li>
                         );
                       }
@@ -973,7 +973,7 @@ export default function LiveReports() {
                       strengths.push(
                         <li key="active-students" className="flex items-start">
                           <span className="mr-2 text-green-600">•</span>
-                          <span><strong className="text-foreground">{analytics.engagementStats.length}</strong> {analytics.engagementStats.length === 1 ? 'student is' : 'students are'} actively creating and engaging with content {periodLabel}</span>
+                          <span><strong className="text-foreground">{analytics.engagementStats.length}</strong> {analytics.engagementStats.length === 1 ? 'player is' : 'players are'} actively creating and engaging with content {periodLabel}</span>
                         </li>
                       );
                     }
@@ -1031,7 +1031,7 @@ export default function LiveReports() {
                       strengths.push(
                         <li key="grade-distribution" className="flex items-start">
                           <span className="mr-2 text-green-600">•</span>
-                          <span>Well-distributed student body across <strong className="text-foreground">{Object.keys(analytics.gradeDistribution).length}</strong> grade levels</span>
+                          <span>Well-distributed player body across <strong className="text-foreground">{Object.keys(analytics.gradeDistribution).length}</strong> grade levels</span>
                         </li>
                       );
                     }
@@ -1074,14 +1074,14 @@ export default function LiveReports() {
                         strengths.push(
                           <li key="high-participation" className="flex items-start">
                             <span className="mr-2 text-green-600">•</span>
-                            <span>Excellent participation rate with <strong className="text-foreground">{studentEngagement.activePercentage.toFixed(1)}%</strong> of students actively engaging</span>
+                            <span>Excellent participation rate with <strong className="text-foreground">{studentEngagement.activePercentage.toFixed(1)}%</strong> of players actively engaging</span>
                           </li>
                         );
                       } else if (studentEngagement.activePercentage >= 50) {
                         strengths.push(
                           <li key="good-participation" className="flex items-start">
                             <span className="mr-2 text-green-600">•</span>
-                            <span>Good participation with <strong className="text-foreground">{studentEngagement.activePercentage.toFixed(1)}%</strong> of students actively engaging</span>
+                            <span>Good participation with <strong className="text-foreground">{studentEngagement.activePercentage.toFixed(1)}%</strong> of players actively engaging</span>
                           </li>
                         );
                       }
@@ -1093,7 +1093,7 @@ export default function LiveReports() {
                         strengths.push(
                           <li key="empty" className="flex items-start text-muted-foreground">
                             <span className="mr-2">•</span>
-                            <span>Start encouraging students to create content to see insights here</span>
+                            <span>Start encouraging players to create content to see insights here</span>
                           </li>
                         );
                       } else {
@@ -1127,14 +1127,14 @@ export default function LiveReports() {
                         opportunities.push(
                           <li key="participation" className="flex items-start">
                             <span className="mr-2 text-amber-600">•</span>
-                            <span>Only <strong className="text-foreground">{participationRate.toFixed(0)}%</strong> of students ({analytics.engagementStats.length} of {analytics.totalStudents}) are actively posting - encourage more participation</span>
+                            <span>Only <strong className="text-foreground">{participationRate.toFixed(0)}%</strong> of players ({analytics.engagementStats.length} of {analytics.totalStudents}) are actively posting - encourage more participation</span>
                           </li>
                         );
                       } else if (analytics.totalStudents > 1 && analytics.engagementStats.length === 1) {
                         opportunities.push(
                           <li key="participation" className="flex items-start">
                             <span className="mr-2 text-amber-600">•</span>
-                            <span>Only <strong className="text-foreground">{analytics.engagementStats.length} of {analytics.totalStudents}</strong> students are posting - encourage others to start sharing content</span>
+                            <span>Only <strong className="text-foreground">{analytics.engagementStats.length} of {analytics.totalStudents}</strong> players are posting - encourage others to start sharing content</span>
                           </li>
                         );
                       }
@@ -1142,7 +1142,7 @@ export default function LiveReports() {
                       opportunities.push(
                         <li key="participation" className="flex items-start">
                           <span className="mr-2 text-amber-600">•</span>
-                          <span>Only <strong className="text-foreground">{studentEngagement.activePercentage.toFixed(1)}%</strong> of students are actively engaging - increase awareness and participation</span>
+                          <span>Only <strong className="text-foreground">{studentEngagement.activePercentage.toFixed(1)}%</strong> of players are actively engaging - increase awareness and participation</span>
                         </li>
                       );
                     }
@@ -1199,7 +1199,7 @@ export default function LiveReports() {
                         opportunities.push(
                           <li key="low-eng-per-post" className="flex items-start">
                             <span className="mr-2 text-amber-600">•</span>
-                            <span>Low engagement per post (<strong className="text-foreground">{avgEngPerPost.toFixed(1)}</strong> avg) - encourage students to interact more with each other's content</span>
+                            <span>Low engagement per post (<strong className="text-foreground">{avgEngPerPost.toFixed(1)}</strong> avg) - encourage players to interact more with each other's content</span>
                           </li>
                         );
                       } else if (avgEngPerPost >= 5 && avgEngPerPost < 10) {
@@ -1230,7 +1230,7 @@ export default function LiveReports() {
                           opportunities.push(
                             <li key="no-saves" className="flex items-start">
                               <span className="mr-2 text-amber-600">•</span>
-                              <span>No saved content yet - saves indicate high-quality, valuable posts that students want to revisit</span>
+                              <span>No saved content yet - saves indicate high-quality, valuable posts that players want to revisit</span>
                             </li>
                           );
                         } else if (saves / total < 0.1) {
@@ -1278,7 +1278,7 @@ export default function LiveReports() {
                         opportunities.push(
                           <li key="no-posts" className="flex items-start">
                             <span className="mr-2 text-amber-600">•</span>
-                            <span>No posts {periodLabel} - encourage students to start sharing content</span>
+                            <span>No posts {periodLabel} - encourage players to start sharing content</span>
                           </li>
                         );
                       }
@@ -1314,7 +1314,7 @@ export default function LiveReports() {
                         opportunities.push(
                           <li key="no-posts-period" className="flex items-start">
                             <span className="mr-2 text-amber-600">•</span>
-                            <span>No posts in the selected time period - encourage students to start sharing content</span>
+                            <span>No posts in the selected time period - encourage players to start sharing content</span>
                           </li>
                         );
                       }
@@ -1327,7 +1327,7 @@ export default function LiveReports() {
                         opportunities.push(
                           <li key="low-followers" className="flex items-start">
                             <span className="mr-2 text-amber-600">•</span>
-                            <span>Average follower count is low (<strong className="text-foreground">{avgFollowers.toFixed(1)}</strong> per student) - encourage students to follow and connect with each other</span>
+                            <span>Average follower count is low (<strong className="text-foreground">{avgFollowers.toFixed(1)}</strong> per player) - encourage players to follow and connect with each other</span>
                           </li>
                         );
                       }
@@ -1346,7 +1346,7 @@ export default function LiveReports() {
                           opportunities.push(
                             <li key="expand-participation" className="flex items-start">
                               <span className="mr-2 text-amber-600">•</span>
-                              <span>Encourage more students to join the platform and start sharing content to grow your community</span>
+                              <span>Encourage more players to join the platform and start sharing content to grow your community</span>
                             </li>
                           );
                         }
@@ -1354,7 +1354,7 @@ export default function LiveReports() {
                         opportunities.push(
                           <li key="start-posting" className="flex items-start">
                             <span className="mr-2 text-amber-600">•</span>
-                            <span>Start encouraging students to create and share content regularly to build engagement</span>
+                            <span>Start encouraging players to create and share content regularly to build engagement</span>
                           </li>
                         );
                       }
@@ -1375,7 +1375,7 @@ export default function LiveReports() {
                         opportunities.push(
                           <li key="empty-state" className="flex items-start text-muted-foreground">
                             <span className="mr-2">•</span>
-                            <span>Add students and encourage content creation to unlock growth insights</span>
+                            <span>Add players and encourage content creation to unlock growth insights</span>
                           </li>
                         );
                       }

@@ -438,8 +438,8 @@ export default function XenWatch() {
                       <thead className="bg-background border-b border">
                         <tr>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Submission ID</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Student</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">School</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Player</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Academy</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Position</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Date</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Status</th>
@@ -461,7 +461,7 @@ export default function XenWatch() {
                       <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-foreground">{studentInfo?.name || user?.name || 'Student'}</div>
+                      <div className="text-sm font-semibold text-foreground">{studentInfo?.name || user?.name || 'Player'}</div>
                       <div className="text-xs text-muted-foreground">You</div>
                     </div>
                   </div>
@@ -530,7 +530,7 @@ export default function XenWatch() {
                             <User className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                           </div>
                 <div>
-                  <h3 className="text-base font-semibold text-foreground">{studentInfo?.name || user?.name || 'Student'}</h3>
+                  <h3 className="text-base font-semibold text-foreground">{studentInfo?.name || user?.name || 'Player'}</h3>
                   <p className="text-sm text-muted-foreground">#{submission.id.slice(-8)}</p>
                 </div>
                         </div>
@@ -539,7 +539,7 @@ export default function XenWatch() {
                       
                       <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground mb-4">
                         <div>
-                          <span className="font-medium">School:</span> {studentInfo?.school?.name || 'N/A'}
+                          <span className="font-medium">Academy:</span> {studentInfo?.school?.name || 'N/A'}
                         </div>
                         <div>
                           <span className="font-medium">Position:</span> {studentInfo?.position || 'N/A'}
@@ -572,7 +572,7 @@ export default function XenWatch() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Student Information Card */}
+              {/* Player Information Card */}
               {studentInfo && (
                 <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800">
                   <CardContent className="p-6">
@@ -587,7 +587,7 @@ export default function XenWatch() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                           {studentInfo.school && (
                             <div className="flex items-center space-x-2">
-                              <span className="font-semibold text-muted-foreground">School:</span>
+                              <span className="font-semibold text-muted-foreground">Academy:</span>
                               <span className="text-foreground">{studentInfo.school.name}</span>
                             </div>
                           )}
@@ -659,7 +659,7 @@ export default function XenWatch() {
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 space-y-6 sm:space-y-8 min-h-0 pb-4">
             {selectedSubmission && (
               <>
-                {/* Student Information */}
+                {/* Player Information */}
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 sm:p-6 border border-blue-200 dark:border-blue-800">
                   <div className="flex flex-col sm:flex-row sm:items-start space-y-4 sm:space-y-0 sm:space-x-4">
                     <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shadow-sm mx-auto sm:mx-0 overflow-hidden">
@@ -668,14 +668,14 @@ export default function XenWatch() {
                       </div>
                     </div>
                     <div className="flex-1 text-center sm:text-left">
-                      <h4 className="text-lg sm:text-xl font-bold text-foreground mb-2">{studentInfo?.name || user?.name || 'Student'}</h4>
+                      <h4 className="text-lg sm:text-xl font-bold text-foreground mb-2">{studentInfo?.name || user?.name || 'Player'}</h4>
                       <p className="text-sm text-muted-foreground mb-4">
                         Submission #{selectedSubmission.id.slice(-8)}
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                         {studentInfo?.school && (
                           <div className="flex items-center space-x-2">
-                            <span className="font-semibold text-muted-foreground">School:</span>
+                            <span className="font-semibold text-muted-foreground">Academy:</span>
                             <span className="text-foreground">{studentInfo.school.name}</span>
                           </div>
                         )}
@@ -697,7 +697,7 @@ export default function XenWatch() {
                       {selectedSubmission.notes && (
                         <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
                           <p className="text-sm text-foreground bg-card/50 rounded-lg p-3 border border-blue-100">
-                            <span className="font-semibold">Student Notes:</span> {selectedSubmission.notes}
+                            <span className="font-semibold">Player Notes:</span> {selectedSubmission.notes}
                           </p>
                         </div>
                       )}

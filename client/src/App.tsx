@@ -315,13 +315,13 @@ function Router() {
       </Route>
       
       <Route path="/xen-watch">
-        <ProtectedRoute requiredRole={["student", "viewer"]}>
+        <ProtectedRoute requiredRole="student">
           <XenWatch />
         </ProtectedRoute>
       </Route>
       
       <Route path="/xen-watch/submit">
-        <ProtectedRoute requiredRole={["student", "viewer"]}>
+        <ProtectedRoute requiredRole="student">
           <XenWatchSubmitPage />
         </ProtectedRoute>
       </Route>
@@ -339,7 +339,7 @@ function Router() {
       </Route>
       
       <Route path="/scoutai">
-        <ProtectedRoute requiredRole={["student", "viewer"]}>
+        <ProtectedRoute requiredRole="student">
           <ScoutAI />
         </ProtectedRoute>
       </Route>

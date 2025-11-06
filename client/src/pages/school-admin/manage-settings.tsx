@@ -57,13 +57,13 @@ const predefinedSettings = {
   ],
   grades: [
     { key: "grade_levels", value: "9,10,11,12", description: "Available grade levels (comma-separated)" },
-    { key: "class_size_limit", value: "30", description: "Maximum students per class" },
+    { key: "class_size_limit", value: "30", description: "Maximum players per class" },
     { key: "grading_scale", value: "A,B,C,D,F", description: "Grading system used" },
     { key: "semester_system", value: "true", description: "Use semester-based system" },
   ],
   staff: [
     { key: "max_teachers", value: "50", description: "Maximum number of teachers" },
-    { key: "teacher_student_ratio", value: "1:20", description: "Preferred teacher-to-student ratio" },
+    { key: "teacher_student_ratio", value: "1:20", description: "Preferred teacher-to-player ratio" },
     { key: "admin_approval_required", value: "true", description: "Require admin approval for new staff" },
   ],
 };
@@ -110,7 +110,7 @@ export default function ManageSettings() {
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to update school information.",
+        description: "Failed to update academy information.",
         variant: "destructive",
       });
     },
@@ -138,7 +138,7 @@ export default function ManageSettings() {
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to update school setting.",
+        description: "Failed to update academy setting.",
         variant: "destructive",
       });
     },
@@ -455,7 +455,7 @@ export default function ManageSettings() {
                       </div>
 
                       <div>
-                        <Label>Maximum Students</Label>
+                        <Label>Maximum Players</Label>
                         <Input
                           type="number"
                           value={school?.maxStudents || 100}

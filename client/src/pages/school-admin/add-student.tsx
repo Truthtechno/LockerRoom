@@ -127,15 +127,15 @@ export default function AddStudent() {
       
       // Show success message
       toast({
-        title: "Student Added Successfully! 🎉",
-        description: data.message || "Student has been successfully registered. Please share the OTP securely.",
+        title: "Player Added Successfully! 🎉",
+        description: data.message || "Player has been successfully registered. Please share the OTP securely.",
       });
     },
     onError: (error: any) => {
       console.log("💥 Student creation error:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to add student.",
+        description: error.message || "Failed to add player.",
         variant: "destructive",
       });
     },
@@ -229,10 +229,10 @@ export default function AddStudent() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Student Registration
+              Player Registration
             </CardTitle>
             <CardDescription>
-              Fill in the student's information below. Fields marked with * are required.
+              Fill in the player's information below. Fields marked with * are required.
             </CardDescription>
           </CardHeader>
           
