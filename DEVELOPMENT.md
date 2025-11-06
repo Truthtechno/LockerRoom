@@ -186,14 +186,30 @@ npm run seed
 
 ### 7. Start Development Server
 
-```bash
-# Start both frontend and backend concurrently
-npm run dev:both
+You have two options for running the development server:
 
-# Or start separately:
-npm run dev        # Backend on port 5174
-npm run dev:client # Frontend on port 5173
+**Option 1: Single Server (Recommended)**
+```bash
+npm run dev
 ```
+- Runs backend server on port **5174**
+- Serves both API and frontend from the same port using Vite middleware
+- Access at: `http://localhost:5174`
+- ✅ **Recommended for most development work**
+- ✅ **Simpler setup, everything works out of the box**
+
+**Option 2: Separate Servers (Advanced)**
+```bash
+npm run dev:both
+```
+- Runs backend server on port **5174** (API endpoints)
+- Runs standalone Vite dev server on port **5173** (Frontend)
+- Frontend automatically proxies all `/api/*` requests to backend (port 5174)
+- Access at: `http://localhost:5173`
+- ✅ **Useful for advanced debugging or when you need separate processes**
+- ✅ **API requests are automatically proxied - authentication works correctly**
+
+**Note**: The Vite configuration includes a proxy that forwards all `/api/*` requests from port 5173 to port 5174, ensuring authentication, sessions, and API calls work seamlessly when using `dev:both`.
 
 ### 8. Test Phase 1 Optimizations
 
@@ -331,13 +347,25 @@ lockerroom/
    ```
 
 2. **Start Development Server**
+   
+   **Single Server Mode (Recommended)**:
+   ```bash
+   npm run dev
+   ```
+   - Access at: http://localhost:5174
+   - Both frontend and API served from the same port
+   
+   **Separate Servers Mode**:
    ```bash
    npm run dev:both
    ```
-
-3. **Access Application**
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:5174/api
+   - API requests from frontend are automatically proxied to backend
+
+3. **Access Application**
+   - **Single server**: http://localhost:5174
+   - **Separate servers**: http://localhost:5173 (frontend proxies API to 5174)
 
 ### Making Changes
 

@@ -206,17 +206,33 @@
    ```
 
 5. **Start Development Server**
-   ```bash
-   # Start both frontend and backend
-   npm run dev:both
    
-   # Or start separately:
-   npm run dev        # Backend only (port 5174)
-   npm run dev:client # Frontend only (port 5173)
+   You have two options for running the development server:
+   
+   **Option 1: Single Server (Recommended for most cases)**
+   ```bash
+   npm run dev
    ```
+   - Runs backend server on port **5174**
+   - Serves both API and frontend from the same port
+   - Access at: [http://localhost:5174](http://localhost:5174)
+   - ✅ **Use this for standard development**
+   
+   **Option 2: Separate Servers (For advanced development)**
+   ```bash
+   npm run dev:both
+   ```
+   - Runs backend server on port **5174** (API)
+   - Runs standalone Vite dev server on port **5173** (Frontend)
+   - Frontend automatically proxies `/api/*` requests to backend
+   - Access at: [http://localhost:5173](http://localhost:5173)
+   - ✅ **Use this if you need separate frontend/backend processes**
+   
+   **Note**: When using `dev:both`, the Vite dev server (port 5173) is configured to proxy all API requests to the backend server (port 5174), so authentication and API calls work seamlessly.
 
 6. **Access the Application**
-   Open your browser and navigate to [http://localhost:5174](http://localhost:5174)
+   - **Single server mode**: [http://localhost:5174](http://localhost:5174)
+   - **Separate servers mode**: [http://localhost:5173](http://localhost:5173)
 
 ## Demo Accounts
 
