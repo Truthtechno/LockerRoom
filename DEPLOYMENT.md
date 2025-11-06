@@ -25,6 +25,7 @@ Before deploying, ensure you have:
 - ✅ **Database** provisioned and migrations run
 - ✅ **Cloudinary Account** set up with API credentials
 - ✅ **Stripe Account** configured (if using XEN Watch payments)
+- ✅ **Google OAuth** configured (optional, for Gmail sign-in) - See [GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md)
 - ✅ **Redis** configured (Upstash recommended) - Highly recommended for production
 - ✅ **Sentry** account configured - Recommended for error monitoring
 - ✅ **Domain Name** registered (optional)
@@ -73,6 +74,11 @@ SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
 STRIPE_SECRET_KEY=sk_live_your_stripe_secret_key
 STRIPE_PUBLISHABLE_KEY=pk_live_your_stripe_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Google OAuth (Optional - for Gmail sign-in/sign-up)
+# See GOOGLE_OAUTH_SETUP.md for detailed setup instructions
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 ```
 
 ### Generating Secure Secrets
@@ -436,6 +442,7 @@ For complete control, deploy on a VPS (DigitalOcean Droplet, AWS EC2, etc.).
 - ✅ **Health Check**: Visit `/api/health` endpoint (if implemented)
 - ✅ **Database Connection**: Verify database connectivity
 - ✅ **Authentication**: Test login functionality with demo accounts
+- ✅ **Google OAuth**: Test Gmail sign-in/sign-up (if configured)
 - ✅ **Media Uploads**: Test Cloudinary integration (upload image/video)
 - ✅ **API Endpoints**: Test critical API routes
 - ✅ **Redis Caching**: Verify Redis connection (if configured)
@@ -454,7 +461,15 @@ For complete control, deploy on a VPS (DigitalOcean Droplet, AWS EC2, etc.).
      DATABASE_URL="your-prod-db-url" npm run ensure-sysadmin
      ```
 
-2. **Configure System Settings**:
+2. **Configure Google OAuth** (Optional):
+   - If using Google OAuth for Gmail sign-in:
+     - Follow [GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md) for setup
+     - Add production domain to authorized JavaScript origins in Google Cloud Console
+     - Add production domain to authorized redirect URIs
+     - Publish your app in Google Cloud Console (see guide for details)
+     - Set `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` environment variables
+
+3. **Configure System Settings**:
    - Login as system admin
    - Navigate to System Configuration page
    - Configure:
@@ -463,7 +478,7 @@ For complete control, deploy on a VPS (DigitalOcean Droplet, AWS EC2, etc.).
      - **Payment**: Stripe keys, XEN Watch pricing, subscription pricing
      - **General Settings**: Platform-wide configuration
 
-3. **Seed Demo Data** (Optional - for testing only):
+4. **Seed Demo Data** (Optional - for testing only):
    ```bash
    DATABASE_URL="your-prod-db-url" npm run seed
    ```

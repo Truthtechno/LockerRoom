@@ -277,6 +277,8 @@ export class AuthStorage {
         id: users.id,
         email: users.email,
         passwordHash: users.passwordHash,
+        otpHash: users.otpHash,
+        otpExpiresAt: users.otpExpiresAt,
         role: users.role,
         linkedId: users.linkedId, // This maps to linked_id column
         name: users.name,
@@ -304,11 +306,34 @@ export class AuthStorage {
         throw new Error('ACCOUNT_DEACTIVATED');
       }
       
-      // Verify the provided OTP/password against the stored hash
-      const isValid = await bcrypt.compare(otp, user.passwordHash);
+      // Check if OTP hash exists (new system) or fallback to passwordHash (legacy)
+      let isValid = false;
+      if (user.otpHash) {
+        // New system: Use otpHash field
+        // Check if OTP has expired
+        if (user.otpExpiresAt && new Date() > new Date(user.otpExpiresAt)) {
+          console.log('🔐 OTP verification failed: OTP expired for user:', user.id);
+          return null;
+        }
+        isValid = await bcrypt.compare(otp, user.otpHash);
+      } else {
+        // Legacy system: Check passwordHash (for backward compatibility)
+        isValid = await bcrypt.compare(otp, user.passwordHash);
+      }
+      
       if (!isValid) {
-        console.log('🔐 OTP verification failed: Invalid OTP/password for user:', user.id);
+        console.log('🔐 OTP verification failed: Invalid OTP for user:', user.id);
         return null;
+      }
+      
+      // Clear OTP after successful verification
+      if (user.otpHash) {
+        await db.update(users)
+          .set({ 
+            otpHash: null,
+            otpExpiresAt: null
+          })
+          .where(eq(users.id, user.id));
       }
       
       // Use schoolId from profile if user is school_admin, otherwise use users.schoolId

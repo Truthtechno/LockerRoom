@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { login } from "@/lib/auth";
+import { login, loginWithGoogle } from "@/lib/auth";
 import { useAuth } from "@/hooks/use-auth";
 import { PasswordResetModal } from "@/components/PasswordResetModal";
 import { Eye, EyeOff } from "lucide-react";
@@ -24,6 +24,167 @@ export default function Login() {
     email: "",
     password: "",
   });
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  // Initialize Google OAuth
+  useEffect(() => {
+    const initGoogleSignIn = () => {
+      if (typeof window !== 'undefined' && (window as any).google) {
+        (window as any).google.accounts.id.initialize({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+          callback: handleGoogleSignIn,
+        });
+      }
+    };
+
+    // Wait for Google script to load
+    if ((window as any).google) {
+      initGoogleSignIn();
+    } else {
+      const checkGoogle = setInterval(() => {
+        if ((window as any).google) {
+          initGoogleSignIn();
+          clearInterval(checkGoogle);
+        }
+      }, 100);
+      
+      // Cleanup after 10 seconds
+      setTimeout(() => clearInterval(checkGoogle), 10000);
+    }
+  }, []);
+
+  const handleGoogleSignIn = async (response: any) => {
+    if (!response.credential) {
+      toast({
+        title: "Google Sign-In Failed",
+        description: "No credential received from Google.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGoogleLoading(true);
+    try {
+      // Force clear any residual auth data before login
+      localStorage.removeItem("auth_user");
+      localStorage.removeItem("token");
+      localStorage.removeItem("schoolId");
+      sessionStorage.clear();
+      
+      // CRITICAL: Clear React Query cache before login
+      try {
+        queryClient.clear();
+      } catch (error) {
+        console.warn("Failed to clear React Query cache before Google login:", error);
+      }
+      
+      const result = await loginWithGoogle(response.credential);
+      updateUser(result.user);
+      
+      toast({
+        title: "Login successful",
+        description: `Welcome back, ${result.user.name}!`,
+      });
+
+      // Use window.location for hard navigation to clear any cached state
+      const redirectPath = (() => {
+        switch (result.user.role) {
+          case "system_admin":
+            return "/system-admin";
+          case "scout_admin":
+            return "/scouts/admin";
+          case "school_admin":
+            return "/school-admin";
+          case "student":
+            return "/feed";
+          default:
+            return "/feed";
+        }
+      })();
+      
+      // Force hard navigation with cache busting
+      const timestamp = Date.now();
+      setTimeout(() => {
+        window.location.href = redirectPath + '?_=' + timestamp + '&nocache=' + timestamp;
+      }, 100);
+    } catch (error: any) {
+      toast({
+        title: "Google Sign-In Failed",
+        description: error instanceof Error ? error.message : "Failed to sign in with Google",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  // Render Google Sign-In button
+  useEffect(() => {
+    const renderButton = () => {
+      const buttonElement = document.getElementById('google-signin-button');
+      if (!buttonElement) {
+        return; // Element not ready yet
+      }
+
+      // Check if Google is loaded and initialized
+      if (typeof window !== 'undefined' && (window as any).google?.accounts?.id && import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+        try {
+          // Clear any existing button first
+          buttonElement.innerHTML = '';
+          (window as any).google.accounts.id.renderButton(
+            buttonElement,
+            {
+              theme: 'outline',
+              size: 'large',
+              width: '100%',
+              text: 'signin_with',
+              locale: 'en',
+            }
+          );
+          console.log('✅ Google sign-in button rendered successfully');
+        } catch (error) {
+          console.error('Failed to render Google sign-in button:', error);
+        }
+      }
+    };
+
+    // Wait for both Google script and DOM element
+    const checkAndRender = () => {
+      if (document.getElementById('google-signin-button') && (window as any).google?.accounts?.id) {
+        renderButton();
+        return true;
+      }
+      return false;
+    };
+
+    // Try immediately
+    if (!checkAndRender()) {
+      // Poll until both are ready
+      const interval = setInterval(() => {
+        if (checkAndRender()) {
+          clearInterval(interval);
+        }
+      }, 100);
+
+      // Stop polling after 5 seconds
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        if (!(window as any).google?.accounts?.id) {
+          console.warn('Google OAuth not available:', {
+            hasGoogle: !!(window as any).google,
+            hasAccounts: !!(window as any).google?.accounts,
+            hasId: !!(window as any).google?.accounts?.id,
+            hasClientId: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
+          });
+        }
+      }, 5000);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
+    }
+  }, []);
 
   // Check for error message in URL (from account deactivated redirect)
   useEffect(() => {
@@ -106,7 +267,18 @@ export default function Login() {
       setTimeout(() => {
         window.location.href = redirectPath + '?_=' + timestamp + '&nocache=' + timestamp;
       }, 100);
-    } catch (error) {
+    } catch (error: any) {
+      // Handle email not verified error
+      if (error.code === 'email_not_verified') {
+        toast({
+          title: "Email Not Verified",
+          description: error.message || "Please verify your email address before logging in. Check your inbox for the verification email.",
+          variant: "destructive",
+        });
+        // Optionally add a button to resend verification email
+        return;
+      }
+      
       toast({
         title: "Login failed",
         description: error instanceof Error ? error.message : "Invalid credentials",
@@ -217,12 +389,67 @@ export default function Login() {
                   <Button 
                     type="submit" 
                     className="w-full" 
-                    disabled={isLoading}
+                    disabled={isLoading || isGoogleLoading}
                     data-testid="button-login"
                   >
                     {isLoading ? "Signing In..." : "Sign In"}
                   </Button>
                 </form>
+
+                {/* Divider */}
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+                  </div>
+                </div>
+
+                {/* Google Sign-In Button */}
+                <div className="w-full">
+                  {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+                    <div 
+                      id="google-signin-button" 
+                      className="w-full flex justify-center"
+                      style={{ minHeight: '40px' }}
+                    />
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        toast({
+                          title: "Google Sign-In Not Configured",
+                          description: "Please set VITE_GOOGLE_CLIENT_ID in your .env file. See GOOGLE_OAUTH_SETUP.md for instructions.",
+                          variant: "destructive",
+                        });
+                      }}
+                      disabled={isGoogleLoading}
+                    >
+                      <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                        <path
+                          fill="currentColor"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        />
+                      </svg>
+                      Sign in with Google
+                    </Button>
+                  )}
+                </div>
 
                 {/* Create Account Link */}
                 <div className="text-center">

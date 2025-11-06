@@ -29,6 +29,16 @@
 - **Scout Admin** - Manage scout assignments and review submissions
 - **XEN Scouts** - Professional scouts review and rate player submissions
 
+#### **Authentication & Security**
+- **JWT Authentication** - Secure token-based authentication
+- **Google OAuth (Gmail Sign-In)** - One-click sign-in/sign-up with Google accounts
+  - Existing users can log in without password
+  - New users can create viewer accounts instantly
+  - Automatic email verification for Google accounts
+  - Free and seamless authentication experience
+- **Role-based Access Control** - Granular permissions per role
+- **Account Security** - Account freezing, password reset, email verification
+
 #### **Player Portal**
 - **Dashboard** - Personalized feed with posts from followed players and academy announcements
 - **Content Creation** - Upload images and videos to Cloudinary with real-time processing
@@ -91,6 +101,7 @@
 - **Responsive Design** - Mobile-first approach with seamless cross-device experience
 - **Real-time Processing** - Cloudinary integration for automatic video/image optimization
 - **Secure Authentication** - JWT-based authentication with role-based access control
+- **Google OAuth Integration** - Seamless Gmail sign-in/sign-up (completely free)
 - **Advanced Database** - PostgreSQL with Drizzle ORM for type-safe database operations
 - **Analytics Dashboard** - Comprehensive analytics with Recharts visualization
 - **Announcement System** - Multi-scope announcements (global, academy, staff)
@@ -147,6 +158,7 @@
 - **PostgreSQL** 13 or later (or Neon serverless account)
 - **npm** or **yarn** package manager
 - **Cloudinary** account (for media uploads)
+- **Google Cloud Console** account (optional, for Google OAuth/Gmail sign-in)
 
 ### Installation Steps
 
@@ -194,7 +206,13 @@
    
    # Session Storage (Required for authentication)
    SESSION_SECRET="your-session-secret-key"
+   
+   # Google OAuth (Optional - for Gmail sign-in/sign-up)
+   GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+   VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
    ```
+   
+   **Note**: See [GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md) for detailed Google OAuth setup instructions.
 
 4. **Database Setup**
    ```bash
@@ -452,6 +470,7 @@ npm run test:all
 
 - **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Development setup and guidelines
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deployment instructions
+- **[GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md)** - Google OAuth (Gmail sign-in) setup guide
 - **[docs/demo_credentials.md](./docs/demo_credentials.md)** - Demo account information
 - **[docs/system_inputs_and_actions.md](./docs/system_inputs_and_actions.md)** - API documentation
 

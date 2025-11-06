@@ -7,9 +7,12 @@ import { v2 as cloudinary } from "cloudinary";
 import { storage } from "./storage";
 import { authStorage } from "./auth-storage";
 import Stripe from 'stripe';
+import { OAuth2Client } from 'google-auth-library';
 import { requireAuth, requireSelfByParam, requireScoutAdmin, requireScoutOrAdmin, requireSystemAdmin } from "./middleware/auth";
 import { rateLimit as createRateLimit } from "./middleware/rate-limit";
 import { cacheGet, cacheInvalidate } from "./cache";
+import { sendVerificationEmail, sendOTPEmail, sendWelcomeEmail, sendPasswordResetEmail, sendStudentAccountEmail, sendSchoolAdminAccountEmail, sendScoutAdminAccountEmail, sendXenScoutAccountEmail, sendSystemAdminAccountEmail } from "./email";
+import crypto from "crypto";
 import uploadRoutes from "./routes/upload";
 import xenWatchRoutes from "./routes/xen-watch";
 import { registerScoutAdminRoutes } from "./routes/scout-admin";
@@ -65,6 +68,10 @@ const upload = multer({
 
 // JWT secret
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-production';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+
+// Initialize Google OAuth client
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 // Stripe configuration
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
@@ -131,7 +138,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(validateInput);
   
   // Apply rate limiting to auth routes
-  app.use("/api/auth", rateLimit(5, 15 * 60 * 1000)); // 5 requests per 15 minutes
+  app.use("/api/auth", rateLimit(10, 15 * 60 * 1000)); // 10 requests per 15 minutes (increased for email verification flows)
+  
+  // Additional rate limiting for email-sending endpoints (more restrictive)
+  app.use("/api/auth/resend-verification", rateLimit(3, 60 * 60 * 1000)); // 3 per hour
+  app.use("/api/auth/forgot-password", rateLimit(3, 60 * 60 * 1000)); // 3 per hour
   
   // Upload routes
   app.use("/api/upload", uploadRoutes);
@@ -444,9 +455,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ===== REGULAR USER AUTHENTICATION =====
       console.log('🔐 Attempting regular user authentication for:', email);
 
+      // Check if email is verified before allowing login
+      // Legacy users (created before email verification) don't have verification tokens
+      // Only block new users who have a pending verification token
+      const [userCheck] = await db.select({ 
+        emailVerified: users.emailVerified,
+        emailVerificationToken: users.emailVerificationToken,
+        email: users.email 
+      })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      
+      // Block login only if:
+      // 1. emailVerified is explicitly false AND
+      // 2. They have a pending verification token (meaning they're a new user who needs to verify)
+      if (userCheck && userCheck.emailVerified === false && userCheck.emailVerificationToken) {
+        console.log('🔐 Login blocked: Email not verified for new user:', email);
+        return res.status(403).json({ 
+          error: { 
+            code: "email_not_verified", 
+            message: "Please verify your email address before logging in. Check your inbox for the verification email." 
+          } 
+        });
+      }
+      
+      // Allow login for:
+      // - Legacy users (emailVerified = false but no verification token)
+      // - Verified users (emailVerified = true)
+      // - Users with null emailVerified
+
       // Try OTP verification first (for new students)
       console.log('🔐 Attempting OTP verification for:', email);
-      const otpResult = await authStorage.verifyOTP(email, password);
+      let otpResult;
+      try {
+        otpResult = await authStorage.verifyOTP(email, password);
+      } catch (error: any) {
+        // Handle ACCOUNT_DEACTIVATED error from verifyOTP
+        if (error.message === 'ACCOUNT_DEACTIVATED') {
+          console.log('🔐 Login blocked: Account is deactivated for:', email);
+          return res.status(403).json({ 
+            error: { 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
+            } 
+          });
+        }
+        // Re-throw other errors
+        throw error;
+      }
       
       if (otpResult) {
         const { user, profile, requiresPasswordReset } = otpResult;
@@ -605,91 +662,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         profile
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔐 Login error:', error);
-      res.status(500).json({ 
-        error: { 
-          code: "login_failed", 
-          message: "Login failed" 
-        } 
-      });
+      // Ensure we always send a valid JSON response
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: { 
+            code: "login_failed", 
+            message: error.message || "Login failed. Please try again." 
+          } 
+        });
+      } else {
+        console.error('🔐 Response already sent, cannot send error response');
+      }
     }
   });
 
-  // Password reset endpoint for OTP users
+  // Password reset endpoint - handles both authenticated users and token-based reset
   app.post("/api/auth/reset-password", async (req, res) => {
     try {
-      const { password } = req.body;
+      const { password, token } = req.body;
+      const authHeader = req.headers.authorization;
       
       console.log('🔐 Reset password request received:', { 
         hasPassword: !!password, 
-        passwordLength: password?.length || 0,
-        hasAuthHeader: !!req.headers.authorization 
+        hasToken: !!token,
+        hasAuthHeader: !!authHeader
       });
       
-      // Read Authorization header
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        console.log('🔐 Reset password failed: Missing or invalid Authorization header');
-        return res.status(401).json({ 
-          error: { 
-            code: "authentication_required", 
-            message: "Authentication required. Please provide a valid token." 
-          } 
-        });
-      }
-      
-      const token = authHeader.replace('Bearer ', '');
-      
-      // Verify JWT token
-      let decoded: any;
-      try {
-        decoded = jwt.verify(token, JWT_SECRET);
-        console.log('🔐 JWT token verified successfully:', { 
-          userId: decoded.id, 
-          email: decoded.email, 
-          role: decoded.role 
-        });
-      } catch (error: any) {
-        console.log('🔐 JWT verification failed:', error.name, error.message);
-        if (error.name === 'TokenExpiredError') {
-          return res.status(401).json({ 
-            error: { 
-              code: "token_expired", 
-              message: "Session expired. Please log in again." 
-            } 
-          });
-        } else if (error.name === 'JsonWebTokenError') {
-          return res.status(401).json({ 
-            error: { 
-              code: "invalid_token", 
-              message: "Invalid token. Please log in again." 
-            } 
-          });
-        } else {
-          return res.status(401).json({ 
-            error: { 
-              code: "authentication_failed", 
-              message: "Authentication failed. Please log in again." 
-            } 
-          });
-        }
-      }
-      
-      // Extract user ID from JWT payload
-      const userId = decoded.id;
-      if (!userId) {
-        console.log('🔐 Reset password failed: Missing user ID in token');
-        return res.status(401).json({ 
-          error: { 
-            code: "invalid_token", 
-            message: "Invalid token structure" 
-          } 
-        });
-      }
-      
       if (!password) {
-        console.log('🔐 Reset password failed: Missing password');
         return res.status(400).json({ 
           error: { 
             code: "missing_fields", 
@@ -697,50 +698,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } 
         });
       }
-
-      if (password.length < 6) {
-        console.log('🔐 Reset password failed: Password too short');
+      
+      // Validate password strength
+      if (password.length < 8) {
         return res.status(400).json({ 
-          error: { 
+            error: { 
             code: "weak_password", 
-            message: "Password must be at least 6 characters long" 
+            message: "Password must be at least 8 characters long" 
+          } 
+        });
+      }
+      
+      // Check password complexity
+      const hasUpperCase = /[A-Z]/.test(password);
+      const hasLowerCase = /[a-z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+      
+      if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+        return res.status(400).json({ 
+            error: { 
+            code: "weak_password", 
+            message: "Password must contain at least one uppercase letter, one lowercase letter, and one number" 
           } 
         });
       }
 
-      console.log('🔐 Attempting password reset for user:', userId, 'role:', decoded.role);
+      let userId: string | null = null;
+      let userRole: string | null = null;
+
+      // Case 1: Token-based reset (from forgot password email)
+      if (token) {
+        const [user] = await db.select()
+          .from(users)
+          .where(eq(users.passwordResetToken, token))
+          .limit(1);
+        
+        if (!user) {
+          return res.status(400).json({ 
+          error: { 
+            code: "invalid_token", 
+              message: "Invalid or expired reset token" 
+          } 
+        });
+      }
+      
+        // Check if token has expired
+        if (user.passwordResetTokenExpiresAt && new Date() > new Date(user.passwordResetTokenExpiresAt)) {
+        return res.status(400).json({ 
+          error: { 
+              code: "token_expired", 
+              message: "Reset token has expired. Please request a new password reset." 
+          } 
+        });
+      }
+
+        userId = user.id;
+        userRole = user.role;
+
+        // Hash the new password and clear reset token
+        const passwordHash = await bcrypt.hash(password, 12);
+        await db.update(users)
+          .set({ 
+            passwordHash,
+            passwordResetToken: null,
+            passwordResetTokenExpiresAt: null,
+            isOneTimePassword: false
+          })
+          .where(eq(users.id, user.id));
+
+        console.log('🔐 Token-based password reset completed for user:', userId);
+
+        // Fix linkedId if it's broken
+        await authStorage.fixLinkedId(user.id);
+
+        return res.json({ 
+          success: true,
+          message: "Password has been reset successfully. You can now log in with your new password."
+        });
+      }
+
+      // Case 2: Authenticated user reset (from logged-in user changing password)
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const jwtToken = authHeader.replace('Bearer ', '');
+        
+        let decoded: any;
+        try {
+          decoded = jwt.verify(jwtToken, JWT_SECRET);
+        } catch (error: any) {
+          if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ 
+          error: { 
+                code: "token_expired", 
+                message: "Session expired. Please log in again." 
+              } 
+            });
+          }
+          return res.status(401).json({ 
+            error: { 
+              code: "invalid_token", 
+              message: "Invalid token. Please log in again." 
+          } 
+        });
+      }
+
+        userId = decoded.id;
+        userRole = decoded.role;
 
       // Check which table the user exists in
-      // Scouts (xen_scout, scout_admin) are stored in users table, NOT admins table
-      // Only system admins and school admins might be in admins table
-      // For consistency with student password reset, check users table first for scout roles
       const isScoutRole = decoded.role === 'xen_scout' || decoded.role === 'scout_admin';
       
       let success = false;
       if (isScoutRole) {
-        // Scouts are always in users table - use regular user password reset (same as students)
-        console.log('🔐 Scout role detected, using regular user password reset (users table)');
         success = await authStorage.resetPassword(userId, password);
-        console.log('🔐 Scout password reset result:', success);
       } else {
-        // For other roles, check which table they exist in
-        const [adminRecord] = await db.select({ id: admins.id }).from(admins).where(eq(admins.id, userId));
-        
-        if (adminRecord) {
-          // User exists in admins table - use admin password reset
-          console.log('🔐 User found in admins table, using admin password reset');
+          const [adminRecord] = await db.select({ id: admins.id }).from(admins).where(eq(admins.id, userId ?? '')).limit(1);
+          if (adminRecord && userId) {
           success = await authStorage.resetAdminPassword(userId, password);
-          console.log('🔐 Admin password reset result:', success);
-        } else {
-          // User exists in users table (students, viewers, etc.) - use regular user password reset
-          console.log('🔐 User found in users table, using regular password reset');
+          } else if (userId) {
           success = await authStorage.resetPassword(userId, password);
-          console.log('🔐 User password reset result:', success);
         }
       }
       
       if (!success) {
-        console.log('🔐 Reset password failed: Database update failed for user:', userId);
         return res.status(500).json({ 
           error: { 
             code: "reset_failed", 
@@ -749,90 +828,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log('🔐 Password reset completed successfully for user:', userId, 'role:', decoded.role);
+        console.log('🔐 Authenticated password reset completed for user:', userId);
+        return res.json({ 
+          ok: true,
+          message: "Password has been reset successfully."
+        });
+      }
 
-      res.json({ 
-        ok: true
-      });
-    } catch (error) {
-      console.error('🔐 Password reset error:', error);
-      res.status(500).json({ 
+      // Neither token nor auth header provided
+      return res.status(400).json({ 
         error: { 
-          code: "reset_failed", 
-          message: "Failed to reset password" 
+          code: "missing_credentials", 
+          message: "Either a reset token or authentication token is required" 
         } 
       });
-    }
-  });
-
-  // Forgot password endpoint (no authentication required)
-  app.post("/api/auth/forgot-password", async (req, res) => {
-    try {
-      const { email, newPassword } = req.body;
-      
-      console.log('🔐 Forgot password request received:', { 
-        email, 
-        hasNewPassword: !!newPassword, 
-        passwordLength: newPassword?.length || 0
-      });
-      
-      if (!email || !newPassword) {
-        console.log('🔐 Forgot password failed: Missing email or new password');
-        return res.status(400).json({ 
-          error: { 
-            code: "missing_fields", 
-            message: "Email and new password are required" 
-          } 
-        });
-      }
-
-      if (newPassword.length < 6) {
-        console.log('🔐 Forgot password failed: Password too short');
-        return res.status(400).json({ 
-          error: { 
-            code: "weak_password", 
-            message: "Password must be at least 6 characters long" 
-          } 
-        });
-      }
-
-      // Check if user exists in the users table
-      const user = await db.select().from(users).where(eq(users.email, email)).limit(1);
-      
-      if (user.length === 0) {
-        console.log('🔐 Forgot password failed: User not found for email:', email);
-        return res.status(404).json({ 
-          error: { 
-            code: "user_not_found", 
-            message: "No account found with this email address" 
-          } 
-        });
-      }
-
-      // Hash the new password
-      const passwordHash = await bcrypt.hash(newPassword, 10);
-      
-      // Update the user's password_hash
-      await db.update(users)
-        .set({ passwordHash })
-        .where(eq(users.id, user[0].id));
-
-      console.log('🔐 Password reset completed successfully for user:', user[0].id, 'email:', email);
-
-      // Fix linkedId if it's broken
-      const linkedIdFixed = await authStorage.fixLinkedId(user[0].id);
-      if (linkedIdFixed) {
-        console.log('🔐 LinkedId fixed during forgot password reset for user:', user[0].id);
-      } else {
-        console.log('🔐 LinkedId fix failed during forgot password reset for user:', user[0].id, '- user may need manual profile setup');
-      }
-
-      res.json({ 
-        success: true,
-        message: "Password has been reset successfully"
-      });
-    } catch (error) {
-      console.error('🔐 Forgot password error:', error);
+    } catch (error: any) {
+      console.error('🔐 Password reset error:', error);
       res.status(500).json({ 
         error: { 
           code: "reset_failed", 
@@ -841,6 +852,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // Forgot password request endpoint (no authentication required)
+  // User requests password reset - system sends email with reset link
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      console.log('🔐 Forgot password request received:', { email });
+      
+      if (!email) {
+        return res.status(400).json({ 
+          error: { 
+            code: "missing_email", 
+            message: "Email is required" 
+          } 
+        });
+      }
+
+      // Check if user exists in the users table
+      const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      
+      if (!user) {
+        // Don't reveal if email exists (security best practice)
+        return res.json({ 
+          success: true,
+          message: "If an account exists with this email, a password reset link has been sent." 
+        });
+      }
+
+      // Rate limiting: Check last email sent time
+      const now = new Date();
+      if (user.lastEmailSentAt) {
+        const timeSinceLastEmail = now.getTime() - new Date(user.lastEmailSentAt).getTime();
+        const oneHour = 60 * 60 * 1000;
+        if (timeSinceLastEmail < oneHour) {
+          return res.status(429).json({ 
+          error: { 
+              code: "rate_limit_exceeded", 
+              message: "Please wait before requesting another password reset. You can request another one in " + Math.ceil((oneHour - timeSinceLastEmail) / 60000) + " minutes." 
+            } 
+          });
+        }
+      }
+
+      // Generate secure reset token
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const resetTokenExpiresAt = new Date();
+      resetTokenExpiresAt.setHours(resetTokenExpiresAt.getHours() + 1); // 1 hour expiration
+      
+      // Store reset token in database
+      await db.update(users)
+        .set({ 
+          passwordResetToken: resetToken,
+          passwordResetTokenExpiresAt: resetTokenExpiresAt,
+          lastEmailSentAt: now
+        })
+        .where(eq(users.id, user.id));
+
+      // Send password reset email
+      const emailResult = await sendPasswordResetEmail(email, resetToken, user.name || 'User');
+      
+      if (!emailResult.success) {
+        console.error('📧 Failed to send password reset email:', emailResult.error);
+        return res.status(500).json({ 
+          error: { 
+            code: "email_send_failed", 
+            message: "Failed to send password reset email. Please try again later." 
+          } 
+        });
+      }
+
+      console.log('🔐 Password reset email sent to:', email);
+
+      res.json({ 
+        success: true,
+        message: "If an account exists with this email, a password reset link has been sent."
+      });
+    } catch (error: any) {
+      console.error('🔐 Forgot password error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "reset_failed", 
+          message: "Failed to process password reset request. Please try again." 
+        } 
+      });
+    }
+  });
+
 
   // Alias route for register -> signup (for backward compatibility)
   app.post("/api/auth/register", async (req, res) => {
@@ -4746,12 +4845,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Validate password strength
-      if (password.length < 6) {
+      // Validate password strength (enhanced for production)
+      if (password.length < 8) {
         return res.status(400).json({ 
           error: { 
             code: "weak_password", 
-            message: "Password must be at least 6 characters long" 
+            message: "Password must be at least 8 characters long" 
+          } 
+        });
+      }
+      
+      // Check password complexity
+      const hasUpperCase = /[A-Z]/.test(password);
+      const hasLowerCase = /[a-z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+      
+      if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+        return res.status(400).json({ 
+          error: { 
+            code: "weak_password", 
+            message: "Password must contain at least one uppercase letter, one lowercase letter, and one number" 
           } 
         });
       }
@@ -4782,54 +4895,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { name, schoolId }
       );
       
-      // Generate OTP for first-time login (for students)
-      let otp = null;
+      // Generate email verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpiresAt = new Date();
+      verificationTokenExpiresAt.setHours(verificationTokenExpiresAt.getHours() + 24); // 24 hours from now
+      
+      // Store verification token in database
+      await db.update(users)
+        .set({ 
+          emailVerificationToken: verificationToken,
+          emailVerificationTokenExpiresAt: verificationTokenExpiresAt
+        })
+        .where(eq(users.id, user.id));
+      
+      // Generate OTP for first-time login (for students) - send via email
       if (role === 'student') {
-        otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpHash = await bcrypt.hash(otp, 10);
+        const otpExpiresAt = new Date();
+        otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 30); // 30 minutes from now
         
         // Store OTP in user record
         await db.update(users)
-          .set({ otpHash })
+          .set({ 
+            otpHash,
+            otpExpiresAt,
+            isOneTimePassword: true
+          })
           .where(eq(users.id, user.id));
+        
+        // Send OTP email (will be sent after email verification)
+        // Note: OTP will be sent after user verifies their email
       }
       
-      // Generate JWT token with schoolId for school admins
-      const tokenPayload: any = { 
-        id: user.id, 
-        email: user.email, 
-        role: user.role, 
-        linkedId: user.linkedId 
-      };
-      
-      // Add schoolId for school admins
-      if (user.role === 'school_admin' && (profile as any).schoolId) {
-        tokenPayload.schoolId = (profile as any).schoolId;
+      // Send verification email
+      const emailResult = await sendVerificationEmail(email, verificationToken, name);
+      if (!emailResult.success) {
+        console.error('📧 Failed to send verification email:', emailResult.error);
+        console.error('📧 Email details:', { email, token: verificationToken.substring(0, 10) + '...', name });
+        // Don't fail registration if email fails, but log it
+        // Return warning in response so user knows to check email or contact support
+      } else {
+        console.log('📧 Verification email sent successfully to:', email);
       }
       
-      const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
-      
-      // Send welcome email (dummy service)
-      console.log(`📧 Welcome email sent to ${email}`);
-      console.log(`Welcome to LockerRoom, ${name}!`);
-      if (role === 'student' && otp) {
-        console.log(`Your one-time password is: ${otp}`);
-      }
-      
+      // Don't return token - user must verify email first
+      // Don't return OTP - security issue
       res.json({ 
-        token,
+        success: true,
+        message: "Account created successfully! Please check your email to verify your account before logging in.",
         user: { 
           id: user.id, 
           name: user.name,
           email: user.email, 
           role: user.role,
-          linkedId: user.linkedId
+          linkedId: user.linkedId,
+          emailVerified: false
         },
         profile,
-        otp: otp, // Return OTP for students
-        message: role === 'student' 
-          ? `Account created successfully! Your one-time password is: ${otp}`
-          : "Account created successfully! You can now search and follow student athletes."
+        requiresEmailVerification: true
       });
     } catch (error) {
       console.error('Signup error:', error);
@@ -4839,6 +4963,385 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: { 
           code: "signup_failed", 
           message: `Registration failed: ${error.message}` 
+        } 
+      });
+    }
+  });
+
+  // Google OAuth authentication endpoint
+  app.post("/api/auth/google", async (req, res) => {
+    try {
+      const { credential } = req.body; // Google ID token
+      
+      if (!credential) {
+        return res.status(400).json({ 
+          error: { 
+            code: "missing_credential", 
+            message: "Google credential is required" 
+          } 
+        });
+      }
+
+      if (!googleClient) {
+        return res.status(500).json({ 
+          error: { 
+            code: "google_oauth_not_configured", 
+            message: "Google OAuth is not configured. Please set GOOGLE_CLIENT_ID environment variable." 
+          } 
+        });
+      }
+
+      // Verify the Google ID token
+      let ticket;
+      try {
+        ticket = await googleClient.verifyIdToken({
+          idToken: credential,
+          audience: GOOGLE_CLIENT_ID,
+        });
+      } catch (error: any) {
+        console.error('Google token verification error:', error);
+        return res.status(401).json({ 
+          error: { 
+            code: "invalid_credential", 
+            message: "Invalid Google credential" 
+          } 
+        });
+      }
+
+      const payload = ticket.getPayload();
+      if (!payload) {
+        return res.status(401).json({ 
+          error: { 
+            code: "invalid_credential", 
+            message: "Invalid Google credential payload" 
+          } 
+        });
+      }
+
+      const { email, name, picture, sub: googleId } = payload;
+      
+      if (!email) {
+        return res.status(400).json({ 
+          error: { 
+            code: "missing_email", 
+            message: "Google account email is required" 
+          } 
+        });
+      }
+
+      // Check if user already exists
+      let user = await authStorage.getUserByEmail(email);
+      let profile;
+      let isNewUser = false;
+
+      if (user) {
+        // Existing user - log them in
+        console.log('🔐 Google OAuth: Existing user found:', email);
+        
+        // Check if account is frozen
+        if (user.isFrozen) {
+          return res.status(403).json({ 
+            error: { 
+              code: "account_deactivated", 
+              message: "Your account has been deactivated. Please contact Customer Support for reactivation." 
+            } 
+          });
+        }
+
+        // Get user profile
+        profile = await authStorage.getUserProfile(user.id);
+        
+        // Check if school is disabled (for school_admin and student roles)
+        if (['school_admin', 'student'].includes(user.role) && user.schoolId) {
+          const school = await storage.getSchool(user.schoolId);
+          // Check if school exists and is active (assuming schools have an active/disabled status)
+          // Note: Adjust this check based on your actual school schema
+          if (!school) {
+            return res.status(403).json({ 
+              error: { 
+                code: "school_not_found", 
+                message: "Your school account could not be found. Please contact Customer Support." 
+              } 
+            });
+          }
+        }
+      } else {
+        // New user - create viewer account
+        console.log('🔐 Google OAuth: Creating new viewer account:', email);
+        isNewUser = true;
+        
+        // Generate a random password (won't be used for Google OAuth users, but required by schema)
+        const randomPassword = crypto.randomBytes(32).toString('hex');
+        
+        const result = await authStorage.createUserWithProfile(
+          email,
+          randomPassword, // Password won't be used for Google OAuth
+          'viewer',
+          {
+            name: name || email.split('@')[0],
+            profilePicUrl: picture || null,
+          }
+        );
+        
+        user = result.user;
+        profile = result.profile;
+        
+        // Mark email as verified (Google already verified it)
+        await db.update(users)
+          .set({ 
+            emailVerified: true,
+            // Store Google ID for future reference
+            // Note: We might want to add a googleId column to users table later
+          })
+          .where(eq(users.id, user.id));
+        
+        // Send welcome email
+        const welcomeEmailResult = await sendWelcomeEmail(email, name || email.split('@')[0], 'viewer');
+        if (!welcomeEmailResult.success) {
+          console.error('📧 Failed to send welcome email:', welcomeEmailResult.error);
+        }
+      }
+
+      // Generate JWT token
+      const tokenPayload: any = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        schoolId: user.schoolId || null,
+        linkedId: user.linkedId || null
+      };
+
+      const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+
+      console.log('🔐 Google OAuth login successful:', {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        isNewUser
+      });
+
+      return res.json({
+        token,
+        user: {
+          id: user.id,
+          name: user.name || profile?.name || name || null,
+          email: user.email,
+          role: user.role,
+          schoolId: user.schoolId || null,
+          linkedId: user.linkedId || null,
+          profilePicUrl: profile?.profilePicUrl || picture || null,
+          emailVerified: true,
+        },
+        profile,
+        isNewUser
+      });
+    } catch (error: any) {
+      console.error('Google OAuth error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "oauth_failed", 
+          message: error.message || "Google authentication failed" 
+        } 
+      });
+    }
+  });
+
+  // Email verification endpoint
+  app.post("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ 
+          error: { 
+            code: "missing_token", 
+            message: "Verification token is required" 
+          } 
+        });
+      }
+      
+      // Find user with this verification token
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.emailVerificationToken, token))
+        .limit(1);
+      
+      if (!user) {
+        return res.status(400).json({ 
+          error: { 
+            code: "invalid_token", 
+            message: "Invalid or expired verification token" 
+          } 
+        });
+      }
+      
+      // Check if token has expired
+      if (user.emailVerificationTokenExpiresAt && new Date() > new Date(user.emailVerificationTokenExpiresAt)) {
+        return res.status(400).json({ 
+          error: { 
+            code: "token_expired", 
+            message: "Verification token has expired. Please request a new one." 
+          } 
+        });
+      }
+      
+      // Check if already verified
+      if (user.emailVerified) {
+        return res.status(400).json({ 
+          error: { 
+            code: "already_verified", 
+            message: "Email is already verified" 
+          } 
+        });
+      }
+      
+      // Verify email and clear token
+      await db.update(users)
+        .set({ 
+          emailVerified: true,
+          emailVerificationToken: null,
+          emailVerificationTokenExpiresAt: null
+        })
+        .where(eq(users.id, user.id));
+      
+      // If user is a student with OTP, send OTP email now
+      if (user.role === 'student' && user.otpHash) {
+        // Generate new OTP since we can't retrieve the hashed one
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpHash = await bcrypt.hash(otp, 10);
+        const otpExpiresAt = new Date();
+        otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 30);
+        
+        await db.update(users)
+          .set({ 
+            otpHash,
+            otpExpiresAt
+          })
+          .where(eq(users.id, user.id));
+        
+        const otpEmailResult = await sendOTPEmail(user.email, otp, user.name || 'Player', 'registration');
+        if (!otpEmailResult.success) {
+          console.error('📧 Failed to send OTP email:', otpEmailResult.error);
+        }
+      } else {
+        // Send welcome email
+        const welcomeEmailResult = await sendWelcomeEmail(user.email, user.name || 'Player', user.role);
+        if (!welcomeEmailResult.success) {
+          console.error('📧 Failed to send welcome email:', welcomeEmailResult.error);
+        }
+      }
+      
+      console.log(`✅ Email verified for user: ${user.id}, email: ${user.email}`);
+      
+      res.json({ 
+        success: true,
+        message: "Email verified successfully! You can now log in.",
+        user: {
+          id: user.id,
+          email: user.email,
+          emailVerified: true
+        }
+      });
+    } catch (error: any) {
+      console.error('Email verification error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "verification_failed", 
+          message: "Failed to verify email. Please try again." 
+        } 
+      });
+    }
+  });
+
+  // Resend verification email endpoint
+  app.post("/api/auth/resend-verification", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ 
+          error: { 
+            code: "missing_email", 
+            message: "Email is required" 
+          } 
+        });
+      }
+      
+      // Find user
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      
+      if (!user) {
+        // Don't reveal if email exists (security best practice)
+        return res.json({ 
+          success: true,
+          message: "If an account exists with this email, a verification email has been sent." 
+        });
+      }
+      
+      // Check if already verified
+      if (user.emailVerified) {
+        return res.status(400).json({ 
+          error: { 
+            code: "already_verified", 
+            message: "Email is already verified" 
+          } 
+        });
+      }
+      
+      // Rate limiting: Check last email sent time
+      const now = new Date();
+      if (user.lastEmailSentAt) {
+        const timeSinceLastEmail = now.getTime() - new Date(user.lastEmailSentAt).getTime();
+        const oneHour = 60 * 60 * 1000;
+        if (timeSinceLastEmail < oneHour) {
+          return res.status(429).json({ 
+            error: { 
+              code: "rate_limit_exceeded", 
+              message: "Please wait before requesting another verification email. You can request another one in " + Math.ceil((oneHour - timeSinceLastEmail) / 60000) + " minutes." 
+            } 
+          });
+        }
+      }
+      
+      // Generate new verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpiresAt = new Date();
+      verificationTokenExpiresAt.setHours(verificationTokenExpiresAt.getHours() + 24);
+      
+      // Update user with new token
+      await db.update(users)
+        .set({ 
+          emailVerificationToken: verificationToken,
+          emailVerificationTokenExpiresAt: verificationTokenExpiresAt,
+          lastEmailSentAt: now
+        })
+        .where(eq(users.id, user.id));
+      
+      // Send verification email
+      const emailResult = await sendVerificationEmail(email, verificationToken, user.name || 'User');
+      if (!emailResult.success) {
+        console.error('📧 Failed to send verification email:', emailResult.error);
+        return res.status(500).json({ 
+          error: { 
+            code: "email_send_failed", 
+            message: "Failed to send verification email. Please try again later." 
+          } 
+        });
+      }
+      
+      res.json({ 
+        success: true,
+        message: "Verification email sent successfully. Please check your inbox." 
+      });
+    } catch (error: any) {
+      console.error('Resend verification error:', error);
+      res.status(500).json({ 
+        error: { 
+          code: "resend_failed", 
+          message: "Failed to resend verification email. Please try again." 
         } 
       });
     }

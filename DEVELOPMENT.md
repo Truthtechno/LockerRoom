@@ -41,6 +41,8 @@ This guide provides comprehensive information for developers working on the Lock
 - **Cloudinary** account ([Sign up](https://cloudinary.com/))
 - **Stripe** account (for XEN Watch payments - optional)
 - **Neon** account (for serverless PostgreSQL - recommended)
+- **Google Cloud Console** account (for Google OAuth/Gmail sign-in - optional)
+  - See [GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md) for setup instructions
 - **Redis** (Upstash serverless recommended) - Optional, for caching and rate limiting
 - **Sentry** account - Optional, for error monitoring and performance tracking
 
@@ -94,6 +96,11 @@ REDIS_TOKEN=your-redis-token
 
 # Sentry Error Monitoring (Optional)
 SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id
+
+# Google OAuth (Optional - for Gmail sign-in/sign-up)
+# See GOOGLE_OAUTH_SETUP.md for detailed setup instructions
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 
 # Rate Limiting (Optional - enables rate limiting in development)
 ENABLE_RATE_LIMIT=false
@@ -227,11 +234,25 @@ npm run test:phase1
 
 **Note**: The test suite will pass even if Redis/Sentry are not configured, as these are optional optimizations with graceful fallbacks.
 
-### 9. Verify System Features
+### 9. Setup Google OAuth (Optional)
+
+If you want to enable Gmail sign-in/sign-up:
+
+1. **Follow Setup Guide**: See [GOOGLE_OAUTH_SETUP.md](./GOOGLE_OAUTH_SETUP.md) for detailed instructions
+2. **Create OAuth Client**: Get Client ID from Google Cloud Console
+3. **Add to `.env`**: Add `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID`
+4. **Add Test Users**: Add your Gmail address as a test user in Google Cloud Console
+5. **Restart Server**: Restart development server to load new environment variables
+6. **Test**: Visit `/login` or `/signup` and test Google Sign-In button
+
+**Note**: Google OAuth is completely free and provides seamless authentication.
+
+### 10. Verify System Features
 
 After setup, test the following features:
 
 - ✅ **Authentication**: Login with demo accounts
+- ✅ **Google OAuth**: Test Gmail sign-in/sign-up (if configured)
 - ✅ **Posts**: Create posts with images/videos
 - ✅ **Notifications**: Check notification system
 - ✅ **XEN Watch**: Submit a video (if configured)

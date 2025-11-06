@@ -16,6 +16,77 @@ export interface LoginResult {
   requiresPasswordReset?: boolean;
 }
 
+export async function loginWithGoogle(credential: string): Promise<LoginResult> {
+  const response = await fetch("/api/auth/google", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ credential }),
+  });
+
+  if (!response.ok) {
+    let error: any;
+    try {
+      const text = await response.text();
+      error = text ? JSON.parse(text) : { error: { message: "Google authentication failed" } };
+    } catch (parseError) {
+      error = { error: { message: `Google authentication failed: ${response.statusText || "Unknown error"}` } };
+    }
+    const errorMessage = new Error(error.error?.message || error.message || "Google authentication failed");
+    (errorMessage as any).code = error.error?.code;
+    (errorMessage as any).status = response.status;
+    throw errorMessage;
+  }
+
+  let responseData: any;
+  try {
+    const text = await response.text();
+    if (!text) {
+      throw new Error("Empty response from server");
+    }
+    responseData = JSON.parse(text);
+  } catch (parseError) {
+    console.error("Failed to parse Google OAuth response:", parseError);
+    throw new Error("Invalid response from server. Please try again.");
+  }
+
+  const { token, user, profile, isNewUser } = responseData;
+  
+  // Merge user with profile data to include profilePicUrl and schoolId
+  const userWithProfile = {
+    ...user,
+    name: user.name || profile?.name || null,
+    profilePicUrl: user.profilePicUrl || profile?.profilePicUrl || null,
+    schoolId: profile?.schoolId || user.schoolId || null
+  };
+  
+  // CRITICAL: Clear React Query cache before storing new user data
+  try {
+    queryClient.clear();
+  } catch (error) {
+    console.warn("Failed to clear React Query cache on Google login:", error);
+  }
+  
+  // Store token, user, and schoolId in localStorage
+  localStorage.setItem("token", token);
+  localStorage.setItem("auth_user", JSON.stringify(userWithProfile));
+  localStorage.setItem("auth_user_timestamp", Date.now().toString());
+  
+  // Store schoolId separately for easy access
+  if (userWithProfile.schoolId) {
+    localStorage.setItem("schoolId", userWithProfile.schoolId);
+  }
+  
+  // Trigger custom event to notify auth state change
+  window.dispatchEvent(new Event('auth-change'));
+  
+  return {
+    user: userWithProfile,
+    requiresPasswordReset: false
+  };
+}
+
 export async function login(email: string, password: string): Promise<LoginResult> {
   const response = await fetch("/api/auth/login", {
     method: "POST",
@@ -26,11 +97,33 @@ export async function login(email: string, password: string): Promise<LoginResul
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || error.message || "Login failed");
+    let error: any;
+    try {
+      const text = await response.text();
+      error = text ? JSON.parse(text) : { error: { message: "Login failed" } };
+    } catch (parseError) {
+      error = { error: { message: `Login failed: ${response.statusText || "Unknown error"}` } };
+    }
+    // Preserve error code for special handling (e.g., email_not_verified)
+    const errorMessage = new Error(error.error?.message || error.message || "Login failed");
+    (errorMessage as any).code = error.error?.code;
+    (errorMessage as any).status = response.status;
+    throw errorMessage;
   }
 
-  const { token, user, profile, requiresPasswordReset } = await response.json();
+  let responseData: any;
+  try {
+    const text = await response.text();
+    if (!text) {
+      throw new Error("Empty response from server");
+    }
+    responseData = JSON.parse(text);
+  } catch (parseError) {
+    console.error("Failed to parse login response:", parseError);
+    throw new Error("Invalid response from server. Please try again.");
+  }
+
+  const { token, user, profile, requiresPasswordReset } = responseData;
   
   // Merge user with profile data to include profilePicUrl and schoolId
   const userWithProfile = {
