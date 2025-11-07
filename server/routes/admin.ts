@@ -83,13 +83,13 @@ export function registerAdminRoutes(app: Express) {
           });
         }
 
-        // Validate role
-        const validRoles: Role[] = ['system_admin', 'moderator', 'scout_admin', 'xen_scout', 'finance', 'support', 'coach', 'analyst'];
+        // Validate role - only allow active roles: system_admin, scout_admin, xen_scout
+        const validRoles: Role[] = ['system_admin', 'scout_admin', 'xen_scout'];
         if (!validRoles.includes(role as Role)) {
           return res.status(400).json({ 
             error: { 
               code: 'validation_error', 
-              message: 'Invalid role specified' 
+              message: 'Invalid role specified. Only system_admin, scout_admin, and xen_scout are allowed.' 
             } 
           });
         }
@@ -104,16 +104,30 @@ export function registerAdminRoutes(app: Express) {
           });
         }
 
-        // Check if email already exists in admins table
-        const existingAdmin = await db.select().from(admins).where(eq(admins.email, email)).limit(1);
-        if (existingAdmin.length > 0) {
+        // Check if email already exists in users table (covers all roles)
+        const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
+        if (existingUser.length > 0) {
           return res.status(400).json({
             error: {
               code: 'email_exists',
-              message: 'An admin with this email already exists'
+              message: 'An account with this email already exists'
             }
           });
         }
+        
+        // For scout roles, also check admins table for additional validation
+        if (role !== 'system_admin') {
+          const existingAdmin = await db.select().from(admins).where(eq(admins.email, email)).limit(1);
+          if (existingAdmin.length > 0) {
+            return res.status(400).json({
+              error: {
+                code: 'email_exists',
+                message: 'An admin with this email already exists'
+              }
+            });
+          }
+        }
+        // Note: system_admins table doesn't have an email field, so we rely on users table check
 
         // Check if XEN ID already exists (for scout roles)
         if (xenId) {
@@ -159,29 +173,81 @@ export function registerAdminRoutes(app: Express) {
           }
         }
 
-        // Create admin in admins table
-        const [newAdmin] = await db.insert(admins).values({
-          name,
-          email,
-          role: role as Role,
-          profilePicUrl,
-          xenId: xenId || null,
-          otp: otp || null,
-        }).returning();
+        // Generate OTP if not provided (6-digit numeric for consistency)
+        const generatedOTP = otp || Math.floor(100000 + Math.random() * 900000).toString();
+        const otpHash = await bcrypt.hash(generatedOTP, 10);
+        const otpExpiresAt = new Date();
+        otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 30); // 30 minutes expiration
 
-        // Create corresponding user record for authentication and reviews
-        const passwordHash = await bcrypt.hash(otp || 'defaultpassword', 10);
-        const [newUser] = await db.insert(users).values({
-          name,
-          email,
-          passwordHash,
-          role: role as Role,
-          profilePicUrl,
-          schoolId: null, // Admins don't belong to schools
-          linkedId: newAdmin.id, // Link to admin record
-          isOneTimePassword: !!otp, // Mark as OTP if otp is provided
-          xenId: xenId || null,
-        }).returning();
+        // Generate initial password hash (will be replaced on first login)
+        const crypto = await import('crypto');
+        const initialPassword = crypto.randomUUID();
+        const passwordHash = await bcrypt.hash(initialPassword, 12);
+
+        let newAdmin: any;
+        let newUser: any;
+        let profileId: string;
+
+        // Handle system_admin differently - they use system_admins table, not admins table
+        if (role === 'system_admin') {
+          // Create system admin in system_admins table
+          const [systemAdmin] = await db.insert(systemAdmins).values({
+            name,
+            profilePicUrl: profilePicUrl || undefined,
+          }).returning();
+          
+          newAdmin = systemAdmin;
+          profileId = systemAdmin.id;
+
+          // Create corresponding user record for authentication
+          const [user] = await db.insert(users).values({
+            name,
+            email,
+            passwordHash,
+            role: 'system_admin',
+            profilePicUrl,
+            schoolId: null, // System admins don't belong to schools
+            linkedId: systemAdmin.id, // Link to system_admins record
+            isOneTimePassword: true, // Mark as OTP - will force password reset on first login
+            emailVerified: true, // System admins created by system admin are pre-verified
+            otpHash: otpHash,
+            otpExpiresAt: otpExpiresAt
+          }).returning();
+          
+          newUser = user;
+        } else {
+          // For scout_admin and xen_scout, create in admins table
+          // Create admin in admins table
+          const [admin] = await db.insert(admins).values({
+            name,
+            email,
+            role: role as Role,
+            profilePicUrl,
+            xenId: xenId || null,
+            otp: null, // OTP no longer stored in admins table
+          }).returning();
+
+          newAdmin = admin;
+          profileId = admin.id;
+
+          // Create corresponding user record for authentication and reviews
+          const [user] = await db.insert(users).values({
+            name,
+            email,
+            passwordHash,
+            role: role as Role,
+            profilePicUrl,
+            schoolId: null, // Admins don't belong to schools
+            linkedId: admin.id, // Link to admin record
+            isOneTimePassword: true, // Mark as OTP - will force password reset on first login
+            xenId: xenId || null,
+            emailVerified: true, // Admins created by system admin are pre-verified
+            otpHash: otpHash,
+            otpExpiresAt: otpExpiresAt
+          }).returning();
+          
+          newUser = user;
+        }
 
         // If role is scout_admin or xen_scout, create linked scout profile
         let scoutProfile = null;
@@ -210,6 +276,25 @@ export function registerAdminRoutes(app: Express) {
 
         console.log(`🎯 Administrator created: ${newAdmin.name} (Role: ${newAdmin.role})`);
 
+        // Send welcome email with OTP based on role
+        const { sendScoutAdminAccountEmail, sendXenScoutAccountEmail, sendSystemAdminAccountEmail } = await import("../email");
+        let emailResult;
+        
+        if (role === 'scout_admin') {
+          emailResult = await sendScoutAdminAccountEmail(email, name, generatedOTP, xenId || undefined);
+        } else if (role === 'xen_scout' && xenId) {
+          emailResult = await sendXenScoutAccountEmail(email, name, generatedOTP, xenId);
+        } else if (role === 'system_admin') {
+          emailResult = await sendSystemAdminAccountEmail(email, name, generatedOTP);
+        }
+        
+        if (emailResult && !emailResult.success) {
+          console.error(`📧 Failed to send ${role} account email:`, emailResult.error);
+          // Don't fail admin creation if email fails, but log it
+        } else if (emailResult) {
+          console.log(`📧 Welcome email with OTP sent to ${role}: ${email}`);
+        }
+
         // Notify scout admins if a new scout was created
         if ((role === 'scout_admin' || role === 'xen_scout') && scoutProfile) {
           const { notifyScoutAdminsOfNewScout } = await import('../utils/notification-helpers');
@@ -232,12 +317,13 @@ export function registerAdminRoutes(app: Express) {
 
         res.json({
           success: true,
+          message: `${role === 'system_admin' ? 'System Admin' : role === 'scout_admin' ? 'Scout Admin' : 'XEN Scout'} created successfully. A welcome email with login instructions has been sent to the ${role}.`,
           admin: {
             id: newAdmin.id,
             name: newAdmin.name,
-            email: newAdmin.email,
-            role: newAdmin.role,
-            xenId: newAdmin.xenId,
+            email: role === 'system_admin' ? newAdmin.email : newAdmin.email,
+            role: role === 'system_admin' ? 'system_admin' : newAdmin.role,
+            xenId: role === 'system_admin' ? null : newAdmin.xenId,
             profilePicUrl: newAdmin.profilePicUrl,
             createdAt: newAdmin.createdAt,
           },
@@ -251,10 +337,8 @@ export function registerAdminRoutes(app: Express) {
           scout: scoutProfile ? {
             id: scoutProfile.id,
             xenId: scoutProfile.xenId,
-            otp: scoutProfile.otp,
           } : null,
-          otp: otp || null,
-          message: "Administrator created successfully"
+          // OTP removed from response for security - sent via email instead
         });
 
       } catch (error) {
@@ -430,8 +514,8 @@ export function registerAdminRoutes(app: Express) {
         }
 
         // Get all admin/scout roles from users table (for scouts created by scout admins)
-        // These are admin roles that should be counted: system_admin, scout_admin, xen_scout, moderator, finance, support, coach, analyst
-        const adminRoles = ['system_admin', 'scout_admin', 'xen_scout', 'moderator', 'finance', 'support', 'coach', 'analyst'];
+        // Only active roles: system_admin, scout_admin, xen_scout
+        const adminRoles = ['system_admin', 'scout_admin', 'xen_scout'];
         const usersWithAdminRoles = await db.select({
           id: users.id,
           name: users.name,

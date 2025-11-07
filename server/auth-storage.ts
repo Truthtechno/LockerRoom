@@ -696,8 +696,70 @@ export class AuthStorage {
 
   // Update user profile by role
   async updateUserProfile(userId: string, role: string, profileData: Partial<UserProfile>): Promise<UserProfile | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
-    if (!user || user.role !== role) return undefined;
+    console.log('🔍 updateUserProfile called:', { userId, role, profileDataKeys: Object.keys(profileData) });
+    
+    // Query user with explicit field selection to ensure we get all fields
+    const userResult = await db.select({
+      id: users.id,
+      email: users.email,
+      role: users.role,
+      linkedId: users.linkedId,
+      name: users.name,
+      schoolId: users.schoolId,
+      emailVerified: users.emailVerified,
+      isOneTimePassword: users.isOneTimePassword,
+      isFrozen: users.isFrozen,
+    }).from(users).where(eq(users.id, userId)).limit(1);
+    
+    const user = userResult[0];
+    
+    console.log('🔍 User query result:', { 
+      found: !!user, 
+      userId: user?.id, 
+      email: user?.email, 
+      role: user?.role, 
+      linkedId: user?.linkedId 
+    });
+    
+    if (!user) {
+      console.error('❌ updateUserProfile: User not found in database:', { userId });
+      return undefined;
+    }
+    
+    if (!user.role) {
+      console.error('❌ updateUserProfile: User exists but role is null/undefined:', { 
+        userId, 
+        email: user.email, 
+        linkedId: user.linkedId 
+      });
+      // Try to fix by updating the role if it's missing
+      if (role) {
+        console.warn('⚠️ Attempting to fix missing role...');
+        await db.update(users)
+          .set({ role })
+          .where(eq(users.id, userId));
+        user.role = role;
+        console.log('✅ Fixed user role');
+      } else {
+        return undefined;
+      }
+    }
+    
+    if (user.role !== role) {
+      console.error('❌ updateUserProfile: Role mismatch:', { 
+        userId, 
+        userRole: user.role, 
+        expectedRole: role,
+        email: user.email
+      });
+      return undefined;
+    }
+    
+    // Check if linkedId is required and present
+    if (!user.linkedId) {
+      console.error('❌ updateUserProfile: User missing linkedId:', { userId, role, email: user.email });
+      return undefined;
+    }
     
     switch (role) {
       case 'viewer':
@@ -705,6 +767,9 @@ export class AuthStorage {
           .set(profileData)
           .where(eq(viewers.id, user.linkedId))
           .returning();
+        if (!updatedViewer) {
+          console.error('❌ updateUserProfile: Viewer profile not found:', { userId, linkedId: user.linkedId });
+        }
         return updatedViewer ? { ...updatedViewer, role: 'viewer' } : undefined;
         
       case 'student':
@@ -712,6 +777,9 @@ export class AuthStorage {
           .set(profileData)
           .where(eq(students.id, user.linkedId))
           .returning();
+        if (!updatedStudent) {
+          console.error('❌ updateUserProfile: Student profile not found:', { userId, linkedId: user.linkedId });
+        }
         return updatedStudent ? { ...updatedStudent, role: 'student' } : undefined;
         
       case 'school_admin':
@@ -719,16 +787,155 @@ export class AuthStorage {
           .set(profileData)
           .where(eq(schoolAdmins.id, user.linkedId))
           .returning();
+        if (!updatedSchoolAdmin) {
+          console.error('❌ updateUserProfile: School admin profile not found:', { userId, linkedId: user.linkedId });
+        }
         return updatedSchoolAdmin ? { ...updatedSchoolAdmin, role: 'school_admin' } : undefined;
         
       case 'system_admin':
-        const [updatedSystemAdmin] = await db.update(systemAdmins)
+        // First, try to update using linkedId
+        let [updatedSystemAdmin] = await db.update(systemAdmins)
           .set(profileData)
           .where(eq(systemAdmins.id, user.linkedId))
           .returning();
-        return updatedSystemAdmin ? { ...updatedSystemAdmin, role: 'system_admin' } : undefined;
+        
+        // If not found, check if linkedId is incorrect (might point to admins table or be self-referential)
+        if (!updatedSystemAdmin) {
+          console.warn('⚠️ System admin profile not found with linkedId, attempting to fix:', { 
+            userId, 
+            linkedId: user.linkedId, 
+            userEmail: user.email 
+          });
+          
+          // Check if linkedId points to an admins record (wrong table)
+          const [adminRecord] = await db.select()
+            .from(admins)
+            .where(eq(admins.id, user.linkedId))
+            .limit(1);
+          
+          if (adminRecord) {
+            // linkedId points to admins table, but should point to system_admins
+            // Check if a system_admin record exists for this user (by joining with users)
+            const [existingSystemAdmin] = await db.select({
+              systemAdmin: systemAdmins
+            })
+            .from(systemAdmins)
+            .innerJoin(users, eq(users.linkedId, systemAdmins.id))
+            .where(eq(users.id, userId))
+            .limit(1);
+            
+            if (existingSystemAdmin) {
+              // Update the user's linkedId to point to the correct system_admins record
+              await db.update(users)
+                .set({ linkedId: existingSystemAdmin.systemAdmin.id })
+                .where(eq(users.id, userId));
+              
+              // Now update the system_admin profile
+              [updatedSystemAdmin] = await db.update(systemAdmins)
+                .set(profileData)
+                .where(eq(systemAdmins.id, existingSystemAdmin.systemAdmin.id))
+                .returning();
+              
+              console.log('✅ Fixed system admin linkedId (was pointing to admins table) and updated profile:', { 
+                userId, 
+                oldLinkedId: user.linkedId, 
+                newLinkedId: existingSystemAdmin.systemAdmin.id 
+              });
+            } else {
+              // No system_admin record exists - create one
+              console.warn('⚠️ No system_admin record found, creating one:', { userId, email: user.email });
+              
+              const [newSystemAdmin] = await db.insert(systemAdmins).values({
+                name: user.name || '',
+                profilePicUrl: profileData.profilePicUrl || undefined,
+              }).returning();
+              
+              // Update user's linkedId to point to the new system_admin record
+              await db.update(users)
+                .set({ linkedId: newSystemAdmin.id })
+                .where(eq(users.id, userId));
+              
+              // Now update with the profile data
+              [updatedSystemAdmin] = await db.update(systemAdmins)
+                .set(profileData)
+                .where(eq(systemAdmins.id, newSystemAdmin.id))
+                .returning();
+              
+              console.log('✅ Created system_admin record and updated profile:', { 
+                userId, 
+                systemAdminId: newSystemAdmin.id 
+              });
+            }
+          } else if (user.linkedId === userId) {
+            // linkedId is self-referential (points to user's own ID) - this is wrong
+            console.warn('⚠️ linkedId is self-referential, creating system_admin record:', { userId, email: user.email });
+            
+            const [newSystemAdmin] = await db.insert(systemAdmins).values({
+              name: user.name || '',
+              profilePicUrl: profileData.profilePicUrl || undefined,
+            }).returning();
+            
+            // Update user's linkedId to point to the new system_admin record
+            await db.update(users)
+              .set({ linkedId: newSystemAdmin.id })
+              .where(eq(users.id, userId));
+            
+            // Now update with the profile data
+            [updatedSystemAdmin] = await db.update(systemAdmins)
+              .set(profileData)
+              .where(eq(systemAdmins.id, newSystemAdmin.id))
+              .returning();
+            
+            console.log('✅ Created system_admin record (was self-referential) and updated profile:', { 
+              userId, 
+              systemAdminId: newSystemAdmin.id 
+            });
+          } else {
+            // Unknown case - try to create a new system_admin record
+            console.warn('⚠️ Unknown linkedId issue, creating new system_admin record:', { userId, linkedId: user.linkedId, email: user.email });
+            
+            const [newSystemAdmin] = await db.insert(systemAdmins).values({
+              name: user.name || '',
+              profilePicUrl: profileData.profilePicUrl || undefined,
+            }).returning();
+            
+            // Update user's linkedId to point to the new system_admin record
+            await db.update(users)
+              .set({ linkedId: newSystemAdmin.id })
+              .where(eq(users.id, userId));
+            
+            // Now update with the profile data
+            [updatedSystemAdmin] = await db.update(systemAdmins)
+              .set(profileData)
+              .where(eq(systemAdmins.id, newSystemAdmin.id))
+              .returning();
+            
+            console.log('✅ Created system_admin record (recovery) and updated profile:', { 
+              userId, 
+              systemAdminId: newSystemAdmin.id 
+            });
+          }
+        }
+        
+        if (!updatedSystemAdmin) {
+          console.error('❌ updateUserProfile: Failed to update system admin profile after recovery attempts:', { 
+            userId, 
+            linkedId: user.linkedId, 
+            userEmail: user.email 
+          });
+          return undefined;
+        }
+        
+        return { 
+          ...updatedSystemAdmin, 
+          role: 'system_admin',
+          profilePicUrl: updatedSystemAdmin.profilePicUrl ?? undefined,
+          bio: updatedSystemAdmin.bio ?? undefined,
+          phone: updatedSystemAdmin.phone ?? undefined
+        };
         
       default:
+        console.error('❌ updateUserProfile: Unknown role:', role);
         return undefined;
     }
   }

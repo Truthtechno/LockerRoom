@@ -33,6 +33,11 @@ export async function cacheGet<T>(
   fetchFn: () => Promise<T>,
   ttl: number = 300 // 5 minutes default
 ): Promise<T> {
+  // If TTL is 0 or negative, bypass cache entirely and always fetch fresh
+  if (ttl <= 0) {
+    return fetchFn();
+  }
+  
   if (!redis) {
     // No Redis configured, just fetch directly
     return fetchFn();

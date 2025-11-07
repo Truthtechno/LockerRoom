@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Mail, CheckCircle } from "lucide-react";
 
 interface PasswordResetModalProps {
   isOpen: boolean;
@@ -20,10 +21,8 @@ interface PasswordResetModalProps {
 export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    newPassword: "",
-  });
+  const [email, setEmail] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,29 +35,25 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email: formData.email,
-          newPassword: formData.newPassword,
+          email: email,
         }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error?.message || "Failed to reset password");
+        throw new Error(result.error?.message || "Failed to send password reset email");
       }
 
+      setEmailSent(true);
       toast({
-        title: "Password Reset Successful",
-        description: "Your password has been reset successfully. You can now log in with your new password.",
+        title: "Password Reset Email Sent",
+        description: "If an account exists with this email, a password reset link has been sent. Please check your inbox.",
       });
-
-      // Reset form and close modal
-      setFormData({ email: "", newPassword: "" });
-      onClose();
     } catch (error) {
       toast({
-        title: "Password Reset Failed",
-        description: error instanceof Error ? error.message : "Failed to reset password. Please try again.",
+        title: "Failed to Send Reset Email",
+        description: error instanceof Error ? error.message : "Failed to send password reset email. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -68,7 +63,8 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
 
   const handleClose = () => {
     if (!isLoading) {
-      setFormData({ email: "", newPassword: "" });
+      setEmail("");
+      setEmailSent(false);
       onClose();
     }
   };
@@ -79,55 +75,70 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
         <DialogHeader>
           <DialogTitle>Reset Password</DialogTitle>
           <DialogDescription>
-            Enter your email address and new password to reset your account password.
+            {emailSent 
+              ? "We've sent a password reset link to your email address."
+              : "Enter your email address and we'll send you a link to reset your password."}
           </DialogDescription>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="Enter your email address"
-              required
-              disabled={isLoading}
-            />
+        {emailSent ? (
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-3 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+              <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Check Your Email</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  We've sent a password reset link to <strong>{email}</strong>. 
+                  Click the link in the email to reset your password.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleClose}>
+                Close
+              </Button>
+            </DialogFooter>
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">New Password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              value={formData.newPassword}
-              onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-              placeholder="Enter your new password"
-              minLength={6}
-              required
-              disabled={isLoading}
-            />
-            <p className="text-xs text-muted-foreground">
-              Password must be at least 6 characters long
-            </p>
-          </div>
-          
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Resetting..." : "Reset Password"}
-            </Button>
-          </DialogFooter>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email address"
+                required
+                disabled={isLoading}
+              />
+              <p className="text-xs text-muted-foreground">
+                We'll send a secure link to reset your password
+              </p>
+            </div>
+            
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  "Sending..."
+                ) : (
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Send Reset Link
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

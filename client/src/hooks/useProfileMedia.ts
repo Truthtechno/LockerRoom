@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { uploadToCloudinary } from "@/lib/cloudinary";
+import { apiRequest } from "@/lib/queryClient";
 
 type UpdateBody = {
   bio?: string;
@@ -160,6 +161,54 @@ const putSchoolAdminMe = async (body: UpdateBody) => {
   }
 };
 
+const putSystemAdminMe = async (body: UpdateBody) => {
+  // Validate token exists before making request
+  const token = localStorage.getItem("token");
+  if (!token) {
+    console.error('❌ No token found in localStorage');
+    throw new Error("Not authenticated. Please log in again.");
+  }
+
+  console.log('📤 Updating system admin profile:', body);
+
+  try {
+    // Use apiRequest utility which handles authentication more reliably
+    const res = await apiRequest("PUT", "/api/system-admin/profile", body);
+
+    console.log('📥 System admin update response:', {
+      status: res.status,
+      statusText: res.statusText,
+      ok: res.ok
+    });
+
+    // Parse successful response
+    const data = await res.json();
+    console.log('✅ System admin profile updated successfully:', data);
+    return data;
+  } catch (error: any) {
+    console.error('❌ System admin profile update failed:', error);
+    
+    // Handle specific error cases
+    if (error?.message?.includes('Invalid token') || 
+        error?.message?.includes('Authentication required') ||
+        error?.message?.includes('session token is invalid') ||
+        error?.message?.includes('log out and log back in')) {
+      // Token might be expired or invalid - suggest re-login
+      throw new Error("Your session has expired. Please log out and log back in to refresh your session.");
+    }
+    
+    // Handle profile not found errors
+    if (error?.message?.includes('profile not found') || 
+        error?.message?.includes('account is properly configured')) {
+      // This might be a data issue - suggest re-login to refresh session
+      throw new Error("Profile configuration issue detected. Please log out and log back in, then try again.");
+    }
+    
+    // Re-throw the original error with better context
+    throw new Error(error?.message || "Failed to update system admin profile. Please try again.");
+  }
+};
+
 export function useProfileMedia() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -194,56 +243,189 @@ export function useProfileMedia() {
   }, [toast]);
 
   const handleCropComplete = useCallback(async (croppedImageBlob: Blob) => {
+    // Validate user and token before proceeding
+    if (!user) {
+      toast({ 
+        title: "Authentication required", 
+        description: "Please log in to update your profile picture.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast({ 
+        title: "Authentication required", 
+        description: "Your session has expired. Please log in again.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     try {
       setIsUploading(true);
       
-      // Optimistic preview
-      setProfilePicPreview(URL.createObjectURL(croppedImageBlob));
+      // CRITICAL: Set optimistic preview IMMEDIATELY before any async operations
+      // This ensures the UI shows the new picture instantly
+      const previewUrl = URL.createObjectURL(croppedImageBlob);
+      setProfilePicPreview(previewUrl);
+      console.log('✅ Preview set immediately:', previewUrl);
 
       console.log('📤 Uploading profile picture:', {
         fileSize: croppedImageBlob.size,
-        fileType: croppedImageBlob.type
+        fileType: croppedImageBlob.type,
+        userRole: user.role,
+        userId: user.id
       });
 
-      // Upload to Cloudinary
-      const { url } = await uploadToCloudinary(croppedImageBlob as any, "profilePic");
+      // Upload to Cloudinary with retry logic
+      let url: string;
+      let retries = 0;
+      const maxRetries = 2;
+      
+      while (retries <= maxRetries) {
+        try {
+          const result = await uploadToCloudinary(croppedImageBlob as any, "profilePic");
+          url = result.url;
+          break;
+        } catch (uploadError: any) {
+          retries++;
+          if (retries > maxRetries) {
+            throw new Error(uploadError?.message || "Failed to upload image to Cloudinary");
+          }
+          console.log(`⚠️ Cloudinary upload failed, retrying (${retries}/${maxRetries})...`);
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+        }
+      }
       
       setIsUpdating(true);
       
       // Update profile with the Cloudinary URL based on user role
-      if (user?.role === 'school_admin') {
-        await putSchoolAdminMe({ profilePicUrl: url });
-      } else if (user?.role === 'scout_admin' || user?.role === 'xen_scout' || user?.role === 'system_admin') {
-        await putAdminMe({ profilePicUrl: url });
-      } else {
-        await putStudentMe({ profilePicUrl: url });
+      // Add retry logic for API calls and capture response data
+      let responseData: any = null;
+      let profileUpdateRetries = 0;
+      const maxProfileRetries = 2;
+      
+      while (profileUpdateRetries <= maxProfileRetries) {
+        try {
+          // Call the appropriate API based on user role and capture response
+          if (user.role === 'school_admin') {
+            responseData = await putSchoolAdminMe({ profilePicUrl: url! });
+          } else if (user.role === 'system_admin') {
+            responseData = await putSystemAdminMe({ profilePicUrl: url! });
+          } else if (user.role === 'scout_admin' || user.role === 'xen_scout') {
+            responseData = await putAdminMe({ profilePicUrl: url! });
+          } else {
+            responseData = await putStudentMe({ profilePicUrl: url! });
+          }
+          break; // Success, exit retry loop
+        } catch (apiError: any) {
+          profileUpdateRetries++;
+          
+          // Don't retry on authentication errors - user needs to log in again
+          if (apiError?.message?.includes('session has expired') || 
+              apiError?.message?.includes('Invalid token') ||
+              apiError?.message?.includes('Authentication required')) {
+            throw apiError;
+          }
+          
+          if (profileUpdateRetries > maxProfileRetries) {
+            throw apiError;
+          }
+          
+          console.log(`⚠️ Profile update failed, retrying (${profileUpdateRetries}/${maxProfileRetries})...`);
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000 * profileUpdateRetries));
+        }
       }
       
-      // Update user context with new profile picture URL
-      updateUser({ profilePicUrl: url });
       console.log('✅ Profile picture updated successfully:', url);
       
+      // CRITICAL: Update user context IMMEDIATELY (synchronously) so UI reflects change instantly
+      // This ensures the settings page shows the new picture right away (before query refetch)
+      if (responseData && user) {
+        updateUser({ 
+          ...user, 
+          name: responseData.name || user.name, 
+          profilePicUrl: responseData.profilePicUrl || url!
+        });
+        console.log('✅ User context updated IMMEDIATELY:', { 
+          name: responseData.name || user.name, 
+          profilePicUrl: responseData.profilePicUrl || url!
+        });
+      } else {
+        // Fallback: just update profilePicUrl if response doesn't have full data
+        updateUser({ ...user, profilePicUrl: url! });
+        console.log('✅ User context updated with fallback profilePicUrl:', url!);
+      }
+      
+      // Trigger auth-change event IMMEDIATELY to refresh sidebar
+      window.dispatchEvent(new Event('auth-change'));
+      
+      // Show success toast
       toast({ 
         title: "Profile photo updated", 
         description: "Your profile picture has been updated successfully!" 
       });
       
-      // Refresh current user data everywhere
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ['/api/users/me'] }),
-        qc.invalidateQueries({ queryKey: ['/api/students/me'] }),
-        qc.invalidateQueries({ queryKey: ['/api/school-admin/profile'] }),
-        qc.invalidateQueries({ queryKey: ['/api/admins/me'] })
-      ]);
+      // CRITICAL: Invalidate and refetch queries to ensure all components update
+      // We do this synchronously to ensure the UI updates properly
+      try {
+        // Remove cached queries first
+        qc.removeQueries({ queryKey: ['/api/users/me'] });
+        qc.removeQueries({ queryKey: ['/api/users/me', user?.id] });
+        
+        // Invalidate all relevant queries
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ['/api/users/me'] }),
+          qc.invalidateQueries({ queryKey: ['/api/users/me', user?.id] }),
+          qc.invalidateQueries({ queryKey: ['/api/students/me'] }),
+          qc.invalidateQueries({ queryKey: ['/api/school-admin/profile'] }),
+          qc.invalidateQueries({ queryKey: ['/api/admins/me'] }),
+          qc.invalidateQueries({ queryKey: ['/api/system-admin/profile'] })
+        ]);
+        
+        // Force immediate refetch - this ensures sidebar and settings page update
+        await Promise.all([
+          qc.refetchQueries({ queryKey: ['/api/users/me'], type: 'active' }),
+          qc.refetchQueries({ queryKey: ['/api/users/me', user?.id], type: 'active' }),
+        ]);
+        
+        console.log('✅ All queries invalidated and refetched');
+      } catch (refetchError) {
+        console.warn('⚠️ Query refetch error (non-critical):', refetchError);
+        // Don't fail the upload if refetch fails - user context update already happened
+      }
+      
+      // Keep preview visible - it will be cleared when userData refetches
+      // This ensures seamless visual transition from preview to actual image
+      
+      console.log('✅ Profile update complete - UI updated immediately');
     } catch (e: any) {
       // Clear optimistic preview on error
       setProfilePicPreview(null);
       
       console.error('❌ Profile picture upload failed:', e);
       
+      // Provide more helpful error messages
+      let errorMessage = e.message || "Please try again.";
+      if (e.message?.includes('session has expired') || 
+          e.message?.includes('Invalid token') ||
+          e.message?.includes('session token is invalid') ||
+          e.message?.includes('log out and log back in')) {
+        errorMessage = "Your session has expired. Please log out and log back in to refresh your session, then try updating your profile picture again.";
+      } else if (e.message?.includes('Authentication required')) {
+        errorMessage = "Please log in to update your profile picture.";
+      } else if (e.message?.includes('profile not found') || 
+                 e.message?.includes('account is properly configured')) {
+        errorMessage = "Profile configuration issue detected. Please log out and log back in, then try updating your profile picture again.";
+      }
+      
       toast({ 
         title: "Profile picture upload failed", 
-        description: e.message || "Please try again.", 
+        description: errorMessage, 
         variant: "destructive" 
       });
     } finally {
@@ -251,8 +433,10 @@ export function useProfileMedia() {
       setIsUpdating(false);
       setShowCropper(false);
       setSelectedImage(null);
+      // Don't clear profilePicPreview here - keep it until query refetches
+      // This ensures the UI shows the new picture immediately
     }
-  }, [qc, toast, updateUser]);
+  }, [qc, toast, updateUser, user]);
 
   const handleCoverPhotoChange = useCallback((file: File) => {
     if (!file?.type?.startsWith("image/")) {
@@ -330,7 +514,9 @@ export function useProfileMedia() {
       // Use appropriate endpoint based on user role
       if (user?.role === 'school_admin') {
         await putSchoolAdminMe(body);
-      } else if (user?.role === 'scout_admin' || user?.role === 'system_admin') {
+      } else if (user?.role === 'system_admin') {
+        await putSystemAdminMe(body);
+      } else if (user?.role === 'scout_admin' || user?.role === 'xen_scout') {
         await putAdminMe(body);
       } else {
         await putStudentMe(body);
@@ -341,6 +527,7 @@ export function useProfileMedia() {
         qc.invalidateQueries({ queryKey: ["/api/users/me"] }),
         qc.invalidateQueries({ queryKey: ["/api/admins/me"] }),
         qc.invalidateQueries({ queryKey: ["/api/school-admin/profile"] }),
+        qc.invalidateQueries({ queryKey: ["/api/system-admin/profile"] }),
       ]);
       return true;
     } finally {

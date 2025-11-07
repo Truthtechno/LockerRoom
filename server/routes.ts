@@ -1015,7 +1015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/users/me", requireAuth, async (req, res) => {
     try {
       const auth = req.user || (req as any).auth;
-      const userId = auth.id;
+      let userId = auth.id;
       const jwtSchoolId = auth.schoolId;
       
       console.log('🔍 /api/users/me - Auth object:', { id: auth.id, role: auth.role, schoolId: auth.schoolId });
@@ -1031,13 +1031,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Use Redis caching for user profile (10 minute TTL)
-      const userCacheKey = `user:${userId}`;
-      const cachedUser = await cacheGet(
-        userCacheKey,
-        async () => {
-          // Get user data with schoolId from database, with JWT fallback
-          let userResult = await db.select({
+      // Get user data with schoolId from database, with JWT fallback
+      // Don't use cache for /api/users/me - always fetch fresh (TTL = 0)
+      let userResult = await db.select({
         id: users.id,
         name: users.name,
         email: users.email,
@@ -1054,37 +1050,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: userId
       });
       
-      // If user not found in users table, check admins table
+      // If user not found in users table, try to find by email from JWT (for stale JWT tokens)
       if (!userResult || userResult.length === 0) {
-        console.log('🔍 User not found in users table, checking admins table...');
-        const adminResult = await db.select({
-          id: admins.id,
-          name: admins.name,
-          email: admins.email,
-          role: admins.role,
-          schoolId: sql`NULL`, // Admins don't have schoolId
-          linkedId: sql`NULL`, // Admins don't have linkedId
-          profilePicUrl: admins.profilePicUrl
-        })
-        .from(admins)
-        .where(eq(admins.id, userId));
+        console.log('🔍 User not found in users table, trying to find by email from JWT...');
+        const userEmail = auth.email;
         
-        console.log('🔍 /api/users/me - Admin query result:', {
-          resultCount: adminResult.length,
-          userId: userId
-        });
-        
-        if (!adminResult || adminResult.length === 0) {
-          console.error('❌ User not found in database:', userId);
+        if (userEmail) {
+          const userByEmailResult = await db.select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            role: users.role,
+            schoolId: users.schoolId,
+            linkedId: users.linkedId,
+            profilePicUrl: users.profilePicUrl
+          })
+          .from(users)
+          .where(eq(users.email, userEmail))
+          .limit(1);
+          
+          console.log('🔍 /api/users/me - User by email query result:', {
+            resultCount: userByEmailResult.length,
+            email: userEmail
+          });
+          
+          if (userByEmailResult && userByEmailResult.length > 0) {
+            const actualUserId = userByEmailResult[0].id;
+            console.log('✅ Found user by email, using correct userId:', {
+              jwtUserId: userId,
+              actualUserId: actualUserId,
+              email: userEmail
+            });
+            userResult = userByEmailResult;
+            // CRITICAL: Update userId variable for use in profile picture lookup
+            userId = actualUserId;
+          } else {
+            // Last resort: check admins table (legacy support)
+            console.log('🔍 User not found by email, checking admins table...');
+            const adminResult = await db.select({
+              id: admins.id,
+              name: admins.name,
+              email: admins.email,
+              role: admins.role,
+              schoolId: sql`NULL`, // Admins don't have schoolId
+              linkedId: sql`NULL`, // Admins don't have linkedId
+              profilePicUrl: admins.profilePicUrl
+            })
+            .from(admins)
+            .where(eq(admins.id, userId));
+            
+            console.log('🔍 /api/users/me - Admin query result:', {
+              resultCount: adminResult.length,
+              userId: userId
+            });
+            
+            if (!adminResult || adminResult.length === 0) {
+              console.error('❌ User not found in database:', userId);
+              return res.status(404).json({ 
+                error: { 
+                  code: "user_not_found", 
+                  message: "User not found. Please log out and log back in to refresh your session." 
+                } 
+              });
+            }
+            
+            userResult = adminResult;
+          }
+        } else {
+          console.error('❌ User not found and no email in JWT to lookup:', userId);
           return res.status(404).json({ 
             error: { 
               code: "user_not_found", 
-              message: "User not found" 
+              message: "User not found. Please log out and log back in to refresh your session." 
             } 
           });
         }
-        
-        userResult = adminResult;
       }
       
       const user = userResult[0];
@@ -1106,16 +1146,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Order matters: check specific roles first, then general admin roles
       if (user.role === 'system_admin') {
         // System admin profile is in systemAdmins table, linked via linkedId
-        const systemAdminResult = await db.select({
-          profilePicUrl: systemAdmins.profilePicUrl
-        })
-        .from(systemAdmins)
-        .where(eq(systemAdmins.id, user.linkedId)) // user.linkedId maps to linked_id column
-        .limit(1);
-        
-        if (systemAdminResult[0]) {
-          profilePicUrl = systemAdminResult[0].profilePicUrl;
+        if (user.linkedId) {
+          const systemAdminResult = await db.select({
+            profilePicUrl: systemAdmins.profilePicUrl
+          })
+          .from(systemAdmins)
+          .where(eq(systemAdmins.id, user.linkedId)) // user.linkedId maps to linked_id column
+          .limit(1);
+          
+          if (systemAdminResult[0]) {
+            profilePicUrl = systemAdminResult[0].profilePicUrl;
+          }
         }
+        
+        // Fallback: if linkedId is null or profilePicUrl not found, use users table profilePicUrl
+        if (!profilePicUrl && user.profilePicUrl) {
+          profilePicUrl = user.profilePicUrl;
+          console.log('🔍 System admin profile picture (fallback to users table):', profilePicUrl);
+        }
+        
         console.log('🔍 System admin profile picture:', { role: user.role, linkedId: user.linkedId, profilePicUrl });
       } else if (user.role === 'school_admin') {
         // School admin profile is in schoolAdmins table, linked via linkedId
@@ -1178,31 +1227,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('⚠️ Unknown role for profile picture:', user.role);
       }
 
-          const responseData = {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            schoolId: finalSchoolId,
-            linkedId: user.linkedId,
-            profilePicUrl,
-            coverPhoto
-          };
-          
-          return responseData;
-        },
-        600 // 10 minute TTL
-      );
+      // CRITICAL: Use the fetched profilePicUrl (from role-specific table) instead of user.profilePicUrl
+      // For system admins, profilePicUrl comes from systemAdmins table, not users table
+      // Fallback to user.profilePicUrl only if role-specific lookup didn't find one
+      const finalProfilePicUrl = profilePicUrl || user.profilePicUrl || null;
+      
+      const responseData = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        schoolId: finalSchoolId,
+        linkedId: user.linkedId,
+        profilePicUrl: finalProfilePicUrl, // Use fetched profilePicUrl, not user.profilePicUrl
+        coverPhoto
+      };
+      
+      console.log('🔍 /api/users/me - Final response data:', {
+        id: responseData.id,
+        role: responseData.role,
+        profilePicUrl: responseData.profilePicUrl,
+        source: profilePicUrl ? 'role-specific-table' : 'users-table'
+      });
       
       console.log('✅ /api/users/me - Returning user data:', {
-        id: cachedUser.id,
-        role: cachedUser.role,
-        schoolId: cachedUser.schoolId,
-        profilePicUrl: cachedUser.profilePicUrl
+        id: responseData.id,
+        role: responseData.role,
+        schoolId: responseData.schoolId,
+        profilePicUrl: responseData.profilePicUrl
       });
 
       // Return user data with unified profilePicUrl
-      res.json(cachedUser);
+      return res.json(responseData);
     } catch (error) {
       console.error('❌ Get current user error:', error);
       res.status(500).json({ 
@@ -1614,8 +1670,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update current user account information (name, email)
   app.put("/api/users/me", requireAuth, async (req, res) => {
     try {
-      const userId = (req as any).auth.id;
+      let userId = (req as any).auth.id;
+      const userEmail = (req as any).auth.email;
       const { name, email } = req.body;
+      
+      console.log('📝 PUT /api/users/me - Request:', { userId, userEmail, name, email });
       
       if (!name && !email) {
         return res.status(400).json({ 
@@ -1624,6 +1683,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: "No updates provided" 
           } 
         });
+      }
+      
+      // Handle stale JWT tokens - find user by email if userId doesn't exist
+      const [userInDb] = await db.select({
+        id: users.id,
+        email: users.email,
+        role: users.role
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+      
+      if (!userInDb) {
+        console.warn('⚠️ User not found by JWT userId, trying email lookup:', { userId, userEmail });
+        if (userEmail) {
+          const [userByEmail] = await db.select({
+            id: users.id,
+            email: users.email,
+            role: users.role
+          })
+          .from(users)
+          .where(eq(users.email, userEmail))
+          .limit(1);
+          
+          if (userByEmail) {
+            console.log('✅ Found user by email, using correct userId:', {
+              oldUserId: userId,
+              newUserId: userByEmail.id
+            });
+            userId = userByEmail.id;
+          } else {
+            console.error('❌ User not found by email:', userEmail);
+            return res.status(404).json({ 
+              error: { 
+                code: "user_not_found", 
+                message: "User not found. Please log out and log back in to refresh your session." 
+              } 
+            });
+          }
+        } else {
+          return res.status(404).json({ 
+            error: { 
+              code: "user_not_found", 
+              message: "User not found. Please log out and log back in to refresh your session." 
+            } 
+          });
+        }
       }
       
       const updateData: any = {};
@@ -1639,6 +1745,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: "User not found" 
           } 
         });
+      }
+      
+      // Invalidate cache
+      try {
+        await cacheInvalidate(`user:${userId}`);
+      } catch (cacheError) {
+        console.warn('⚠️ Failed to invalidate cache:', cacheError);
       }
       
       res.json({

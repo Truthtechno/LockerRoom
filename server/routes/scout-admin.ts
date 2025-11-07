@@ -82,17 +82,11 @@ export function registerScoutAdminRoutes(app: Express) {
           });
         }
 
-        // Generate secure OTP (10 alphanumeric characters) - matching student creation pattern
-        const generateSecureOTP = () => {
-          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-          let result = '';
-          for (let i = 0; i < 10; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-          }
-          return result;
-        };
-        
-        const generatedOTP = otp || generateSecureOTP();
+        // Generate secure OTP (6-digit numeric for consistency with other accounts)
+        const generatedOTP = otp || Math.floor(100000 + Math.random() * 900000).toString();
+        const otpHash = await bcrypt.hash(generatedOTP, 10);
+        const otpExpiresAt = new Date();
+        otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 30); // 30 minutes expiration
 
         // Check if email already exists
         const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -147,10 +141,12 @@ export function registerScoutAdminRoutes(app: Express) {
           }
         }
 
-        // Hash the OTP as password (using salt rounds 12 - matching student creation pattern)
-        const passwordHash = await bcrypt.hash(generatedOTP, 12);
+        // Generate initial password hash (will be replaced on first login)
+        const cryptoModule = await import('crypto');
+        const initialPassword = cryptoModule.randomUUID();
+        const passwordHash = await bcrypt.hash(initialPassword, 12);
 
-        // Create user (matching student creation pattern exactly)
+        // Create user with OTP stored securely
         const [newUser] = await db.insert(users).values({
           email,
           passwordHash,
@@ -159,8 +155,10 @@ export function registerScoutAdminRoutes(app: Express) {
           name,
           xenId,
           profilePicUrl,
-          isOneTimePassword: true, // Flag to force password reset on first login (matching student pattern)
-          emailVerified: false,
+          isOneTimePassword: true, // Flag to force password reset on first login
+          emailVerified: true, // XEN scouts created by scout admin are pre-verified
+          otpHash: otpHash,
+          otpExpiresAt: otpExpiresAt
         }).returning();
 
         // Update linkedId to point to the user's own ID
@@ -194,6 +192,22 @@ export function registerScoutAdminRoutes(app: Express) {
 
         console.log(`🎯 Scout created: ${newUser.name} (XEN ID: ${newUser.xenId})`);
 
+        // Send welcome email with OTP to XEN scout
+        const { sendXenScoutAccountEmail } = await import("../email");
+        const emailResult = await sendXenScoutAccountEmail(
+          email,
+          name,
+          generatedOTP,
+          xenId
+        );
+        
+        if (!emailResult.success) {
+          console.error('📧 Failed to send XEN scout account email:', emailResult.error);
+          // Don't fail scout creation if email fails, but log it
+        } else {
+          console.log(`📧 Welcome email with OTP sent to XEN scout: ${email}`);
+        }
+
         // Notify scout admins about the new scout
         notifyScoutAdminsOfNewScout(newUser.id, newUser.name).catch(err => {
           console.error('❌ Failed to notify scout admins (non-critical):', err);
@@ -218,9 +232,8 @@ export function registerScoutAdminRoutes(app: Express) {
             profilePicUrl: newUser.profilePicUrl,
             createdAt: newUser.createdAt,
           },
-          otp: generatedOTP,
-          oneTimePassword: generatedOTP, // Also include for consistency with school admin
-          message: "Scout created successfully with temporary password"
+          message: "Scout created successfully. A welcome email with login instructions has been sent to the scout."
+          // OTP removed from response for security - sent via email instead
         });
 
       } catch (error) {

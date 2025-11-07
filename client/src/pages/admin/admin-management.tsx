@@ -37,7 +37,7 @@ type ScoutAdmin = {
 const adminFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
   email: z.string().email("Valid email is required").max(255, "Email must be less than 255 characters"),
-  role: z.enum(["system_admin", "moderator", "scout_admin", "xen_scout", "finance", "support", "coach", "analyst"]).default("moderator"),
+  role: z.enum(["system_admin", "scout_admin", "xen_scout"]).default("system_admin"),
 });
 
 type AdminFormData = z.infer<typeof adminFormSchema>;
@@ -74,7 +74,7 @@ export default function AdminManagement() {
     defaultValues: {
       name: "",
       email: "",
-      role: "moderator",
+      role: "system_admin",
     },
   });
 
@@ -82,36 +82,46 @@ export default function AdminManagement() {
     queryKey: ["/api/scout-admins"],
   });
 
-  // Calculate metrics
+  // Calculate metrics - only for active roles: system_admin, scout_admin, xen_scout
   const metrics = useMemo(() => {
     if (!scoutAdmins) {
       return {
         total: 0,
         systemAdmins: 0,
         scoutAdmins: 0,
-        otherRoles: 0,
+        xenScouts: 0,
       };
     }
 
-    const systemAdmins = scoutAdmins.filter(admin => admin.role === "system_admin").length;
-    const scoutAdminsCount = scoutAdmins.filter(admin => admin.role === "scout_admin").length;
-    const otherRoles = scoutAdmins.filter(admin => 
-      admin.role !== "system_admin" && admin.role !== "scout_admin"
-    ).length;
+    // Filter to only active roles
+    const activeRoles = ['system_admin', 'scout_admin', 'xen_scout'];
+    const activeAdmins = scoutAdmins.filter(admin => activeRoles.includes(admin.role));
+
+    const systemAdmins = activeAdmins.filter(admin => admin.role === "system_admin").length;
+    const scoutAdminsCount = activeAdmins.filter(admin => admin.role === "scout_admin").length;
+    const xenScouts = activeAdmins.filter(admin => admin.role === "xen_scout").length;
 
     return {
-      total: scoutAdmins.length,
+      total: activeAdmins.length,
       systemAdmins,
       scoutAdmins: scoutAdminsCount,
-      otherRoles,
+      xenScouts,
     };
   }, [scoutAdmins]);
 
-  // Filter and search admins
+  // Filter and search admins - only show active roles: system_admin, scout_admin, xen_scout
   const filteredAdmins = useMemo(() => {
     if (!scoutAdmins) return [];
     
+    // Only include active roles
+    const activeRoles = ['system_admin', 'scout_admin', 'xen_scout'];
+    
     return scoutAdmins.filter(admin => {
+      // Only show active roles
+      if (!activeRoles.includes(admin.role)) {
+        return false;
+      }
+
       // Search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -174,19 +184,11 @@ export default function AdminManagement() {
         setOtpDisplay(data.otp);
         setScoutData(data.scout || data.admin);
         setShowOtpModal(true);
-      }
-      
-      // For non-scout roles, show a message about coming soon
-      const createdRole = data?.admin?.role;
-      if (createdRole && !['scout_admin', 'xen_scout'].includes(createdRole)) {
-        toast({
-          title: "Admin Created Successfully! 🎉",
-          description: `${createdRole} portal is coming soon. The admin can log in but will see a placeholder page until their portal is implemented.`,
-        });
       } else {
+        // For system_admin (no OTP needed), show success message
         toast({
           title: "Admin Created Successfully! 🎉",
-          description: data.message || "Admin has been successfully registered. Please share the OTP securely if applicable.",
+          description: data.message || "Admin has been successfully registered. A welcome email with login instructions has been sent.",
         });
       }
     },
@@ -616,13 +618,8 @@ export default function AdminManagement() {
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="system_admin">System Admin</SelectItem>
-                                <SelectItem value="moderator">Moderator</SelectItem>
                                 <SelectItem value="scout_admin">Scout Admin</SelectItem>
                                 <SelectItem value="xen_scout">XEN Scout</SelectItem>
-                                <SelectItem value="finance">Finance</SelectItem>
-                                <SelectItem value="support">Support</SelectItem>
-                                <SelectItem value="coach">Coach</SelectItem>
-                                <SelectItem value="analyst">Analyst</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -687,12 +684,12 @@ export default function AdminManagement() {
           
           <Card className="p-3 sm:p-6">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-0">
-              <CardTitle className="text-xs sm:text-sm font-medium">Other Roles</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium">XEN Scouts</CardTitle>
               <User className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent className="p-0 pt-2">
               <div className="text-xl sm:text-2xl font-bold text-green-600">
-                {metrics.otherRoles}
+                {metrics.xenScouts}
               </div>
             </CardContent>
           </Card>
@@ -719,11 +716,6 @@ export default function AdminManagement() {
               <SelectItem value="system_admin">System Admin</SelectItem>
               <SelectItem value="scout_admin">Scout Admin</SelectItem>
               <SelectItem value="xen_scout">XEN Scout</SelectItem>
-              <SelectItem value="moderator">Moderator</SelectItem>
-              <SelectItem value="finance">Finance</SelectItem>
-              <SelectItem value="support">Support</SelectItem>
-              <SelectItem value="coach">Coach</SelectItem>
-              <SelectItem value="analyst">Analyst</SelectItem>
             </SelectContent>
           </Select>
           <Button 

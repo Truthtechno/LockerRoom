@@ -12,6 +12,8 @@ import { useNotificationToast } from "@/hooks/use-notification-toast";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import ResetPassword from "@/pages/reset-password";
+import VerifyEmail from "@/pages/verify-email";
+import ResetPasswordToken from "@/pages/reset-password-token";
 import Feed from "./pages/feed";
 import CreatePostPage from "./pages/create";
 import Profile from "./pages/profile";
@@ -103,6 +105,8 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/verify-email" component={VerifyEmail} />
+      <Route path="/reset-password-token" component={ResetPasswordToken} />
       
       <Route path="/feed">
         <ProtectedRoute>

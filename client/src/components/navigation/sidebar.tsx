@@ -75,10 +75,16 @@ export default function Sidebar() {
 
     // Listen for auth-change events to immediately refresh data
     const handleAuthChange = () => {
-      // Always invalidate queries regardless of current user state
-      // This ensures fresh data after login/logout
+      console.log('🔄 Sidebar: auth-change event received, refetching user data...');
+      // Remove cached queries first
+      queryClient.removeQueries({ queryKey: ["/api/users/me"] });
+      queryClient.removeQueries({ queryKey: ["/api/users/me", user?.id] });
+      // Invalidate and refetch queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/students/me"] });
+      // Force immediate refetch
+      queryClient.refetchQueries({ queryKey: ["/api/users/me", user?.id], type: 'active' });
     };
 
     window.addEventListener('auth-change', handleAuthChange);
@@ -118,9 +124,11 @@ export default function Sidebar() {
 
   // Use currentUserData if available and matches current user, otherwise fall back to user from auth hook
   // This prevents showing stale data from a previous user session
+  // CRITICAL: Prioritize user context profilePicUrl (updated immediately) over query data
   // For students, prefer studentProfile profilePicUrl as it may be more up-to-date
   const displayUser = (currentUserData && currentUserData.id === user?.id) ? currentUserData : user;
-  const displayProfilePic = studentProfile?.profilePicUrl || displayUser?.profilePicUrl;
+  // Use user context profilePicUrl first (updated immediately), then query data
+  const displayProfilePic = studentProfile?.profilePicUrl || user?.profilePicUrl || displayUser?.profilePicUrl;
 
   const handleLogout = () => {
     logout(); // logout() now handles clearing data and redirecting

@@ -275,8 +275,9 @@ export function registerSchoolAdminRoutes(app: Express) {
           return result;
         };
         
-        const otp = generateSecureOTP();
-        const hash = await bcrypt.hash(otp, 12); // Increased salt rounds for security
+        // Generate initial password for student (will be replaced with OTP on first login)
+        const initialPassword = generateSecureOTP();
+        const hash = await bcrypt.hash(initialPassword, 12); // Increased salt rounds for security
   
         // Check if student with this email already exists
         const existingUser = await db.select().from(users).where(eq(users.email, email));
@@ -326,6 +327,12 @@ export function registerSchoolAdminRoutes(app: Express) {
         console.log('📝 Step 1: Creating user for student:', email, 'with schoolId:', schoolId);
         const tempStudentId = crypto.randomUUID();
         
+        // Generate OTP for student
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpHash = await bcrypt.hash(otp, 10);
+        const otpExpiresAt = new Date();
+        otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 30); // 30 minutes expiration
+        
         const [userRow] = await db.insert(users).values({
           email,
           name, // Include student name in users table
@@ -334,7 +341,9 @@ export function registerSchoolAdminRoutes(app: Express) {
           passwordHash: hash,
           linkedId: tempStudentId, // Temporary ID, will be updated in step 3
           emailVerified: false,
-          isOneTimePassword: true // Flag to force password reset on first login
+          isOneTimePassword: true, // Flag to force password reset on first login
+          otpHash: otpHash,
+          otpExpiresAt: otpExpiresAt
         }).returning();
         
         console.log('✅ Step 1 completed: User created with ID:', userRow.id, 'and schoolId:', userRow.schoolId);
@@ -420,9 +429,23 @@ export function registerSchoolAdminRoutes(app: Express) {
           // Don't fail student creation if auto-follow fails
         }
 
-        // Log OTP generation (no email/SMS sent for now)
-        console.log(`🎓 Student created: ${name} (${email}) with OTP: ${otp}`);
-        console.log(`📝 OTP will be displayed in admin UI for secure sharing`);
+        // Send welcome email with OTP to student
+        const { sendStudentAccountEmail } = await import("../email");
+        const emailResult = await sendStudentAccountEmail(
+          email,
+          name,
+          otp,
+          school.name
+        );
+        
+        if (!emailResult.success) {
+          console.error('📧 Failed to send student account email:', emailResult.error);
+          // Don't fail student creation if email fails, but log it
+        } else {
+          console.log(`📧 Welcome email with OTP sent to student: ${email}`);
+        }
+        
+        console.log(`🎓 Student created: ${name} (${email})`);
         console.log(`🔗 User ${userRow.id} linked to student ${studentRow.id}`);
         console.log('🎉 Student creation completed successfully!', {
           studentId: studentRow.id,
@@ -433,10 +456,10 @@ export function registerSchoolAdminRoutes(app: Express) {
           email: email
         });
   
-        // Return success response with OTP
+        // Return success response (OTP sent via email, not in response for security)
         return res.json({
           success: true,
-          message: 'Student added successfully',
+          message: 'Student added successfully. A welcome email with login instructions has been sent to the student.',
           student: {
             id: studentRow.id,
             userId: userRow.id,
@@ -445,8 +468,8 @@ export function registerSchoolAdminRoutes(app: Express) {
             phone: phone || null,
             schoolId,
             profilePicUrl: profilePicUrl // Include the uploaded profile picture URL
-          },
-          oneTimePassword: otp // Return plain OTP for admin display
+          }
+          // OTP removed from response for security - sent via email instead
         });
         
       } catch (error) {

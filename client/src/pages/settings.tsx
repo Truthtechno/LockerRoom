@@ -89,16 +89,35 @@ export default function Settings() {
 
   // Load user data
   // CRITICAL: Include user?.id in query key to prevent stale data when switching users
-  const { data: userData, isLoading } = useQuery({
+  const { data: userData, isLoading, refetch: refetchUserData } = useQuery({
     queryKey: ["/api/users/me", user?.id],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/users/me");
-      return response.json();
+      const data = await response.json();
+      // Update auth context with fresh data to keep it in sync
+      if (data && updateUser) {
+        updateUser(data);
+      }
+      return data;
     },
     enabled: !!user?.id,
-    staleTime: 30_000, // 30 seconds
+    staleTime: 0, // Always consider stale to force fresh fetches after profile updates
     refetchOnMount: true, // Always refetch on mount to ensure fresh data
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   });
+
+  // Listen for auth-change events to immediately refetch user data when profile is updated
+  useEffect(() => {
+    const handleAuthChange = () => {
+      console.log('🔄 Auth change detected, refetching user data...');
+      refetchUserData();
+    };
+    
+    window.addEventListener('auth-change', handleAuthChange);
+    return () => {
+      window.removeEventListener('auth-change', handleAuthChange);
+    };
+  }, [refetchUserData]);
 
   // Load student profile data for students
   // IMPORTANT: Include user.id in query key to prevent stale data when switching between students
@@ -119,8 +138,23 @@ export default function Settings() {
         name: userData.name || "",
         email: userData.email || "",
       });
+      // Clear preview once userData has been updated with new profile picture
+      // This ensures smooth transition from preview to actual image
+      if (userData.profilePicUrl && profilePicPreview) {
+        // Only clear if the userData profilePicUrl matches what we expect
+        // This prevents clearing the preview prematurely
+        // Use a small delay to ensure the new image has loaded in the browser
+        const timer = setTimeout(() => {
+          // Double-check that userData has the new profile picture before clearing preview
+          if (userData.profilePicUrl && userData.profilePicUrl !== user?.profilePicUrl) {
+            // userData has updated, safe to clear preview
+            clearPreviews();
+          }
+        }, 200);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [userData]);
+  }, [userData, profilePicPreview, clearPreviews]);
 
   const updateAccountMutation = useMutation({
     mutationFn: async (updates: { name?: string; email?: string }) => {
@@ -473,8 +507,9 @@ export default function Settings() {
                     <Avatar className="w-20 h-20">
                       <AvatarImage
                         src={
-                          profilePicPreview ||
-                          userData?.profilePicUrl || // unified from API
+                          profilePicPreview || // Show preview immediately during upload
+                          user?.profilePicUrl || // Use user from auth context (updated immediately after upload)
+                          userData?.profilePicUrl || // Fallback to userData from query
                           undefined // never pass ""
                         }
                         alt={user?.name || "Profile"}

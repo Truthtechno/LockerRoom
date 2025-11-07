@@ -17,10 +17,18 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").default(false),
   isOneTimePassword: boolean("is_one_time_password").default(false), // Flag for OTP users
   xenId: text("xen_id"), // XEN ID for scouts (e.g., XSA-25###)
-  otp: text("otp"), // One-time password for scouts
+  otp: text("otp"), // One-time password for scouts (legacy - use otpHash instead)
   profilePicUrl: text("profile_pic_url"), // Profile picture URL
   isFrozen: boolean("is_frozen").default(false), // Flag for frozen/disabled accounts
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+  // Email authentication fields
+  emailVerificationToken: text("email_verification_token"), // Token for email verification
+  emailVerificationTokenExpiresAt: timestamp("email_verification_token_expires_at"), // Expiration time for verification token
+  passwordResetToken: text("password_reset_token"), // Token for password reset
+  passwordResetTokenExpiresAt: timestamp("password_reset_token_expires_at"), // Expiration time for reset token
+  otpHash: text("otp_hash"), // Hashed OTP (separate from password_hash)
+  otpExpiresAt: timestamp("otp_expires_at"), // Expiration time for OTP
+  lastEmailSentAt: timestamp("last_email_sent_at"), // Rate limiting for email sends
 });
 
 // Role-specific profile tables

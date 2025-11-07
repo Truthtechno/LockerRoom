@@ -4,6 +4,7 @@ import { db } from '../db';
 import { users, schools, schoolAdmins, systemAdmins, students, subscriptions, schoolSettings, schoolApplications, posts, studentFollowers, banners, schoolPaymentRecords } from '../../shared/schema';
 import { eq, sql, and } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { AuthStorage } from '../auth-storage';
 import { storage } from '../storage';
 import multer from 'multer';
@@ -242,18 +243,15 @@ export function registerSystemAdminRoutes(app: Express) {
           });
         }
 
-        // Generate secure OTP (10 alphanumeric characters) - always required for school admin creation
-        const generateSecureOTP = () => {
-          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-          let result = '';
-          for (let i = 0; i < 10; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-          }
-          return result;
-        };
+        // Generate secure OTP (6-digit numeric for consistency with student OTPs)
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpHash = await bcrypt.hash(otp, 10);
+        const otpExpiresAt = new Date();
+        otpExpiresAt.setMinutes(otpExpiresAt.getMinutes() + 30); // 30 minutes expiration
         
-        const otp = generateSecureOTP();
-        const passwordHash = await bcrypt.hash(otp, 12);
+        // Generate initial password hash (will be replaced on first login)
+        const initialPassword = crypto.randomUUID();
+        const passwordHash = await bcrypt.hash(initialPassword, 12);
 
         // Create school admin profile first
         const [schoolAdmin] = await db.insert(schoolAdmins).values({
@@ -270,8 +268,10 @@ export function registerSystemAdminRoutes(app: Express) {
           passwordHash,
           role: 'school_admin',
           linkedId: schoolAdmin.id,
-          emailVerified: true,
+          emailVerified: true, // School admins created by system admin are pre-verified
           isOneTimePassword: true, // Flag to force password reset on first login
+          otpHash: otpHash,
+          otpExpiresAt: otpExpiresAt
         }).returning();
 
         // Auto-follow all existing students in the school
@@ -312,7 +312,23 @@ export function registerSystemAdminRoutes(app: Express) {
           // Don't fail school admin creation if auto-follow fails
         }
 
-        console.log(`👨‍💼 School admin created: ${name} (${email}) for school: ${school.name} with OTP: ${otp}`);
+        // Send welcome email with OTP to school admin
+        const { sendSchoolAdminAccountEmail } = await import("../email");
+        const emailResult = await sendSchoolAdminAccountEmail(
+          email,
+          name,
+          otp,
+          school.name
+        );
+        
+        if (!emailResult.success) {
+          console.error('📧 Failed to send school admin account email:', emailResult.error);
+          // Don't fail school admin creation if email fails, but log it
+        } else {
+          console.log(`📧 Welcome email with OTP sent to school admin: ${email}`);
+        }
+
+        console.log(`👨‍💼 School admin created: ${name} (${email}) for school: ${school.name}`);
 
         // Notify system admins about the new school admin
         const { notifySystemAdminsOfNewSchoolAdmin } = await import('../utils/notification-helpers');
@@ -322,6 +338,7 @@ export function registerSystemAdminRoutes(app: Express) {
 
         res.json({
           success: true,
+          message: 'School admin created successfully. A welcome email with login instructions has been sent to the admin.',
           schoolAdmin: {
             id: schoolAdmin.id,
             name: schoolAdmin.name,
@@ -329,12 +346,8 @@ export function registerSystemAdminRoutes(app: Express) {
             schoolId: schoolAdmin.schoolId,
             schoolName: school.name,
             position: schoolAdmin.position
-          },
-          otp: otp, // Return plain OTP for UI display
-          notifications: {
-            emailSent: false, // No email sent for now
-            smsSent: false   // No SMS sent for now
           }
+          // OTP removed from response for security - sent via email instead
         });
       } catch (error) {
         console.error('❌ Error creating school admin:', error);
@@ -442,25 +455,181 @@ export function registerSystemAdminRoutes(app: Express) {
     }
   );
 
+  // Conditional multer middleware - only process multipart/form-data
+  const conditionalMulter = (req: any, res: any, next: any) => {
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+      return upload.single('profilePic')(req, res, next);
+    }
+    // Skip multer for JSON requests
+    next();
+  };
+
   // Safe profile update for system admin
   app.put('/api/system-admin/profile',
     requireAuth,
     requireRole('system_admin'),
-    upload.single('profilePic'),
+    conditionalMulter,
     async (req, res) => {
       try {
-        const userId = (req as any).auth.id;
-        const { name } = req.body;
+        let userId = (req as any).auth?.id;
+        let linkedId = (req as any).auth?.linkedId;
+        const userRole = (req as any).auth?.role;
+        const userEmail = (req as any).auth?.email;
+        
+        console.log('📤 System admin profile update request:', {
+          userId,
+          linkedId,
+          userRole,
+          userEmail,
+          contentType: req.headers['content-type'],
+          hasFile: !!req.file,
+          bodyKeys: Object.keys(req.body || {})
+        });
+        
+        if (!userId) {
+          console.error('❌ No userId in auth object');
+          return res.status(401).json({
+            error: {
+              code: 'unauthorized',
+              message: 'User ID not found in authentication token. Please log out and log back in.'
+            }
+          });
+        }
+        
+        // Verify user exists in database - JWT might have stale userId
+        // Use let instead of const to allow reassignment in fallback path
+        let userInDb = await db.select({
+          id: users.id,
+          email: users.email,
+          role: users.role,
+          linkedId: users.linkedId
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+        
+        // Ensure userInDb is always set - fix fallback path
+        if (!userInDb || userInDb.length === 0) {
+          console.warn('⚠️ User from JWT not found in database, trying to find by email:', { 
+            jwtUserId: userId, 
+            email: userEmail 
+          });
+          
+          // Fallback: try to find user by email if userId doesn't exist
+          if (userEmail) {
+            const [userByEmail] = await db.select({
+              id: users.id,
+              email: users.email,
+              role: users.role,
+              linkedId: users.linkedId
+            })
+            .from(users)
+            .where(eq(users.email, userEmail))
+            .limit(1);
+            
+            if (userByEmail && userByEmail.role === 'system_admin') {
+              console.log('✅ Found user by email, using correct userId:', {
+                oldUserId: userId,
+                newUserId: userByEmail.id,
+                email: userByEmail.email
+              });
+              // CRITICAL: Set userInDb to array with userByEmail so it's available later
+              userInDb = [userByEmail];
+              userId = userByEmail.id;
+              linkedId = userByEmail.linkedId;
+            } else {
+              console.error('❌ User not found by email or role mismatch:', { 
+                email: userEmail, 
+                found: !!userByEmail,
+                role: userByEmail?.role 
+              });
+              return res.status(401).json({
+                error: {
+                  code: 'invalid_token',
+                  message: 'Your session token is invalid. Please log out and log back in to refresh your session.'
+                }
+              });
+            }
+          } else {
+            console.error('❌ Cannot lookup user - no email in JWT');
+            return res.status(401).json({
+              error: {
+                code: 'invalid_token',
+                message: 'Your session token is invalid. Please log out and log back in to refresh your session.'
+              }
+            });
+          }
+        }
+        
+        // Verify userInDb is set and extract first element
+        if (!userInDb || userInDb.length === 0) {
+          console.error('❌ User not found after fallback');
+          return res.status(401).json({
+            error: {
+              code: 'user_not_found',
+              message: 'User not found in database'
+            }
+          });
+        }
+        
+        const currentUser = userInDb[0];
+        
+        // Verify role matches (currentUser is guaranteed to be set at this point)
+        if (currentUser.role !== 'system_admin') {
+          console.error('❌ User role mismatch:', { 
+            userId: currentUser.id, 
+            role: currentUser.role, 
+            expected: 'system_admin' 
+          });
+          return res.status(403).json({
+            error: {
+              code: 'forbidden',
+              message: 'You do not have permission to update system admin profiles'
+            }
+          });
+        }
+        
+        // Use the linkedId from database (more reliable than JWT)
+        linkedId = currentUser.linkedId;
+        console.log('✅ User verified in database:', {
+          userId: currentUser.id,
+          email: currentUser.email,
+          linkedId: currentUser.linkedId
+        });
+        
+        // Parse body - handle both JSON and form-data
+        let name: string | undefined;
+        let profilePicUrl: string | undefined;
+        
+        if (req.headers['content-type']?.includes('application/json')) {
+          // JSON body
+          const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+          name = body.name;
+          profilePicUrl = body.profilePicUrl;
+        } else {
+          // Form data
+          name = req.body.name;
+          profilePicUrl = req.body.profilePicUrl;
+        }
+        
+        console.log('📋 Parsed update data:', { name, profilePicUrl, hasFile: !!req.file });
         
         let updateData: any = {};
         
         // Only update name if provided
-        if (name !== undefined && name.trim()) {
+        if (name !== undefined && name !== null && name.trim()) {
           updateData.name = name.trim();
         }
         
-        // Handle profile picture upload to Cloudinary
+        // Handle profile picture URL from JSON body (already uploaded to Cloudinary)
+        if (profilePicUrl !== undefined && profilePicUrl !== null) {
+          updateData.profilePicUrl = profilePicUrl;
+        }
+        
+        // Handle profile picture upload to Cloudinary via file upload
         if (req.file) {
+          console.log('📁 Processing file upload to Cloudinary');
           const result = await new Promise((resolve, reject) => {
             cloudinary.uploader.upload_stream(
               { 
@@ -478,10 +647,12 @@ export function registerSystemAdminRoutes(app: Express) {
           });
 
           updateData.profilePicUrl = (result as any).secure_url;
+          console.log('✅ File uploaded to Cloudinary:', updateData.profilePicUrl);
         }
         
         // Only proceed if there's something to update
         if (Object.keys(updateData).length === 0) {
+          console.warn('⚠️ No updates provided');
           return res.status(400).json({
             error: {
               code: 'no_updates',
@@ -490,33 +661,96 @@ export function registerSystemAdminRoutes(app: Express) {
           });
         }
         
+        console.log('💾 Updating system admin profile with data:', updateData);
+        
         // Use safe update method that only updates provided fields
         const updatedProfile = await authStorage.updateUserProfile(userId, 'system_admin', updateData);
         
         if (!updatedProfile) {
+          console.error('❌ System admin profile update returned null/undefined:', {
+            userId,
+            linkedId,
+            updateData
+          });
           return res.status(404).json({
             error: {
               code: 'profile_not_found',
-              message: 'System admin profile not found'
+              message: 'System admin profile not found. Please ensure your account is properly configured.'
             }
           });
         }
         
-        res.json({
-          success: true,
-          profile: {
+        console.log('✅ System admin profile updated successfully:', {
             id: updatedProfile.id,
             name: updatedProfile.name,
-            profilePicUrl: updatedProfile.profilePicUrl,
-            role: updatedProfile.role
-          }
+          hasProfilePic: !!updatedProfile.profilePicUrl
         });
-      } catch (error) {
-        console.error('❌ Error updating system admin profile:', error);
+        
+        // Also update the users table profilePicUrl and name if provided (for consistency)
+        const userUpdates: any = {};
+        if (updateData.profilePicUrl) {
+          userUpdates.profilePicUrl = updateData.profilePicUrl;
+        }
+        if (updateData.name) {
+          userUpdates.name = updateData.name;
+        }
+        
+        if (Object.keys(userUpdates).length > 0) {
+          await db.update(users)
+            .set(userUpdates)
+            .where(eq(users.id, userId));
+          console.log('✅ Updated users table with profile data');
+        }
+        
+        // CRITICAL: Invalidate Redis cache BEFORE returning response
+        // This ensures the next /api/users/me request gets fresh data immediately
+        try {
+          const { cacheInvalidate } = await import('../cache');
+          await cacheInvalidate(`user:${userId}`);
+          console.log('✅ Invalidated user cache:', `user:${userId}`);
+          
+          // Also invalidate any pattern-based caches (if Redis supports it)
+          try {
+            const { cacheInvalidatePattern } = await import('../cache');
+            await cacheInvalidatePattern(`user:${userId}*`);
+            console.log('✅ Invalidated user cache pattern');
+          } catch (patternError) {
+            // Pattern invalidation might not be supported, that's okay
+            console.log('ℹ️ Pattern-based cache invalidation not available');
+          }
+        } catch (cacheError) {
+          console.warn('⚠️ Failed to invalidate cache (non-critical):', cacheError);
+          // Don't fail the request if cache invalidation fails, but log it
+        }
+        
+        // Return response in same format as school-admin for consistency
+        // This matches what the client expects: { id, name, email, profilePicUrl }
+        // Use currentUser.email (guaranteed to be set at this point)
+        const response = {
+          id: userId,
+          name: updatedProfile.name,
+          email: currentUser.email,
+          profilePicUrl: updatedProfile.profilePicUrl,
+          role: 'system_admin'
+        };
+        
+        console.log('✅ Returning profile update response:', {
+          id: response.id,
+          email: response.email,
+          profilePicUrl: response.profilePicUrl
+        });
+        
+        res.json(response);
+      } catch (error: any) {
+        console.error('❌ Error updating system admin profile:', {
+          error: error.message,
+          stack: error.stack,
+          userId: (req as any).auth?.id
+        });
         res.status(500).json({
           error: {
             code: 'server_error',
-            message: 'Failed to update profile'
+            message: error.message || 'Failed to update profile'
           }
         });
       }
