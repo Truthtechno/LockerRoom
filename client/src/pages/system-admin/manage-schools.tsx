@@ -101,6 +101,8 @@ interface School {
   last_payment_date?: string; // Database field name
   createdAt: string;
   created_at?: string; // Database field name
+  maxStudents?: number; // CamelCase from API/UI
+  max_students?: number; // Snake_case from DB
   admin_count?: number;
   student_count?: number;
   post_count?: number;
@@ -265,6 +267,7 @@ export default function ManageSchools() {
       isActive: school.isActive ?? school.is_active ?? true,
       lastPaymentDate: school.lastPaymentDate || school.last_payment_date,
       createdAt: school.createdAt || school.created_at || school.createdAt,
+      maxStudents: school.maxStudents ?? school.max_students ?? 10,
     };
   };
 

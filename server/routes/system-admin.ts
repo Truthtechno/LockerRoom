@@ -1,4 +1,4 @@
-import { Express } from 'express';
+import { Express, Request, Response } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { db } from '../db';
 import { users, schools, schoolAdmins, systemAdmins, students, subscriptions, schoolSettings, schoolApplications, posts, studentFollowers, banners, schoolPaymentRecords } from '../../shared/schema';
@@ -1816,7 +1816,7 @@ export function registerSystemAdminRoutes(app: Express) {
     requireRole('system_admin'),
     upload.single('profilePic'),
     handleMulterError,
-    async (req, res) => {
+    async (req: Request, res: Response) => {
       try {
         const { schoolId } = req.params;
         
