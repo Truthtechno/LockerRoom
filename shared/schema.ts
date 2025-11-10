@@ -960,6 +960,7 @@ export type StudentWithStats = Student & {
 };
 
 export type StudentSearchResult = Student & {
+  user: User;
   school?: School;
   followersCount: number;
   isFollowing?: boolean;

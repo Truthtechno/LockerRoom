@@ -10,7 +10,7 @@ const baseFormTemplateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   description: z.string().optional().or(z.literal("")),
   fields: z.array(z.object({
-    fieldType: z.enum(['short_text', 'paragraph', 'star_rating', 'multiple_choice', 'multiple_selection', 'number', 'date', 'dropdown']),
+    fieldType: z.enum(['short_text', 'paragraph', 'star_rating', 'multiple_choice', 'multiple_selection', 'number', 'date', 'dropdown', 'section_header']),
     label: z.string().min(1, 'Label is required'),
     placeholder: z.string().optional().or(z.literal("")),
     helpText: z.string().optional().or(z.literal("")),
@@ -47,7 +47,7 @@ const createFormTemplateSchema = baseFormTemplateSchema.refine((data) => {
 // Update schema - use base schema for partial() since refine() returns ZodEffects
 const updateFormTemplateSchema = baseFormTemplateSchema.partial().extend({
   fields: z.array(z.object({
-    fieldType: z.enum(['short_text', 'paragraph', 'star_rating', 'multiple_choice', 'multiple_selection', 'number', 'date', 'dropdown']),
+    fieldType: z.enum(['short_text', 'paragraph', 'star_rating', 'multiple_choice', 'multiple_selection', 'number', 'date', 'dropdown', 'section_header']),
     label: z.string().min(1, 'Label is required'),
     placeholder: z.string().optional().or(z.literal("")),
     helpText: z.string().optional().or(z.literal("")),
@@ -144,7 +144,7 @@ export function registerEvaluationFormsRoutes(app: Express) {
             createdBy: req.user!.id,
             version: 1,
           },
-          fields.map(field => ({
+          (fields.map(field => ({
             fieldType: field.fieldType,
             label: field.label,
             placeholder: field.placeholder || null,
@@ -153,11 +153,11 @@ export function registerEvaluationFormsRoutes(app: Express) {
             orderIndex: field.orderIndex,
             options: field.options ? JSON.stringify(field.options) as any : null,
             validationRules: field.validationRules ? JSON.stringify(field.validationRules) as any : null,
-          }))
+          })) as any)
         );
 
         // Notify system admin, scouts admin, and xen scouts about the new form
-        notifyFormCreated(template.id, template.name, req.user!.id).catch(err => {
+        notifyFormCreated(template.id, template.name, req.user!.email).catch(err => {
           console.error('Error sending form creation notifications:', err);
           // Don't fail the request if notifications fail
         });
@@ -254,7 +254,7 @@ export function registerEvaluationFormsRoutes(app: Express) {
             name: name || undefined,
             description: description !== undefined ? description || null : undefined,
           },
-          fields ? fields.map(field => ({
+          fields ? (fields.map(field => ({
             fieldType: field.fieldType,
             label: field.label,
             placeholder: field.placeholder || null,
@@ -263,7 +263,7 @@ export function registerEvaluationFormsRoutes(app: Express) {
             orderIndex: field.orderIndex,
             options: field.options ? JSON.stringify(field.options) as any : null,
             validationRules: field.validationRules ? JSON.stringify(field.validationRules) as any : null,
-          })) : undefined
+          })) as any) : undefined
         );
 
         if (!template) {
@@ -497,7 +497,7 @@ export function registerEvaluationFormsRoutes(app: Express) {
               formTemplateId,
               formTemplate.name,
               req.user!.id,
-              req.user!.name,
+              req.user!.email,
               finalStudentData?.name || null
             ).then(() => {
               console.log('✅ notifyFormSubmitted completed successfully');
@@ -702,7 +702,7 @@ export function registerEvaluationFormsRoutes(app: Express) {
                 submission.formTemplateId,
                 formTemplate.name,
                 existingSubmission.submittedBy,
-                submitterUser.name,
+                submitterUser.name || '',
                 submission.studentName || null
               ).then(() => {
                 console.log('✅ notifyFormSubmitted completed successfully');

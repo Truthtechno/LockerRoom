@@ -71,7 +71,7 @@ export function registerSystemAdminRoutes(app: Express) {
   app.post('/api/system-admin/create-school',
     requireAuth,
     requireRole('system_admin'),
-    async (req, res) => {
+    async (req: any, res: any) => {
       try {
         const { name, address, contactEmail, contactPhone, paymentAmount, paymentFrequency, maxStudents } = req.body;
         const auth = (req as any).auth;
@@ -847,27 +847,18 @@ export function registerSystemAdminRoutes(app: Express) {
         
         console.log(`✅ Enabling school account: ${schoolId}`);
         
-        // Check if school exists
         const [school] = await db.select().from(schools).where(eq(schools.id, schoolId));
         if (!school) {
           console.log(`❌ School not found: ${schoolId}`);
           return res.status(404).json({ 
-            error: { 
-              code: 'school_not_found', 
-              message: 'School not found' 
-            } 
+            error: { code: 'school_not_found', message: 'School not found' } 
           });
         }
 
-        // Update school status to enabled
         await db.update(schools)
-          .set({ 
-            isActive: true,
-            updatedAt: new Date(),
-          })
+          .set({ isActive: true, updatedAt: new Date() })
           .where(eq(schools.id, schoolId));
 
-        // Re-enable all school admin accounts for this school
         const schoolAdminUsers = await db
           .select({ id: users.id })
           .from(users)
@@ -876,11 +867,10 @@ export function registerSystemAdminRoutes(app: Express) {
 
         for (const adminUser of schoolAdminUsers) {
           await db.update(users)
-            .set({ emailVerified: true }) // Re-enable login by verifying email
+            .set({ emailVerified: true })
             .where(eq(users.id, adminUser.id));
         }
 
-        // Re-enable all student accounts for this school
         const studentUsers = await db
           .select({ id: users.id })
           .from(users)
@@ -889,7 +879,7 @@ export function registerSystemAdminRoutes(app: Express) {
 
         for (const studentUser of studentUsers) {
           await db.update(users)
-            .set({ emailVerified: true }) // Re-enable login by verifying email
+            .set({ emailVerified: true })
             .where(eq(users.id, studentUser.id));
         }
 
@@ -1476,6 +1466,91 @@ export function registerSystemAdminRoutes(app: Express) {
     }
   );
 
+  // Bulk disable users (academy admins and players)
+  app.put('/api/system-admin/users/disable',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req: any, res: any) => {
+      try {
+        const { userIds } = req.body || {};
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+          return res.status(400).json({ error: { code: 'validation_error', message: 'userIds array is required' } });
+        }
+        let updated = 0;
+        for (const id of userIds) {
+          const result = await db.update(users).set({ isFrozen: true }).where(eq(users.id, id));
+          // drizzle returns void on Neon; count manually
+          updated += 1;
+        }
+        return res.json({ success: true, message: 'Selected accounts have been disabled', count: updated });
+      } catch (error) {
+        console.error('❌ Error disabling users:', error);
+        return res.status(500).json({ error: { code: 'server_error', message: 'Failed to disable users' } });
+      }
+    }
+  );
+
+  // Bulk enable users
+  app.put('/api/system-admin/users/enable',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req: any, res: any) => {
+      try {
+        const { userIds } = req.body || {};
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+          return res.status(400).json({ error: { code: 'validation_error', message: 'userIds array is required' } });
+        }
+        let updated = 0;
+        for (const id of userIds) {
+          await db.update(users).set({ isFrozen: false }).where(eq(users.id, id));
+          updated += 1;
+        }
+        return res.json({ success: true, message: 'Selected accounts have been enabled', count: updated });
+      } catch (error) {
+        console.error('❌ Error enabling users:', error);
+        return res.status(500).json({ error: { code: 'server_error', message: 'Failed to enable users' } });
+      }
+    }
+  );
+
+  // Bulk delete users (also delete linked profiles)
+  app.delete('/api/system-admin/users',
+    requireAuth,
+    requireRole('system_admin'),
+    async (req: any, res: any) => {
+      try {
+        const { userIds } = req.body || {};
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+          return res.status(400).json({ error: { code: 'validation_error', message: 'userIds array is required' } });
+        }
+        let deleted = 0;
+        for (const id of userIds) {
+          // Load user with role and linkedId
+          const [userRow] = await db.select({ id: users.id, role: users.role, linkedId: users.linkedId }).from(users).where(eq(users.id, id)).limit(1);
+          if (!userRow) continue;
+          // Delete role profile first
+          try {
+            if (userRow.role === 'student') {
+              await db.delete(students).where(eq(students.id, userRow.linkedId));
+            } else if (userRow.role === 'school_admin') {
+              await db.delete(schoolAdmins).where(eq(schoolAdmins.id, userRow.linkedId));
+            }
+          } catch (inner) {
+            const msg = inner instanceof Error ? inner.message : String(inner);
+            console.warn('⚠️ Error deleting role profile for', id, msg);
+          }
+          // Delete the user
+          await db.delete(users).where(eq(users.id, id));
+          deleted += 1;
+        }
+        return res.json({ success: true, message: 'Selected accounts have been deleted', count: deleted });
+      } catch (error) {
+        console.error('❌ Error deleting users:', error);
+        return res.status(500).json({ error: { code: 'server_error', message: 'Failed to delete users' } });
+      }
+    }
+  );
+
   // Get School Admins
   app.get('/api/system-admin/schools/:schoolId/admins',
     requireAuth,
@@ -1491,6 +1566,7 @@ export function registerSystemAdminRoutes(app: Express) {
             name: users.name,
             email: users.email,
             createdAt: users.createdAt,
+            isFrozen: users.isFrozen,
           })
           .from(schoolAdmins)
           .innerJoin(users, eq(users.linkedId, schoolAdmins.id))
@@ -1519,10 +1595,14 @@ export function registerSystemAdminRoutes(app: Express) {
     requireRole('system_admin'),
     async (req, res) => {
       try {
-        const { schoolId } = req.params;
-        const { search, sortBy = 'name', sortOrder = 'asc' } = req.query;
-        
-        let query = db
+        const { schoolId } = req.params as { schoolId: string };
+        const { search, sortOrder = 'asc' } = req.query as { search?: string; sortOrder?: 'asc' | 'desc' };
+
+        const whereClause = search && typeof search === 'string'
+          ? (sql`${students.schoolId} = ${schoolId} AND (${users.name} ILIKE ${`%${search}%`} OR ${users.email} ILIKE ${`%${search}%`})` as any)
+          : eq(students.schoolId, schoolId);
+
+        const studentsList = await db
           .select({
             studentId: students.id,
             userId: users.id,
@@ -1538,38 +1618,17 @@ export function registerSystemAdminRoutes(app: Express) {
             height: students.height,
             weight: students.weight,
             createdAt: users.createdAt,
+            isFrozen: users.isFrozen,
           })
           .from(students)
           .innerJoin(users, eq(users.linkedId, students.id))
-          .where(eq(students.schoolId, schoolId));
+          .where(whereClause)
+          .orderBy(sortOrder === 'desc' ? sql`${users.name} DESC` : sql`${users.name} ASC`);
 
-        // Add search filter if provided
-        if (search && typeof search === 'string') {
-          query = query.where(
-            sql`${users.name} ILIKE ${`%${search}%`} OR ${users.email} ILIKE ${`%${search}%`}`
-          ) as any;
-        }
-
-        // Add sorting
-        const orderBy = sortOrder === 'desc' ? sql`${users.name} DESC` : sql`${users.name} ASC`;
-        const studentsList = await query.orderBy(orderBy);
-
-        // Debug: Log first student to verify roleNumber is being returned
-        if (studentsList.length > 0) {
-          console.log('📊 Sample student data from query:', JSON.stringify(studentsList[0], null, 2));
-          console.log('📊 roleNumber value:', studentsList[0].roleNumber);
-          console.log('📊 roleNumber type:', typeof studentsList[0].roleNumber);
-          console.log('📊 roleNumber === null?', studentsList[0].roleNumber === null);
-          console.log('📊 roleNumber === undefined?', studentsList[0].roleNumber === undefined);
-        }
-
-        // Ensure roleNumber is explicitly included in response
         const normalizedStudents = studentsList.map(student => ({
           ...student,
-          roleNumber: student.roleNumber || null, // Explicitly set to null if falsy
+          roleNumber: student.roleNumber || null,
         }));
-
-        console.log('📊 First normalized student:', JSON.stringify(normalizedStudents[0] || {}, null, 2));
 
         res.json({
           success: true,
@@ -1587,8 +1646,8 @@ export function registerSystemAdminRoutes(app: Express) {
     }
   );
 
-  // Permanently Delete School
-  app.delete('/api/system-admin/schools/:schoolId',
+  // Get School Admins
+  app.get('/api/system-admin/schools/:schoolId/admins',
     requireAuth,
     requireRole('system_admin'),
     async (req, res) => {
@@ -1634,7 +1693,8 @@ export function registerSystemAdminRoutes(app: Express) {
             `);
             console.log(`✅ Deleted posts for school: ${schoolId}`);
           } catch (error) {
-            console.log(`⚠️  Could not delete posts: ${error.message}`);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.log(`⚠️  Could not delete posts: ${msg}`);
           }
 
           // 2. Delete student profiles (students reference schools via school_id)
@@ -1644,7 +1704,8 @@ export function registerSystemAdminRoutes(app: Express) {
             `);
             console.log(`✅ Deleted students for school: ${schoolId}`);
           } catch (error) {
-            console.log(`⚠️  Could not delete students: ${error.message}`);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.log(`⚠️  Could not delete students: ${msg}`);
           }
 
           // 3. Delete school admins (school_admins reference schools via school_id)
@@ -1654,7 +1715,8 @@ export function registerSystemAdminRoutes(app: Express) {
             `);
             console.log(`✅ Deleted school admins for school: ${schoolId}`);
           } catch (error) {
-            console.log(`⚠️  Could not delete school admins: ${error.message}`);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.log(`⚠️  Could not delete school admins: ${msg}`);
           }
 
           // 4. Delete subscriptions (if they exist)
@@ -1664,7 +1726,8 @@ export function registerSystemAdminRoutes(app: Express) {
             `);
             console.log(`✅ Deleted subscriptions for school: ${schoolId}`);
           } catch (error) {
-            console.log(`⚠️  Could not delete subscriptions: ${error.message}`);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.log(`⚠️  Could not delete subscriptions: ${msg}`);
           }
 
           // 5. Delete school settings (if they exist)
@@ -1674,7 +1737,8 @@ export function registerSystemAdminRoutes(app: Express) {
             `);
             console.log(`✅ Deleted school settings for school: ${schoolId}`);
           } catch (error) {
-            console.log(`⚠️  Could not delete school settings: ${error.message}`);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.log(`⚠️  Could not delete school settings: ${msg}`);
           }
 
           // 6. Delete school applications (if they exist) - school_applications doesn't have school_id column
@@ -1686,7 +1750,8 @@ export function registerSystemAdminRoutes(app: Express) {
             try {
               await db.delete(users).where(eq(users.id, adminUser.id));
             } catch (error) {
-              console.log(`⚠️  Could not delete admin user ${adminUser.id}: ${error.message}`);
+              const msg = error instanceof Error ? error.message : String(error);
+              console.log(`⚠️  Could not delete admin user ${adminUser.id}: ${msg}`);
             }
           }
           console.log(`✅ Deleted ${schoolAdminUsers.length} school admin user accounts`);
@@ -1695,7 +1760,8 @@ export function registerSystemAdminRoutes(app: Express) {
             try {
               await db.delete(users).where(eq(users.id, studentUser.id));
             } catch (error) {
-              console.log(`⚠️  Could not delete student user ${studentUser.id}: ${error.message}`);
+              const msg = error instanceof Error ? error.message : String(error);
+              console.log(`⚠️  Could not delete student user ${studentUser.id}: ${msg}`);
             }
           }
           console.log(`✅ Deleted ${studentUsers.length} student user accounts`);
@@ -2216,7 +2282,7 @@ export function registerSystemAdminRoutes(app: Express) {
         }
 
         // Handle targetSchoolIds if school_admin is in targetRoles
-        let parsedTargetSchoolIds: string[] | null = undefined;
+        let parsedTargetSchoolIds: string[] | null | undefined = undefined;
         const finalTargetRoles = targetRoles !== undefined ? targetRoles : existingBanner.targetRoles;
         if (finalTargetRoles.includes('school_admin')) {
           if (targetSchoolIds !== undefined) {

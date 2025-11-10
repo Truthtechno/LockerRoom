@@ -24,7 +24,7 @@ import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
 import Header from "@/components/navigation/header";
 
-type FormFieldType = 'short_text' | 'paragraph' | 'star_rating' | 'multiple_choice' | 'multiple_selection' | 'number' | 'date' | 'dropdown';
+type FormFieldType = 'short_text' | 'paragraph' | 'star_rating' | 'multiple_choice' | 'multiple_selection' | 'number' | 'date' | 'dropdown' | 'section_header';
 
 type FormField = {
   id?: string;
@@ -55,7 +55,7 @@ const formTemplateSchema = z.object({
   name: z.string().min(1, "Form name is required").max(200, "Name must be less than 200 characters"),
   description: z.string().optional().or(z.literal("")),
   fields: z.array(z.object({
-    fieldType: z.enum(['short_text', 'paragraph', 'star_rating', 'multiple_choice', 'multiple_selection', 'number', 'date', 'dropdown']),
+    fieldType: z.enum(['short_text', 'paragraph', 'star_rating', 'multiple_choice', 'multiple_selection', 'number', 'date', 'dropdown', 'section_header']),
     label: z.string().min(1, "Label is required"),
     placeholder: z.string().optional().or(z.literal("")),
     helpText: z.string().optional().or(z.literal("")),
@@ -1053,6 +1053,7 @@ function FormBuilder({
                 <SelectItem value="number">Number</SelectItem>
                 <SelectItem value="date">Date</SelectItem>
                 <SelectItem value="dropdown">Dropdown</SelectItem>
+                <SelectItem value="section_header">Section Header (Title & Description)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1185,7 +1186,7 @@ const FieldCard = React.memo(function FieldCard({
             name={`fields.${index}.label`}
             render={({ field: fieldControl }) => (
               <FormItem>
-                <FormLabel className="text-sm sm:text-base">Label *</FormLabel>
+                <FormLabel className="text-sm sm:text-base">{field.fieldType === 'section_header' ? 'Title *' : 'Label *'}</FormLabel>
                 <FormControl>
                   <Input placeholder="Field label" {...fieldControl} className="h-10 sm:h-11 text-sm" />
                 </FormControl>
@@ -1221,6 +1222,11 @@ const FieldCard = React.memo(function FieldCard({
                     if (!isChoiceType && wasChoiceType) {
                       form.setValue(`fields.${index}.options`, undefined, { shouldValidate: false });
                     }
+                    // Special handling for section headers
+                    if (newType === 'section_header') {
+                      form.setValue(`fields.${index}.placeholder`, '', { shouldValidate: false });
+                      form.setValue(`fields.${index}.required`, false, { shouldValidate: false });
+                    }
                   }}
                 >
                   <FormControl>
@@ -1237,6 +1243,7 @@ const FieldCard = React.memo(function FieldCard({
                     <SelectItem value="number">Number</SelectItem>
                     <SelectItem value="date">Date</SelectItem>
                     <SelectItem value="dropdown">Dropdown</SelectItem>
+                    <SelectItem value="section_header">Section Header (Title & Description)</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -1245,51 +1252,55 @@ const FieldCard = React.memo(function FieldCard({
           />
         </div>
 
-        <FormField
-          control={form.control}
-          name={`fields.${index}.placeholder`}
-          render={({ field: fieldControl }) => (
-            <FormItem>
-              <FormLabel className="text-sm sm:text-base">Placeholder</FormLabel>
-              <FormControl>
-                <Input placeholder="Placeholder text" {...fieldControl} className="h-10 sm:h-11 text-sm" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {field.fieldType !== 'section_header' && (
+          <FormField
+            control={form.control}
+            name={`fields.${index}.placeholder`}
+            render={({ field: fieldControl }) => (
+              <FormItem>
+                <FormLabel className="text-sm sm:text-base">Placeholder</FormLabel>
+                <FormControl>
+                  <Input placeholder="Placeholder text" {...fieldControl} className="h-10 sm:h-11 text-sm" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}
           name={`fields.${index}.helpText`}
           render={({ field: fieldControl }) => (
             <FormItem>
-              <FormLabel className="text-sm sm:text-base">Help Text</FormLabel>
+              <FormLabel className="text-sm sm:text-base">{field.fieldType === 'section_header' ? 'Section Description' : 'Help Text'}</FormLabel>
               <FormControl>
-                <Input placeholder="Help text for users" {...fieldControl} className="h-10 sm:h-11 text-sm" />
+                <Input placeholder={field.fieldType === 'section_header' ? 'Optional description shown under the title' : 'Help text for users'} {...fieldControl} className="h-10 sm:h-11 text-sm" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <FormField
-          control={form.control}
-          name={`fields.${index}.required`}
-          render={({ field: fieldControl }) => (
-            <FormItem className="flex flex-row items-center space-x-2 sm:space-x-3 space-y-0">
-              <FormControl>
-                <input
-                  type="checkbox"
-                  checked={fieldControl.value}
-                  onChange={fieldControl.onChange}
-                  className="rounded border-gray-300 w-4 h-4 sm:w-[18px] sm:h-[18px]"
-                />
-              </FormControl>
-              <FormLabel className="text-sm sm:text-base cursor-pointer">Required Field</FormLabel>
-            </FormItem>
-          )}
-        />
+        {field.fieldType !== 'section_header' && (
+          <FormField
+            control={form.control}
+            name={`fields.${index}.required`}
+            render={({ field: fieldControl }) => (
+              <FormItem className="flex flex-row items-center space-x-2 sm:space-x-3 space-y-0">
+                <FormControl>
+                  <input
+                    type="checkbox"
+                    checked={fieldControl.value}
+                    onChange={fieldControl.onChange}
+                    className="rounded border-gray-300 w-4 h-4 sm:w/[18px] sm:h/[18px]"
+                  />
+                </FormControl>
+                <FormLabel className="text-sm sm:text-base cursor-pointer">Required Field</FormLabel>
+              </FormItem>
+            )}
+          />
+        )}
 
         {(field.fieldType === 'multiple_choice' || field.fieldType === 'multiple_selection' || field.fieldType === 'dropdown') && (
           <div className="space-y-2 sm:space-y-3">
@@ -1395,12 +1406,22 @@ function FormPreview({ form }: { form: FormTemplate }) {
           const options = parseFormOptions(field.options);
           return (
             <div key={field.id || index} className="space-y-2">
-              <Label>
-                {field.label}
-                {field.required && <span className="text-destructive ml-1">*</span>}
-              </Label>
-              {field.helpText && (
-                <p className="text-xs text-muted-foreground">{field.helpText}</p>
+              {field.fieldType !== 'section_header' && (
+                <>
+                  <Label>
+                    {field.label}
+                    {field.required && <span className="text-destructive ml-1">*</span>}
+                  </Label>
+                  {field.helpText && (
+                    <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                  )}
+                </>
+              )}
+              {field.fieldType === 'section_header' && (
+                <div className="space-y-1">
+                  <h4 className="text-base font-semibold">{field.label}</h4>
+                  {field.helpText && <p className="text-sm text-muted-foreground">{field.helpText}</p>}
+                </div>
               )}
               
               {field.fieldType === 'short_text' && (

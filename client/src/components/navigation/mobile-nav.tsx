@@ -137,7 +137,7 @@ export default function MobileNav() {
 
   // Helper to check if any student content route is active
   const isStudentContentActive = (feedHref: string) => {
-    return location === feedHref || location === "/saved" || location === "/following";
+    return location === feedHref || location === "/saved" || location === "/following" || location === "/search";
   };
 
   // Helper to get student content dropdown items based on role
@@ -147,18 +147,21 @@ export default function MobileNav() {
         { name: "Feed", href: "/system-admin/feed", icon: Home },
         { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
+        { name: "Search", href: "/search", icon: Search },
       ];
     } else if (user?.role === "school_admin") {
       return [
         { name: "Feed", href: "/school-admin/feed", icon: Home },
         { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
+        { name: "Search", href: "/search", icon: Search },
       ];
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
       return [
         { name: "Feed", href: "/feed", icon: Home },
         { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
+        { name: "Search", href: "/search", icon: Search },
       ];
     }
     return [];
@@ -167,20 +170,22 @@ export default function MobileNav() {
   const getDrawerItems = () => {
     if (user?.role === "student") {
       return [
-        { name: "Saved", href: "/saved", icon: Bookmark },
-        { name: "Following", href: "/following", icon: Users },
-        { name: "Notifications", href: "/notifications", icon: Bell },
-        { name: "Stats", href: "/stats", icon: BarChart3 },
-        { name: "XEN Watch", href: "/xen-watch", icon: Eye },
-        { name: "ScoutAI", href: "/scoutai", icon: Bot },
-        { name: "Settings", href: "/settings", icon: Settings },
+        { name: "Search", href: "/search", icon: Search, active: location === "/search" },
+        { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
+        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
+        { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
+        { name: "XEN Watch", href: "/xen-watch", icon: Eye, active: location === "/xen-watch" },
+        { name: "ScoutAI", href: "/scoutai", icon: Bot, active: location === "/scoutai" },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "viewer") {
       return [
-        { name: "Saved", href: "/saved", icon: Bookmark },
-        { name: "Following", href: "/following", icon: Users },
-        { name: "Notifications", href: "/notifications", icon: Bell },
-        { name: "Settings", href: "/settings", icon: Settings },
+        { name: "Search", href: "/search", icon: Search, active: location === "/search" },
+        { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
+        { name: "Following", href: "/following", icon: Users, active: location === "/following" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "school_admin") {
       const studentContentItems = getStudentContentItems();
@@ -188,13 +193,13 @@ export default function MobileNav() {
       const isActive = isStudentContentActive(feedHref);
       return [
         { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
-        { name: "Dashboard", href: "/school-admin", icon: LayoutDashboard },
-        { name: "Notifications", href: "/notifications", icon: Bell },
-        { name: "Announcements", href: "/school-admin/announcements", icon: Megaphone },
-        { name: "Add Player", href: "/school-admin/add-student", icon: UserPlus },
-        { name: "Live Reports", href: "/school-admin/live-reports", icon: BarChart3 },
-        { name: "Player Search", href: "/school-admin/student-search", icon: Search },
-        { name: "Settings", href: "/settings", icon: Settings },
+        { name: "Dashboard", href: "/school-admin", icon: LayoutDashboard, active: location === "/school-admin" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
+        { name: "Announcements", href: "/school-admin/announcements", icon: Megaphone, active: location.startsWith("/school-admin/announcements") },
+        { name: "Add Player", href: "/school-admin/add-student", icon: UserPlus, active: location.startsWith("/school-admin/add-student") },
+        { name: "Live Reports", href: "/school-admin/live-reports", icon: BarChart3, active: location.startsWith("/school-admin/live-reports") },
+        { name: "Player Search", href: "/school-admin/student-search", icon: Search, active: location.startsWith("/school-admin/student-search") },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "system_admin") {
       const studentContentItems = getStudentContentItems();
@@ -202,18 +207,18 @@ export default function MobileNav() {
       const isActive = isStudentContentActive(feedHref);
       return [
         { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
-        { name: "Dashboard", href: "/system-admin", icon: LayoutDashboard },
-        { name: "Notifications", href: "/notifications", icon: Bell },
-        { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone },
-        { name: "Create Academy", href: "/system-admin/create-school", icon: Building2 },
-        { name: "Create Admin", href: "/system-admin/create-school-admin", icon: UserPlus },
-        { name: "Manage Academies", href: "/system-admin/manage-schools", icon: Building2 },
-        { name: "Platform Analytics", href: "/admin/platform-analytics", icon: TrendingUp },
-        { name: "System Config", href: "/admin/system-config", icon: Settings },
-        { name: "Manage Admins", href: "/admin/admin-management", icon: Shield },
-        { name: "Create Forms", href: "/admin/evaluation-forms", icon: FileText },
-        { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText },
-        { name: "Settings", href: "/settings", icon: Settings },
+        { name: "Dashboard", href: "/system-admin", icon: LayoutDashboard, active: location === "/system-admin" },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
+        { name: "Announcements", href: "/system-admin/announcements", icon: Megaphone, active: location.startsWith("/system-admin/announcements") },
+        { name: "Create Academy", href: "/system-admin/create-school", icon: Building2, active: location.startsWith("/system-admin/create-school") },
+        { name: "Create Admin", href: "/system-admin/create-school-admin", icon: UserPlus, active: location.startsWith("/system-admin/create-school-admin") },
+        { name: "Manage Academies", href: "/system-admin/manage-schools", icon: Building2, active: location.startsWith("/system-admin/manage-schools") },
+        { name: "Platform Analytics", href: "/admin/platform-analytics", icon: TrendingUp, active: location.startsWith("/admin/platform-analytics") },
+        { name: "System Config", href: "/admin/system-config", icon: Settings, active: location.startsWith("/admin/system-config") },
+        { name: "Manage Admins", href: "/admin/admin-management", icon: Shield, active: location.startsWith("/admin/admin-management") },
+        { name: "Create Forms", href: "/admin/evaluation-forms", icon: FileText, active: location.startsWith("/admin/evaluation-forms") },
+        { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText, active: location.startsWith("/admin/evaluation-submissions") },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
       const studentContentItems = getStudentContentItems();
@@ -221,28 +226,28 @@ export default function MobileNav() {
       const isActive = isStudentContentActive(feedHref);
       const scoutNav = [
         { name: "Player Content", href: "#", icon: Layers, active: isActive, isDropdown: true, dropdownItems: studentContentItems },
-        { name: "Notifications", href: "/notifications", icon: Bell },
-        { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye },
-        { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText },
+        { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },
+        { name: "Scout Queue", href: "/xen-watch/scout-queue", icon: Eye, active: location.startsWith("/xen-watch/scout-queue") },
+        { name: "XEN Forms", href: "/admin/evaluation-submissions", icon: FileText, active: location.startsWith("/admin/evaluation-submissions") },
       ];
       
       // Add Scout Admin Dashboard for scout_admin role
       if (user?.role === "scout_admin") {
         scoutNav.push(
-          { name: "Admin Dashboard", href: "/scouts/admin", icon: LayoutDashboard },
-          { name: "Manage Scouts", href: "/scouts/admin/manage-scouts", icon: Users },
-          { name: "XEN Watch Analytics", href: "/scouts/admin/xen-watch-analytics", icon: TrendingUp }
+          { name: "Admin Dashboard", href: "/scouts/admin", icon: LayoutDashboard, active: location.startsWith("/scouts/admin") },
+          { name: "Manage Scouts", href: "/scouts/admin/manage-scouts", icon: Users, active: location.startsWith("/scouts/admin/manage-scouts") },
+          { name: "XEN Watch Analytics", href: "/scouts/admin/xen-watch-analytics", icon: TrendingUp, active: location.startsWith("/scouts/admin/xen-watch-analytics") }
         );
       }
       
       return [
         ...scoutNav,
-        { name: "Settings", href: "/settings", icon: Settings },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     } else {
       return [
-        { name: "Stats", href: "/stats", icon: BarChart3 },
-        { name: "Settings", href: "/settings", icon: Settings },
+        { name: "Stats", href: "/stats", icon: BarChart3, active: location === "/stats" },
+        { name: "Settings", href: "/settings", icon: Settings, active: location === "/settings" },
       ];
     }
   };

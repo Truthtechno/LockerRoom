@@ -24,7 +24,7 @@ import { uploadToCloudinary } from "@/lib/cloudinary";
 import * as XLSX from 'xlsx';
 import { Upload, X as XIcon } from "lucide-react";
 
-type FormFieldType = 'short_text' | 'paragraph' | 'star_rating' | 'multiple_choice' | 'multiple_selection' | 'number' | 'date' | 'dropdown';
+type FormFieldType = 'short_text' | 'paragraph' | 'star_rating' | 'multiple_choice' | 'multiple_selection' | 'number' | 'date' | 'dropdown' | 'section_header';
 
 type FormField = {
   id: string;
@@ -139,6 +139,39 @@ export default function EvaluationSubmissions() {
       return response.json();
     },
     enabled: true,
+  });
+
+  // Separate lightweight count queries for tab badges
+  const { data: submittedCountData } = useQuery<SubmissionsResponse>({
+    queryKey: ["/api/evaluation-forms/submissions", "count", selectedFormId, selectedScout, "submitted"],
+    queryFn: async () => {
+      const params = new URLSearchParams({ status: "submitted", page: "1", limit: "1" });
+      if (selectedFormId && selectedFormId !== "all") {
+        params.append("form_template_id", selectedFormId);
+      }
+      if (selectedScout !== "all" && user?.role !== 'xen_scout') {
+        params.append("submitted_by", selectedScout);
+      }
+      const response = await apiRequest("GET", `/api/evaluation-forms/submissions?${params}`);
+      if (!response.ok) throw new Error("Failed to fetch submitted count");
+      return response.json();
+    },
+  });
+
+  const { data: draftCountData } = useQuery<SubmissionsResponse>({
+    queryKey: ["/api/evaluation-forms/submissions", "count", selectedFormId, selectedScout, "draft"],
+    queryFn: async () => {
+      const params = new URLSearchParams({ status: "draft", page: "1", limit: "1" });
+      if (selectedFormId && selectedFormId !== "all") {
+        params.append("form_template_id", selectedFormId);
+      }
+      if (selectedScout !== "all" && user?.role !== 'xen_scout') {
+        params.append("submitted_by", selectedScout);
+      }
+      const response = await apiRequest("GET", `/api/evaluation-forms/submissions?${params}`);
+      if (!response.ok) throw new Error("Failed to fetch draft count");
+      return response.json();
+    },
   });
 
   const deleteSubmissionMutation = useMutation({
@@ -369,10 +402,10 @@ export default function EvaluationSubmissions() {
           }} className="mb-6">
             <TabsList className="w-full sm:w-auto grid grid-cols-2 h-10 sm:h-9">
               <TabsTrigger value="submitted" className="text-xs sm:text-sm">
-                Submitted ({submissionsData?.total || 0})
+                Submitted ({submittedCountData?.total || 0})
               </TabsTrigger>
               <TabsTrigger value="draft" className="text-xs sm:text-sm">
-                Draft ({submissionsData?.total || 0})
+                Draft ({draftCountData?.total || 0})
               </TabsTrigger>
             </TabsList>
 
@@ -1337,111 +1370,120 @@ function SubmissionFormDialog({
             <div className="space-y-3 sm:space-y-4 border-t pt-3 sm:pt-4">
               <Label className="text-base sm:text-lg font-semibold">Evaluation Responses</Label>
               {selectedForm.fields.sort((a, b) => a.orderIndex - b.orderIndex).map((field) => (
-                <Card key={field.id} className="border-border/50">
-                  <CardHeader className="pb-2 sm:pb-3">
-                    <CardTitle className="text-sm">
-                      {field.label}
-                      {field.required && <span className="text-destructive ml-1">*</span>}
-                    </CardTitle>
+                field.fieldType === 'section_header' ? (
+                  <div key={field.id} className="pt-2 sm:pt-3">
+                    <h3 className="text-base sm:text-lg font-semibold">{field.label}</h3>
                     {field.helpText && (
-                      <CardDescription className="text-xs">{field.helpText}</CardDescription>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-1">{field.helpText}</p>
                     )}
-                  </CardHeader>
-                  <CardContent>
-                    {field.fieldType === 'short_text' && (
-                      <Input
-                        value={formResponses[field.id] || ""}
-                        onChange={(e) => setFormResponses({ ...formResponses, [field.id]: e.target.value })}
-                        placeholder={field.placeholder || "Enter text..."}
-                        className="h-9 sm:h-10 text-sm"
-                      />
-                    )}
-                    {field.fieldType === 'paragraph' && (
-                      <Textarea
-                        value={formResponses[field.id] || ""}
-                        onChange={(e) => setFormResponses({ ...formResponses, [field.id]: e.target.value })}
-                        placeholder={field.placeholder || "Enter text..."}
-                        rows={3}
-                        className="text-sm resize-none"
-                      />
-                    )}
-                    {field.fieldType === 'star_rating' && (
-                      <div className="flex gap-0.5 sm:gap-1">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => setFormResponses({ ...formResponses, [field.id]: star.toString() })}
-                            className={`text-2xl sm:text-3xl transition-colors ${
-                              parseInt(formResponses[field.id] || "0") >= star
-                                ? "text-yellow-400"
-                                : "text-gray-300 hover:text-yellow-300"
-                            }`}
-                          >
-                            ★
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {field.fieldType === 'number' && (
-                      <Input
-                        type="number"
-                        value={formResponses[field.id] || ""}
-                        onChange={(e) => setFormResponses({ ...formResponses, [field.id]: e.target.value })}
-                        placeholder={field.placeholder || "Enter number..."}
-                        className="h-9 sm:h-10 text-sm"
-                      />
-                    )}
-                    {field.fieldType === 'date' && (
-                      <Input
-                        type="date"
-                        value={formResponses[field.id] || ""}
-                        onChange={(e) => setFormResponses({ ...formResponses, [field.id]: e.target.value })}
-                        className="h-9 sm:h-10 text-sm"
-                      />
-                    )}
-                    {(field.fieldType === 'multiple_choice' || field.fieldType === 'dropdown') && field.options && (
-                      <Select
-                        value={formResponses[field.id] || ""}
-                        onValueChange={(value) => setFormResponses({ ...formResponses, [field.id]: value })}
-                      >
-                        <SelectTrigger className="h-9 sm:h-10 text-sm">
-                          <SelectValue placeholder={field.placeholder || "Select an option..."} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {parseOptions(field.options)
-                            .filter(opt => opt.value && opt.value.trim() !== "")
-                            .map((opt, optIndex) => (
-                            <SelectItem key={optIndex} value={opt.value} className="text-sm">{opt.label}</SelectItem>
+                  </div>
+                ) : (
+                  <Card key={field.id} className="border-border/50">
+                    <CardHeader className="pb-2 sm:pb-3">
+                      <CardTitle className="text-sm">
+                        {field.label}
+                        {field.required && <span className="text-destructive ml-1">*</span>}
+                      </CardTitle>
+                      {field.helpText && (
+                        <CardDescription className="text-xs">{field.helpText}</CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      {field.fieldType === 'short_text' && (
+                        <Input
+                          value={formResponses[field.id] || ""}
+                          onChange={(e) => setFormResponses({ ...formResponses, [field.id]: e.target.value })}
+                          placeholder={field.placeholder || "Enter text..."}
+                          className="h-9 sm:h-10 text-sm"
+                        />
+                      )}
+                      {field.fieldType === 'paragraph' && (
+                        <Textarea
+                          value={formResponses[field.id] || ""}
+                          onChange={(e) => setFormResponses({ ...formResponses, [field.id]: e.target.value })}
+                          placeholder={field.placeholder || "Enter text..."}
+                          rows={3}
+                          className="text-sm resize-none"
+                        />
+                      )}
+                      {field.fieldType === 'star_rating' && (
+                        <div className="flex gap-0.5 sm:gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setFormResponses({ ...formResponses, [field.id]: star.toString() })}
+                              className={`text-2xl sm:text-3xl transition-colors ${
+                                parseInt(formResponses[field.id] || "0") >= star
+                                  ? "text-yellow-400"
+                                  : "text-gray-300 hover:text-yellow-300"
+                              }`}
+                            >
+                              ★
+                            </button>
                           ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    {field.fieldType === 'multiple_selection' && field.options && (
-                      <div className="space-y-1.5 sm:space-y-2">
-                        {parseOptions(field.options).map((opt, optIndex) => (
-                          <div key={optIndex} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id={`${field.id}-${optIndex}`}
-                              checked={(formResponses[field.id] || "").split(',').includes(opt.value)}
-                              onChange={(e) => {
-                                const currentValues = (formResponses[field.id] || "").split(',').filter(v => v);
-                                if (e.target.checked) {
-                                  setFormResponses({ ...formResponses, [field.id]: [...currentValues, opt.value].join(',') });
-                                } else {
-                                  setFormResponses({ ...formResponses, [field.id]: currentValues.filter(v => v !== opt.value).join(',') });
-                                }
-                              }}
-                              className="rounded w-4 h-4 sm:w-[18px] sm:h-[18px]"
-                            />
-                            <Label htmlFor={`${field.id}-${optIndex}`} className="cursor-pointer text-sm">{opt.label}</Label>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                        </div>
+                      )}
+                      {field.fieldType === 'number' && (
+                        <Input
+                          type="number"
+                          value={formResponses[field.id] || ""}
+                          onChange={(e) => setFormResponses({ ...formResponses, [field.id]: e.target.value })}
+                          placeholder={field.placeholder || "Enter number..."}
+                          className="h-9 sm:h-10 text-sm"
+                        />
+                      )}
+                      {field.fieldType === 'date' && (
+                        <Input
+                          type="date"
+                          value={formResponses[field.id] || ""}
+                          onChange={(e) => setFormResponses({ ...formResponses, [field.id]: e.target.value })}
+                          className="h-9 sm:h-10 text-sm"
+                        />
+                      )}
+                      {(field.fieldType === 'multiple_choice' || field.fieldType === 'dropdown') && field.options && (
+                        <Select
+                          value={formResponses[field.id] || ""}
+                          onValueChange={(value) => setFormResponses({ ...formResponses, [field.id]: value })}
+                        >
+                          <SelectTrigger className="h-9 sm:h-10 text-sm">
+                            <SelectValue placeholder={field.placeholder || "Select an option..."} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {parseOptions(field.options)
+                              .filter(opt => opt.value && opt.value.trim() !== "")
+                              .map((opt, optIndex) => (
+                              <SelectItem key={optIndex} value={opt.value} className="text-sm">{opt.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {field.fieldType === 'multiple_selection' && field.options && (
+                        <div className="space-y-1.5 sm:space-y-2">
+                          {parseOptions(field.options).map((opt, optIndex) => (
+                            <div key={optIndex} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`${field.id}-${optIndex}`}
+                                checked={(formResponses[field.id] || "").split(',').includes(opt.value)}
+                                onChange={(e) => {
+                                  const currentValues = (formResponses[field.id] || "").split(',').filter(v => v);
+                                  if (e.target.checked) {
+                                    setFormResponses({ ...formResponses, [field.id]: [...currentValues, opt.value].join(',') });
+                                  } else {
+                                    setFormResponses({ ...formResponses, [field.id]: currentValues.filter(v => v !== opt.value).join(',') });
+                                  }
+                                }}
+                                className="rounded w-4 h-4 sm:w-[18px] sm:h-[18px]"
+                              />
+                              <Label htmlFor={`${field.id}-${optIndex}`} className="cursor-pointer text-sm">{opt.label}</Label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
               ))}
             </div>
           )}

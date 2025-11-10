@@ -136,7 +136,7 @@ export default function Sidebar() {
 
   // Helper to check if any student content route is active
   const isStudentContentActive = (feedHref: string) => {
-    return location === feedHref || location === "/saved" || location === "/following";
+    return location === feedHref || location === "/saved" || location === "/following" || location === "/search";
   };
 
   // Helper to get student content dropdown items based on role
@@ -146,18 +146,21 @@ export default function Sidebar() {
         { name: "Feed", href: "/system-admin/feed", icon: Home },
         { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
+        { name: "Search", href: "/search", icon: Search },
       ];
     } else if (user?.role === "school_admin") {
       return [
         { name: "Feed", href: "/school-admin/feed", icon: Home },
         { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
+        { name: "Search", href: "/search", icon: Search },
       ];
     } else if (user?.role === "scout_admin" || user?.role === "xen_scout") {
       return [
         { name: "Feed", href: "/feed", icon: Home },
         { name: "Saved", href: "/saved", icon: Bookmark },
         { name: "Following", href: "/following", icon: Users },
+        { name: "Search", href: "/search", icon: Search },
       ];
     }
     return [];
@@ -171,6 +174,7 @@ export default function Sidebar() {
     if (user?.role === "student") {
       return [
         ...baseNav,
+        { name: "Search", href: "/search", icon: Search, active: location === "/search" },
         { name: "Profile", href: "/profile", icon: User, active: location.startsWith("/profile") },
         { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
         { name: "Following", href: "/following", icon: Users, active: location === "/following" },
@@ -183,6 +187,7 @@ export default function Sidebar() {
     } else if (user?.role === "viewer") {
       return [
         ...baseNav,
+        { name: "Search", href: "/search", icon: Search, active: location === "/search" },
         { name: "Saved", href: "/saved", icon: Bookmark, active: location === "/saved" },
         { name: "Following", href: "/following", icon: Users, active: location === "/following" },
         { name: "Notifications", href: "/notifications", icon: Bell, active: location === "/notifications" },

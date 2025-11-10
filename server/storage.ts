@@ -118,7 +118,7 @@ import {
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 import { db } from './db';
-import { eq, desc, sql, and, or, inArray } from 'drizzle-orm';
+import { eq, desc, asc, sql, and, or, inArray, isNotNull, distinct } from 'drizzle-orm';
 
 // Helper function to safely get post views with fallback
 async function getPostViews(postId: string): Promise<PostView[]> {
@@ -207,7 +207,15 @@ export interface IStorage {
   getUserFollowing(userId: string): Promise<Student[]>;
   isFollowingStudent(followerUserId: string, studentId: string): Promise<boolean>;
   getFollowStatusesForStudents(followerUserId: string, studentIds: string[]): Promise<Map<string, boolean>>;
-  searchStudents(query: string, currentUserId?: string): Promise<StudentSearchResult[]>;
+  searchStudents(
+    query?: string, 
+    currentUserId?: string,
+    sortBy?: 'name' | 'school' | 'position' | 'sport' | 'followers' | 'createdAt',
+    sortOrder?: 'asc' | 'desc',
+    limit?: number,
+    filters?: { schoolId?: string; sport?: string; position?: string }
+  ): Promise<StudentSearchResult[]>;
+  getSearchFilters(): Promise<{ schools: Array<{ id: string; name: string }>; sports: string[]; positions: string[] }>;
   
   // General user follow operations
   followUser(followerId: string, followingId: string): Promise<void>;
@@ -1408,32 +1416,123 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async searchStudents(query: string, currentUserId?: string): Promise<StudentSearchResult[]> {
-    const searchTerm = query.toLowerCase();
-    const results: StudentSearchResult[] = [];
+  async searchStudents(
+    query?: string,
+    currentUserId?: string,
+    sortBy: 'name' | 'school' | 'position' | 'sport' | 'followers' | 'createdAt' = 'followers',
+    sortOrder: 'asc' | 'desc' = 'desc',
+    limit: number = 100,
+    filters?: { schoolId?: string; sport?: string; position?: string }
+  ): Promise<StudentSearchResult[]> {
+    let results: StudentSearchResult[] = [];
 
     for (const student of this.students.values()) {
       const user = this.users.get(student.userId);
       if (!user) continue;
 
-      // Search in name, sport, position
-      const searchableText = `${user.name} ${student.sport || ''} ${student.position || ''}`.toLowerCase();
-      if (searchableText.includes(searchTerm)) {
-        const school = user.schoolId ? this.schools.get(user.schoolId) : undefined;
-        const followersCount = Array.from(this.studentFollowers.values()).filter(follow => follow.studentId === student.id).length;
-        const isFollowing = currentUserId ? await this.isFollowing(currentUserId, student.id) : false;
+      // Apply filters
+      if (filters) {
+        if (filters.schoolId && user.schoolId !== filters.schoolId) continue;
+        if (filters.sport && student.sport !== filters.sport) continue;
+        if (filters.position && student.position !== filters.position) continue;
+      }
 
-        results.push({
-          ...student,
-          user,
-          school,
-          followersCount,
-          isFollowing,
-        });
+      // Apply search query if provided
+      if (query && query.trim().length > 0) {
+        const searchTerm = query.toLowerCase();
+        const searchableText = `${user.name} ${student.sport || ''} ${student.position || ''}`.toLowerCase();
+        if (!searchableText.includes(searchTerm)) continue;
+      }
+
+      const school = user.schoolId ? this.schools.get(user.schoolId) : undefined;
+      const followersCount = Array.from(this.studentFollowers.values()).filter(follow => follow.studentId === student.id).length;
+      const isFollowing = currentUserId ? await this.isFollowing(currentUserId, student.id) : false;
+
+      results.push({
+        ...student,
+        user,
+        school,
+        followersCount,
+        isFollowing,
+      });
+    }
+
+    // Apply sorting
+    results.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortBy) {
+        case 'name':
+          aValue = a.user.name || '';
+          bValue = b.user.name || '';
+          break;
+        case 'school':
+          aValue = a.school?.name || '';
+          bValue = b.school?.name || '';
+          break;
+        case 'position':
+          aValue = a.position || '';
+          bValue = b.position || '';
+          break;
+        case 'sport':
+          aValue = a.sport || '';
+          bValue = b.sport || '';
+          break;
+        case 'followers':
+          aValue = a.followersCount;
+          bValue = b.followersCount;
+          break;
+        case 'createdAt':
+          aValue = new Date(a.createdAt).getTime();
+          bValue = new Date(b.createdAt).getTime();
+          break;
+        default:
+          aValue = a.followersCount;
+          bValue = b.followersCount;
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+
+    // Apply limit
+    return results.slice(0, limit);
+  }
+
+  async getSearchFilters(): Promise<{ schools: Array<{ id: string; name: string }>; sports: string[]; positions: string[] }> {
+    const schoolsMap = new Map<string, string>();
+    const sportsSet = new Set<string>();
+    const positionsSet = new Set<string>();
+
+    for (const student of this.students.values()) {
+      const user = this.users.get(student.userId);
+      if (!user) continue;
+
+      if (user.schoolId) {
+        const school = this.schools.get(user.schoolId);
+        if (school) {
+          schoolsMap.set(school.id, school.name);
+        }
+      }
+
+      if (student.sport) {
+        sportsSet.add(student.sport);
+      }
+
+      if (student.position) {
+        positionsSet.add(student.position);
       }
     }
 
-    return results.sort((a, b) => b.followersCount - a.followersCount); // Sort by popularity
+    return {
+      schools: Array.from(schoolsMap.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),
+      sports: Array.from(sportsSet).sort(),
+      positions: Array.from(positionsSet).sort(),
+    };
   }
 
 
@@ -4347,11 +4446,76 @@ export class PostgresStorage implements IStorage {
     return followMap;
   }
 
-  async searchStudents(query: string, currentUserId?: string): Promise<StudentSearchResult[]> {
+  async searchStudents(
+    query?: string, 
+    currentUserId?: string,
+    sortBy: 'name' | 'school' | 'position' | 'sport' | 'followers' | 'createdAt' = 'followers',
+    sortOrder: 'asc' | 'desc' = 'desc',
+    limit: number = 100,
+    filters?: { schoolId?: string; sport?: string; position?: string }
+  ): Promise<StudentSearchResult[]> {
     if (!isDbConnected) throw new Error('Database not connected');
-    const searchTerm = `%${query.toLowerCase()}%`;
     
-    const result = await db
+    // Build where conditions array
+    const whereConditions = [];
+    
+    // Text search query
+    if (query && query.trim().length > 0) {
+      const searchTerm = `%${query.toLowerCase()}%`;
+      whereConditions.push(
+        sql`(LOWER(${users.name}) LIKE ${searchTerm} OR 
+             LOWER(${students.sport}) LIKE ${searchTerm} OR 
+             LOWER(${students.position}) LIKE ${searchTerm} OR
+             LOWER(${schools.name}) LIKE ${searchTerm})`
+      );
+    }
+    
+    // Apply filters
+    if (filters) {
+      if (filters.schoolId) {
+        whereConditions.push(eq(users.schoolId, filters.schoolId));
+      }
+      if (filters.sport) {
+        whereConditions.push(eq(students.sport, filters.sport));
+      }
+      if (filters.position) {
+        whereConditions.push(eq(students.position, filters.position));
+      }
+    }
+    
+    // Combine all where conditions
+    const whereClause = whereConditions.length > 0 
+      ? and(...whereConditions) 
+      : undefined;
+    
+    // Build order by clause based on sortBy and sortOrder
+    let orderByClause;
+    const orderFunction = sortOrder === 'asc' ? asc : desc;
+    
+    switch (sortBy) {
+      case 'name':
+        orderByClause = orderFunction(users.name);
+        break;
+      case 'school':
+        orderByClause = orderFunction(schools.name);
+        break;
+      case 'position':
+        orderByClause = orderFunction(students.position);
+        break;
+      case 'sport':
+        orderByClause = orderFunction(students.sport);
+        break;
+      case 'followers':
+        orderByClause = orderFunction(sql`COUNT(${studentFollowers.id})`);
+        break;
+      case 'createdAt':
+        orderByClause = orderFunction(students.createdAt);
+        break;
+      default:
+        orderByClause = desc(sql`COUNT(${studentFollowers.id})`);
+    }
+    
+    const queryBuilder = db
       .select({
         student: students,
         user: users,
@@ -4361,32 +4525,82 @@ export class PostgresStorage implements IStorage {
       .from(students)
       .innerJoin(users, eq(students.userId, users.id))
       .leftJoin(schools, eq(users.schoolId, schools.id))
-      .leftJoin(studentFollowers, eq(studentFollowers.studentId, students.id))
-      .where(
-        sql`LOWER(${users.name}) LIKE ${searchTerm} OR 
-            LOWER(${students.sport}) LIKE ${searchTerm} OR 
-            LOWER(${students.position}) LIKE ${searchTerm}`
-      )
+      .leftJoin(studentFollowers, eq(studentFollowers.studentId, students.id));
+    
+    if (whereClause) {
+      queryBuilder.where(whereClause);
+    }
+    
+    const result = await queryBuilder
       .groupBy(students.id, users.id, schools.id)
-      .orderBy(sql`COUNT(${studentFollowers.id}) DESC`);
+      .orderBy(orderByClause)
+      .limit(limit);
 
     // Check if current user is following each student
-    const resultsWithFollowStatus = await Promise.all(
-      result.map(async (row) => {
-        const isFollowing = currentUserId ? 
-          await this.isFollowingStudent(currentUserId, row.student.id) : false;
-        
-        return {
-          ...row.student,
-          user: row.user,
-          school: row.school || undefined,
-          followersCount: row.followersCount,
-          isFollowing,
-        };
-      })
-    );
+    const studentIds = result.map(row => row.student.id);
+    const followStatusMap = currentUserId && studentIds.length > 0
+      ? await this.getFollowStatusesForStudents(currentUserId, studentIds)
+      : new Map<string, boolean>();
+
+    const resultsWithFollowStatus = result.map((row) => {
+      const isFollowing = currentUserId ? (followStatusMap.get(row.student.id) || false) : false;
+      
+      return {
+        ...row.student,
+        user: row.user,
+        school: row.school || undefined,
+        followersCount: row.followersCount,
+        isFollowing,
+      };
+    });
 
     return resultsWithFollowStatus;
+  }
+
+  async getSearchFilters(): Promise<{ schools: Array<{ id: string; name: string }>; sports: string[]; positions: string[] }> {
+    if (!isDbConnected) throw new Error('Database not connected');
+    
+    // Get distinct schools that have students using a subquery approach
+    const schoolResults = await db
+      .select({
+        id: schools.id,
+        name: schools.name,
+      })
+      .from(schools)
+      .where(
+        inArray(
+          schools.id,
+          db.selectDistinct({ schoolId: users.schoolId })
+            .from(users)
+            .innerJoin(students, eq(students.userId, users.id))
+            .where(isNotNull(users.schoolId))
+        )
+      )
+      .orderBy(schools.name);
+    
+    // Get distinct sports
+    const sportResults = await db
+      .selectDistinct({
+        sport: students.sport,
+      })
+      .from(students)
+      .where(isNotNull(students.sport))
+      .orderBy(students.sport);
+    
+    // Get distinct positions
+    const positionResults = await db
+      .selectDistinct({
+        position: students.position,
+      })
+      .from(students)
+      .where(isNotNull(students.position))
+      .orderBy(students.position);
+    
+    return {
+      schools: schoolResults.map(s => ({ id: s.id, name: s.name })),
+      sports: sportResults.map(s => s.sport).filter((s): s is string => s !== null),
+      positions: positionResults.map(p => p.position).filter((p): p is string => p !== null),
+    };
   }
 
   // School application operations

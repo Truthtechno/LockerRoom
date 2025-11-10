@@ -1017,10 +1017,10 @@ export default function SystemConfig() {
                         </div>
                       </div>
                     ) : (
-                      <div className="border-2 border-dashed border-border rounded-lg p-6 sm:p-8 text-center bg-muted/30">
-                        <ImageIcon className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 text-muted-foreground" />
+                      <div className="border-2 border-dashed border-border rounded-lg p-4 sm:p-5 text-center bg-muted/30">
+                        <ImageIcon className="w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2 text-muted-foreground" />
                         <p className="text-sm font-medium text-foreground mb-1">No logo uploaded</p>
-                        <p className="text-xs text-muted-foreground mb-4">
+                        <p className="text-xs text-muted-foreground mb-3">
                           Upload a system logo file or enter a logo URL above. System will use the default "LR" icon when no logo is set.
                         </p>
                         <input

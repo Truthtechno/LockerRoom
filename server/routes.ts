@@ -4914,15 +4914,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Search routes
+  // Get filter options for search
+  app.get("/api/search/filters", async (req, res) => {
+    try {
+      const filters = await storage.getSearchFilters();
+      res.json(filters);
+    } catch (error) {
+      console.error('Get filters error:', error);
+      res.status(500).json({ message: "Failed to fetch filters" });
+    }
+  });
+
   app.get("/api/search/students", async (req, res) => {
     try {
-      const { q: query, userId } = req.query;
+      const { q: query, userId, sortBy, sortOrder, limit, schoolId, sport, position } = req.query;
       
-      if (!query || typeof query !== 'string') {
-        return res.status(400).json({ message: "Search query required" });
-      }
+      // Query is now optional - if not provided, return all students
+      const searchQuery = typeof query === 'string' && query.trim().length > 0 ? query.trim() : undefined;
+      
+      // Validate sortBy if provided
+      const validSortFields = ['name', 'school', 'position', 'sport', 'followers', 'createdAt'];
+      const sortField = typeof sortBy === 'string' && validSortFields.includes(sortBy) 
+        ? sortBy as 'name' | 'school' | 'position' | 'sport' | 'followers' | 'createdAt'
+        : 'followers';
+      
+      // Validate sortOrder if provided
+      const order = typeof sortOrder === 'string' && (sortOrder === 'asc' || sortOrder === 'desc')
+        ? sortOrder as 'asc' | 'desc'
+        : 'desc';
+      
+      // Validate limit if provided
+      const resultLimit = limit ? Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 500) : 100;
 
-      const results = await storage.searchStudents(query, userId as string);
+      // Parse filter parameters
+      const filters = {
+        schoolId: typeof schoolId === 'string' && schoolId.trim().length > 0 ? schoolId : undefined,
+        sport: typeof sport === 'string' && sport.trim().length > 0 ? sport : undefined,
+        position: typeof position === 'string' && position.trim().length > 0 ? position : undefined,
+      };
+
+      const results = await storage.searchStudents(
+        searchQuery, 
+        userId as string,
+        sortField,
+        order,
+        resultLimit,
+        filters
+      );
       res.json(results);
     } catch (error) {
       console.error('Search error:', error);

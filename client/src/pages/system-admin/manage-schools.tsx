@@ -122,6 +122,25 @@ export default function ManageSchools() {
   const [activeDetailsTab, setActiveDetailsTab] = useState<"info" | "admins" | "students">("info");
   const [adminSearchQuery, setAdminSearchQuery] = useState("");
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
+  // Selection state for bulk actions
+  const [selectedAdminUserIds, setSelectedAdminUserIds] = useState<string[]>([]);
+  const [selectedStudentUserIds, setSelectedStudentUserIds] = useState<string[]>([]);
+
+  const clearSelections = () => {
+    setSelectedAdminUserIds([]);
+    setSelectedStudentUserIds([]);
+  };
+
+  // Helper: determine selection status for dynamic bulk toggle labels
+  const getSelectionStatus = (items: Array<{ userId: string; isFrozen?: boolean }> | undefined, selectedIds: string[]) => {
+    if (!items || selectedIds.length === 0) return 'none' as const;
+    const selected = items.filter((i) => selectedIds.includes(i.userId));
+    const allDisabled = selected.every((i) => !!i.isFrozen);
+    const allActive = selected.every((i) => !i.isFrozen);
+    if (allDisabled) return 'allDisabled' as const;
+    if (allActive) return 'allActive' as const;
+    return 'mixed' as const;
+  };
   const [paymentSearchQuery, setPaymentSearchQuery] = useState("");
   const [paymentFilterType, setPaymentFilterType] = useState<string>("all");
   const [paymentFilterFrequency, setPaymentFilterFrequency] = useState<string>("all");
@@ -599,6 +618,50 @@ export default function ManageSchools() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  // Bulk user actions
+  const bulkRequest = async (method: 'disable' | 'enable' | 'delete', userIds: string[]) => {
+    const endpoint = method === 'delete' ? '/api/system-admin/users' : `/api/system-admin/users/${method}`;
+    const options: RequestInit = {
+      method: method === 'delete' ? 'DELETE' : 'PUT',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userIds })
+    };
+    const res = await fetch(endpoint, options);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Failed to ${method} users`);
+    }
+    return res.json();
+  };
+
+  const handleDisableUsers = async (ids: string[]) => {
+    await bulkRequest('disable', ids);
+    toast({ title: 'Accounts Disabled', description: `${ids.length} account(s) disabled` });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools", selectedSchool?.id, "admins"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools", selectedSchool?.id, "students"] }),
+    ]);
+  };
+  const handleEnableUsers = async (ids: string[]) => {
+    await bulkRequest('enable', ids);
+    toast({ title: 'Accounts Enabled', description: `${ids.length} account(s) enabled` });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools", selectedSchool?.id, "admins"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools", selectedSchool?.id, "students"] }),
+    ]);
+  };
+  const handleDeleteUsers = async (ids: string[]) => {
+    await bulkRequest('delete', ids);
+    toast({ title: 'Accounts Deleted', description: `${ids.length} account(s) deleted` });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools", selectedSchool?.id, "admins"] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/system-admin/schools", selectedSchool?.id, "students"] }),
+    ]);
   };
 
   // Export admins to Excel
@@ -1624,12 +1687,65 @@ export default function ManageSchools() {
                 <TabsContent value="admins" className="mt-4">
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                      <Input
-                        placeholder="Search admins..."
-                        value={adminSearchQuery}
-                        onChange={(e) => setAdminSearchQuery(e.target.value)}
-                        className="w-full sm:max-w-sm"
-                      />
+                      <div className="flex items-center gap-2 w-full">
+                        <Input
+                          placeholder="Search admins..."
+                          value={adminSearchQuery}
+                          onChange={(e) => setAdminSearchQuery(e.target.value)}
+                          className="w-full sm:max-w-sm"
+                        />
+                        {(selectedAdminUserIds.length > 0) && (
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const status = getSelectionStatus(adminsData?.admins, selectedAdminUserIds);
+                              if (status === 'allActive') {
+                                return (
+                                  <Button size="sm" variant="outline" onClick={() => handleDisableUsers(selectedAdminUserIds)}>
+                                    <Ban className="w-4 h-4 mr-2" /> Disable Selected
+                                  </Button>
+                                );
+                              }
+                              if (status === 'allDisabled') {
+                                return (
+                                  <Button size="sm" variant="outline" onClick={() => handleEnableUsers(selectedAdminUserIds)}>
+                                    <Power className="w-4 h-4 mr-2" /> Activate Selected
+                                  </Button>
+                                );
+                              }
+                              // mixed
+                              return (
+                                <>
+                                  <Button size="sm" variant="outline" onClick={() => handleDisableUsers(selectedAdminUserIds)}>
+                                    <Ban className="w-4 h-4 mr-2" /> Disable
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => handleEnableUsers(selectedAdminUserIds)}>
+                                    <Power className="w-4 h-4 mr-2" /> Activate
+                                  </Button>
+                                </>
+                              );
+                            })()}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="destructive">
+                                  <Trash2 className="w-4 h-4 mr-2" /> Delete
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete {selectedAdminUserIds.length} account(s)?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={async () => { await handleDeleteUsers(selectedAdminUserIds); clearSelections(); }}>Confirm</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        )}
+                      </div>
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -1650,9 +1766,25 @@ export default function ManageSchools() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead className="w-10">
+                                <input
+                                  type="checkbox"
+                                  aria-label="Select all admins"
+                                  checked={adminsData?.admins?.length > 0 && selectedAdminUserIds.length === adminsData.admins.length}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedAdminUserIds(adminsData?.admins?.map((a: any) => a.userId) || []);
+                                    } else {
+                                      setSelectedAdminUserIds([]);
+                                    }
+                                  }}
+                                  className="h-4 w-4"
+                                />
+                              </TableHead>
                               <TableHead>Name</TableHead>
                               <TableHead>Email</TableHead>
                               <TableHead>Created</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1660,16 +1792,71 @@ export default function ManageSchools() {
                               !adminSearchQuery || 
                               admin.name.toLowerCase().includes(adminSearchQuery.toLowerCase()) ||
                               admin.email.toLowerCase().includes(adminSearchQuery.toLowerCase())
-                            ).map((admin: any) => (
-                              <TableRow key={admin.adminId}>
-                                <TableCell className="font-medium">{admin.name}</TableCell>
-                                <TableCell>{admin.email}</TableCell>
-                                <TableCell>{formatDate(admin.createdAt)}</TableCell>
-                              </TableRow>
-                            ))}
+                            ).map((admin: any) => {
+                              const isSelected = selectedAdminUserIds.includes(admin.userId);
+                              const isDisabled = !!admin.isFrozen;
+                              return (
+                                <TableRow key={admin.adminId}>
+                                  <TableCell>
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        setSelectedAdminUserIds((prev) => 
+                                          e.target.checked ? Array.from(new Set([...prev, admin.userId])) : prev.filter((id) => id !== admin.userId)
+                                        );
+                                      }}
+                                      className="h-4 w-4"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="font-medium">{admin.name}</TableCell>
+                                  <TableCell>{admin.email}</TableCell>
+                                  <TableCell>{formatDate(admin.createdAt)}</TableCell>
+                                  <TableCell className="text-right">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        {isDisabled ? (
+                                          <DropdownMenuItem onClick={async () => handleEnableUsers([admin.userId])}>
+                                            <Power className="w-4 h-4 mr-2" /> Activate Account
+                                          </DropdownMenuItem>
+                                        ) : (
+                                          <DropdownMenuItem onClick={async () => handleDisableUsers([admin.userId])}>
+                                            <Ban className="w-4 h-4 mr-2" /> Disable Account
+                                          </DropdownMenuItem>
+                                        )}
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
+                                              <Trash2 className="w-4 h-4 mr-2" /> Delete Account
+                                            </DropdownMenuItem>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Delete Admin Account</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                This action cannot be undone. Delete {admin.name} ({admin.email})?
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                              <AlertDialogAction onClick={async () => handleDeleteUsers([admin.userId])}>Delete</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                             {(!adminsData?.admins || adminsData.admins.length === 0) && (
                               <TableRow>
-                                <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                                   No admins found
                                 </TableCell>
                               </TableRow>
@@ -1684,12 +1871,64 @@ export default function ManageSchools() {
                 <TabsContent value="students" className="mt-4">
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                      <Input
-                        placeholder="Search players..."
-                        value={studentSearchQuery}
-                        onChange={(e) => setStudentSearchQuery(e.target.value)}
-                        className="w-full sm:max-w-sm"
-                      />
+                      <div className="flex items-center gap-2 w-full">
+                        <Input
+                          placeholder="Search players..."
+                          value={studentSearchQuery}
+                          onChange={(e) => setStudentSearchQuery(e.target.value)}
+                          className="w-full sm:max-w-sm"
+                        />
+                        {(selectedStudentUserIds.length > 0) && (
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const status = getSelectionStatus(studentsData?.students, selectedStudentUserIds);
+                              if (status === 'allActive') {
+                                return (
+                                  <Button size="sm" variant="outline" onClick={() => handleDisableUsers(selectedStudentUserIds)}>
+                                    <Ban className="w-4 h-4 mr-2" /> Disable Selected
+                                  </Button>
+                                );
+                              }
+                              if (status === 'allDisabled') {
+                                return (
+                                  <Button size="sm" variant="outline" onClick={() => handleEnableUsers(selectedStudentUserIds)}>
+                                    <Power className="w-4 h-4 mr-2" /> Activate Selected
+                                  </Button>
+                                );
+                              }
+                              return (
+                                <>
+                                  <Button size="sm" variant="outline" onClick={() => handleDisableUsers(selectedStudentUserIds)}>
+                                    <Ban className="w-4 h-4 mr-2" /> Disable
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => handleEnableUsers(selectedStudentUserIds)}>
+                                    <Power className="w-4 h-4 mr-2" /> Activate
+                                  </Button>
+                                </>
+                              );
+                            })()}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="destructive">
+                                  <Trash2 className="w-4 h-4 mr-2" /> Delete
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete {selectedStudentUserIds.length} account(s)?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={async () => { await handleDeleteUsers(selectedStudentUserIds); clearSelections(); }}>Confirm</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        )}
+                      </div>
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -1710,7 +1949,21 @@ export default function ManageSchools() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="w-12"></TableHead>
+                              <TableHead className="w-10">
+                                <input
+                                  type="checkbox"
+                                  aria-label="Select all players"
+                                  checked={studentsData?.students?.length > 0 && selectedStudentUserIds.length === studentsData.students.length}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedStudentUserIds(studentsData?.students?.map((s: any) => s.userId) || []);
+                                    } else {
+                                      setSelectedStudentUserIds([]);
+                                    }
+                                  }}
+                                  className="h-4 w-4"
+                                />
+                              </TableHead>
                               <TableHead>Name</TableHead>
                               <TableHead>Email</TableHead>
                               <TableHead>Phone</TableHead>
@@ -1720,6 +1973,7 @@ export default function ManageSchools() {
                               <TableHead>Height</TableHead>
                               <TableHead>Weight</TableHead>
                               <TableHead>Created</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1727,46 +1981,95 @@ export default function ManageSchools() {
                               !studentSearchQuery || 
                               student.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
                               student.email.toLowerCase().includes(studentSearchQuery.toLowerCase())
-                            ).map((student: any) => (
-                              <TableRow key={student.studentId}>
-                                <TableCell>
-                                  <Avatar className="w-8 h-8">
-                                    <AvatarImage 
-                                      src={student.profilePicUrl}
-                                      alt={student.name}
+                            ).map((student: any) => {
+                              const isSelected = selectedStudentUserIds.includes(student.userId);
+                              const isDisabled = !!student.isFrozen;
+                              const number = student.roleNumber || student.role_number;
+                              const numberStr = number?.toString().trim();
+                              return (
+                                <TableRow key={student.studentId}>
+                                  <TableCell>
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        setSelectedStudentUserIds((prev) => 
+                                          e.target.checked ? Array.from(new Set([...prev, student.userId])) : prev.filter((id) => id !== student.userId)
+                                        );
+                                      }}
+                                      className="h-4 w-4"
                                     />
-                                    <AvatarFallback className="text-xs">
-                                      {student.name ? student.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : '??'}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                </TableCell>
-                                <TableCell className="font-medium">{student.name}</TableCell>
-                                <TableCell>{student.email}</TableCell>
-                                <TableCell>{student.phone || 'N/A'}</TableCell>
-                                <TableCell>{student.position || 'N/A'}</TableCell>
-                                <TableCell className="font-medium">
-                                  {(() => {
-                                    const number = student.roleNumber || student.role_number;
-                                    const numberStr = number?.toString().trim();
-                                    if (numberStr && numberStr !== 'null' && numberStr !== 'undefined' && numberStr !== '') {
-                                      return (
-                                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold">
-                                          {numberStr}
-                                        </span>
-                                      );
-                                    }
-                                    return 'N/A';
-                                  })()}
-                                </TableCell>
-                                <TableCell>{student.sport || 'N/A'}</TableCell>
-                                <TableCell>{student.height ? formatHeight(student.height) : 'N/A'}</TableCell>
-                                <TableCell>{student.weight ? `${student.weight} kg` : 'N/A'}</TableCell>
-                                <TableCell>{formatDate(student.createdAt)}</TableCell>
-                              </TableRow>
-                            ))}
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="w-8 h-8">
+                                        <AvatarImage src={student.profilePicUrl} alt={student.name} />
+                                        <AvatarFallback className="text-xs">
+                                          {student.name ? student.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : '??'}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span>{student.name}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{student.email}</TableCell>
+                                  <TableCell>{student.phone || 'N/A'}</TableCell>
+                                  <TableCell>{student.position || 'N/A'}</TableCell>
+                                  <TableCell className="font-medium">
+                                    {numberStr && numberStr !== 'null' && numberStr !== 'undefined' && numberStr !== '' ? (
+                                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold">
+                                        {numberStr}
+                                      </span>
+                                    ) : 'N/A'}
+                                  </TableCell>
+                                  <TableCell>{student.sport || 'N/A'}</TableCell>
+                                  <TableCell>{student.height ? formatHeight(student.height) : 'N/A'}</TableCell>
+                                  <TableCell>{student.weight ? `${student.weight} kg` : 'N/A'}</TableCell>
+                                  <TableCell>{formatDate(student.createdAt)}</TableCell>
+                                  <TableCell className="text-right">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        {isDisabled ? (
+                                          <DropdownMenuItem onClick={async () => handleEnableUsers([student.userId])}>
+                                            <Power className="w-4 h-4 mr-2" /> Activate Account
+                                          </DropdownMenuItem>
+                                        ) : (
+                                          <DropdownMenuItem onClick={async () => handleDisableUsers([student.userId])}>
+                                            <Ban className="w-4 h-4 mr-2" /> Disable Account
+                                          </DropdownMenuItem>
+                                        )}
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
+                                              <Trash2 className="w-4 h-4 mr-2" /> Delete Account
+                                            </DropdownMenuItem>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Delete Player Account</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                This action cannot be undone. Delete {student.name} ({student.email})?
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                              <AlertDialogAction onClick={async () => handleDeleteUsers([student.userId])}>Delete</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                             {(!studentsData?.students || studentsData.students.length === 0) && (
                               <TableRow>
-                                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                                   No players found
                                 </TableCell>
                               </TableRow>
