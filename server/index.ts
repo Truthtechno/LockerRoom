@@ -58,12 +58,11 @@ app.use(helmet({
       formAction: ["'self'"],
     },
   },
-  // Disable HSTS in development to avoid browsers force-upgrading http to https on :5174
-  hsts: process.env.NODE_ENV === 'production' ? {
+  hsts: {
     maxAge: 31536000, // 1 year
     includeSubDomains: true,
     preload: true,
-  } : false,
+  },
   noSniff: true,
   frameguard: { action: 'deny' },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
