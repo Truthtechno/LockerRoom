@@ -606,7 +606,7 @@ export default function ScoutReviewQueue() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 dark:text-blue-400 mb-1">
+                <div className="text-2xl sm:text-3xl leading-tight tabular-nums font-bold text-blue-600 dark:text-blue-400 mb-1">
                   {stats.pending}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -625,7 +625,7 @@ export default function ScoutReviewQueue() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 dark:text-emerald-400 mb-1">
+                <div className="text-2xl sm:text-3xl leading-tight tabular-nums font-bold text-emerald-600 dark:text-emerald-400 mb-1">
                   {stats.completed}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -643,7 +643,7 @@ export default function ScoutReviewQueue() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                  <div className="text-2xl sm:text-3xl leading-tight tabular-nums font-bold text-purple-600 dark:text-purple-400 mb-1">
                     {stats.finalized}
                   </div>
                   <p className="text-xs text-muted-foreground">Completed submissions</p>
@@ -659,7 +659,7 @@ export default function ScoutReviewQueue() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-foreground mb-1">
+                <div className="text-2xl sm:text-3xl leading-tight tabular-nums font-bold text-foreground mb-1">
                   {stats.total}
                 </div>
                 <p className="text-xs text-muted-foreground">Submissions assigned</p>
@@ -994,7 +994,7 @@ export default function ScoutReviewQueue() {
 
       {/* Enhanced Detail Modal */}
       <Dialog open={isReviewModalOpen} onOpenChange={closeReviewModal}>
-        <DialogContent className="max-w-6xl h-[95vh] sm:h-[90vh] flex flex-col bg-card p-0 left-4 right-4 sm:left-[50%] sm:right-auto translate-x-0 sm:translate-x-[-50%] top-[50%] translate-y-[-50%] rounded-lg">
+        <DialogContent className="w-full sm:max-w-6xl h-[95vh] sm:h-[90vh] flex flex-col bg-card p-0 rounded-lg inset-x-4 sm:inset-x-auto left-0 right-0 translate-x-0 sm:left-1/2 sm:right-auto sm:translate-x-[-50%]">
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 flex-shrink-0">
             <DialogTitle className="text-xl sm:text-2xl font-bold text-foreground">Submission Details</DialogTitle>
             <DialogDescription className="text-sm sm:text-base text-muted-foreground">

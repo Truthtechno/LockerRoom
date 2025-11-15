@@ -480,13 +480,13 @@ export default function AdminManagement() {
         {/* Header */}
         <div className="bg-card border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between py-4 lg:h-16">
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between py-4 lg:h-16">
             <div className="flex items-center">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setLocation("/system-admin")}
-                className="lg:hidden mr-4"
+                className="hidden sm:inline-flex lg:hidden mr-4"
                 data-testid="back-to-admin"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -500,7 +500,7 @@ export default function AdminManagement() {
             
             <Dialog open={showAddScout} onOpenChange={setShowAddScout}>
               <DialogTrigger asChild>
-                <Button className="gold-gradient text-accent-foreground text-xs sm:text-sm" size="sm" data-testid="button-add-admin">
+                <Button className="gold-gradient text-accent-foreground text-xs sm:text-sm w-full sm:w-auto" size="sm" data-testid="button-add-admin">
                   <UserPlus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                   <span className="hidden sm:inline">Create Admin</span>
                   <span className="sm:hidden">Create</span>

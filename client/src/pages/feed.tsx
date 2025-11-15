@@ -29,7 +29,12 @@ export default function Feed() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [canRequestNextPage, setCanRequestNextPage] = useState(true);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const observerRef = useRef<HTMLDivElement | null>(null);
+
+  const SCROLL_KEY_SESSION = 'feedScrollY';
+  const SCROLL_KEY_LOCAL = 'feedScrollY:persist';
+  const saveScrollRaf = useRef<number | null>(null);
 
   // Query for student profile to check if user can post
   // IMPORTANT: Include user.id in query key to prevent stale data when switching between students
@@ -121,6 +126,92 @@ export default function Feed() {
     }
     return uniquePosts;
   }, [data, user]);
+
+  // One-time scroll restoration when entering or returning to the feed (pre-paint)
+  const hasRestoredRef = useRef(false);
+  useEffect(() => {
+    if (hasRestoredRef.current) return;
+    if (isLoading) return;
+    if (!allPosts || allPosts.length === 0) return;
+
+    let savedY: number | null = null;
+    let returnPostId: string | null = null;
+    try {
+      const ySession = sessionStorage.getItem(SCROLL_KEY_SESSION);
+      const yLocal = localStorage.getItem(SCROLL_KEY_LOCAL);
+      savedY = ySession ? Number(ySession) : (yLocal ? Number(yLocal) : null);
+      returnPostId = sessionStorage.getItem('feedReturnPostId');
+    } catch {}
+
+    if (savedY == null && !returnPostId) return;
+
+    hasRestoredRef.current = true;
+
+    const prevVis = document.body.style.visibility;
+    document.body.style.visibility = 'hidden';
+    const prevBehavior = (document.documentElement as any).style.scrollBehavior;
+    (document.documentElement as any).style.scrollBehavior = 'auto';
+
+    // Use rAF to ensure the DOM has painted, then restore instantly without visible jump
+    requestAnimationFrame(() => {
+      if (savedY != null) {
+        window.scrollTo(0, savedY);
+      } else if (returnPostId) {
+        const el = document.getElementById(`post-${returnPostId}`);
+        if (el) {
+          const top = el.getBoundingClientRect().top + window.pageYOffset - 0;
+          window.scrollTo(0, top);
+        }
+      }
+      // Next frame: reveal body again
+      requestAnimationFrame(() => {
+        document.body.style.visibility = prevVis || '';
+        (document.documentElement as any).style.scrollBehavior = prevBehavior || '';
+        try {
+          sessionStorage.removeItem('feedReturnPostId');
+        } catch {}
+      });
+    });
+  }, [isLoading, allPosts]);
+
+  // Ensure we control browser restoration behavior
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      try { window.history.scrollRestoration = 'manual'; } catch {}
+    }
+  }, []);
+
+  // Persist scroll position continuously (session + local)
+  useEffect(() => {
+    const onScroll = () => {
+      if (saveScrollRaf.current != null) return;
+      saveScrollRaf.current = window.requestAnimationFrame(() => {
+        saveScrollRaf.current = null;
+        const y = Math.max(0, window.scrollY || window.pageYOffset || 0);
+        try {
+          sessionStorage.setItem(SCROLL_KEY_SESSION, String(y));
+          localStorage.setItem(SCROLL_KEY_LOCAL, String(y));
+        } catch {}
+        setShowBackToTop(y > 400);
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    // Run once on mount to decide button visibility
+    onScroll();
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (saveScrollRaf.current != null) cancelAnimationFrame(saveScrollRaf.current);
+    };
+  }, []);
+
+  const handleBackToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      sessionStorage.setItem(SCROLL_KEY_SESSION, '0');
+      localStorage.setItem(SCROLL_KEY_LOCAL, '0');
+    } catch {}
+  };
 
   // Intersection Observer for infinite scroll - TikTok/Instagram style
   // Loads next batch as user views current posts (preloads ahead for seamless scrolling)
@@ -392,6 +483,18 @@ export default function Feed() {
             )}
           </div>
         </main>
+
+        {/* Back to Top button */}
+        {showBackToTop && (
+          <button
+            onClick={handleBackToTop}
+            className="fixed bottom-24 right-4 sm:bottom-8 sm:right-8 z-40 px-3 py-2 rounded-full backdrop-blur-md bg-white/60 dark:bg-black/40 text-black/80 dark:text-white/80 border border-black/10 dark:border-white/10 shadow-md hover:bg-white/70 dark:hover:bg-black/50 focus:outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20"
+            aria-label="Back to top"
+            title="Back to top"
+          >
+            ↑
+          </button>
+        )}
       </div>
 
       <MobileNav />

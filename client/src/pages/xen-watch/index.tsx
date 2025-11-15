@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, Clock, CheckCircle, Upload, Plus, Star, MessageSquare, X, Search, Filter, ArrowUpDown, User, Calendar, Play, Pause, Users, TrendingUp, RefreshCw } from "lucide-react";
+import { formatHeight } from "@/lib/height-utils";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/navigation/sidebar";
 import MobileNav from "@/components/navigation/mobile-nav";
@@ -273,7 +274,7 @@ export default function XenWatch() {
           </div>
 
           {/* Summary Statistics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Submissions</CardTitle>
@@ -648,7 +649,7 @@ export default function XenWatch() {
 
       {/* Full Feedback Modal */}
       <Dialog open={isFeedbackModalOpen} onOpenChange={setIsFeedbackModalOpen}>
-        <DialogContent className="max-w-6xl h-[95vh] sm:h-[90vh] flex flex-col bg-card p-0 mx-4 sm:mx-0">
+        <DialogContent className="w-full max-w-[calc(100vw-2rem)] sm:max-w-6xl h-[95vh] sm:h-[90vh] flex flex-col bg-card p-0 rounded-lg inset-x-4 top-4 bottom-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 transform-none sm:transform">
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-4 flex-shrink-0">
             <DialogTitle className="text-xl sm:text-2xl font-bold text-foreground">Submission Details</DialogTitle>
             <DialogDescription className="text-sm sm:text-base text-muted-foreground">
@@ -662,12 +663,12 @@ export default function XenWatch() {
                 {/* Player Information */}
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 sm:p-6 border border-blue-200 dark:border-blue-800">
                   <div className="flex flex-col sm:flex-row sm:items-start space-y-4 sm:space-y-0 sm:space-x-4">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shadow-sm mx-auto sm:mx-0 overflow-hidden">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shadow-sm overflow-hidden">
                       <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 flex items-center justify-center">
                         <User className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 dark:text-blue-400" />
                       </div>
                     </div>
-                    <div className="flex-1 text-center sm:text-left">
+                    <div className="flex-1 text-left">
                       <h4 className="text-lg sm:text-xl font-bold text-foreground mb-2">{studentInfo?.name || user?.name || 'Player'}</h4>
                       <p className="text-sm text-muted-foreground mb-4">
                         Submission #{selectedSubmission.id.slice(-8)}
@@ -683,6 +684,24 @@ export default function XenWatch() {
                           <div className="flex items-center space-x-2">
                             <span className="font-semibold text-muted-foreground">Position:</span>
                             <span className="text-foreground">{studentInfo.position}</span>
+                          </div>
+                        )}
+                        {studentInfo?.roleNumber && (
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-muted-foreground">Number:</span>
+                            <span className="text-foreground">{studentInfo.roleNumber}</span>
+                          </div>
+                        )}
+                        {studentInfo?.height && (
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-muted-foreground">Height:</span>
+                            <span className="text-foreground">{formatHeight(studentInfo.height)}</span>
+                          </div>
+                        )}
+                        {studentInfo?.weight && (
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-muted-foreground">Weight:</span>
+                            <span className="text-foreground">{studentInfo.weight} kg</span>
                           </div>
                         )}
                         {selectedSubmission.promoCode && (
@@ -702,7 +721,7 @@ export default function XenWatch() {
                         </div>
                       )}
                     </div>
-                    <div className="flex justify-center sm:justify-end">
+                    <div className="flex justify-start sm:justify-end">
                       {getStatusBadge(selectedSubmission.status)}
                     </div>
                   </div>
