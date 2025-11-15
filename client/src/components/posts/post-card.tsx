@@ -6,13 +6,15 @@ import AvatarWithFallback from "@/components/ui/avatar-with-fallback";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Heart, MessageCircle, Bookmark, MoreHorizontal, UserPlus, UserCheck, X, User, Flag, Trash2, Megaphone } from "lucide-react";
+import { Heart, MessageCircle, Bookmark, MoreHorizontal, UserPlus, UserCheck, X, User, Flag, Trash2, Megaphone, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import type { PostWithDetails } from "@shared/schema";
 import { Link } from "wouter";
 import { timeAgo } from "@/lib/timeAgo";
 import LazyMedia from "@/components/ui/lazy-media";
 import ResponsiveMedia from "@/components/ui/responsive-media";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 interface PostCardProps {
   post: PostWithDetails;
@@ -57,6 +59,8 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
   const [isSaved, setIsSaved] = useState(post.isSaved);
   const [isFollowing, setIsFollowing] = useState(post.student?.isFollowing || false);
   const [videoError, setVideoError] = useState(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [inlineNewComment, setInlineNewComment] = useState("");
   
   // Check if this is an announcement
   const isAnnouncement = post.isAnnouncement || post.type === 'announcement';
@@ -205,10 +209,18 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
       return;
     }
     try {
+      const y = String(window.scrollY || window.pageYOffset || 0);
       sessionStorage.setItem('feedReturnPostId', post.id);
-      sessionStorage.setItem('feedScrollY', String(window.scrollY || window.pageYOffset || 0));
+      sessionStorage.setItem('feedScrollY', y);
+      localStorage.setItem('feedScrollY:persist', y);
+
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      fetch(`/api/posts/${post.id}`, { headers }).catch(() => {});
+      fetch(`/api/posts/${post.id}/comments`, { headers }).catch(() => {});
+
+      setIsCommentsOpen(true);
     } catch {}
-    window.location.href = `/post/${post.id}`;
   }, [user, post.id, toast]);
 
   const handleFollow = useCallback(() => {
@@ -634,7 +646,7 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
             <button 
               className="text-sm text-muted-foreground hover:text-foreground"
               data-testid={`button-view-comments-${post.id}`}
-              onClick={() => { try { sessionStorage.setItem('feedReturnPostId', post.id); sessionStorage.setItem('feedScrollY', String(window.scrollY || window.pageYOffset || 0)); } catch {} window.location.href = `/post/${post.id}`; }}
+              onClick={() => { try { const y=String(window.scrollY || window.pageYOffset || 0); sessionStorage.setItem('feedReturnPostId', post.id); sessionStorage.setItem('feedScrollY', y); localStorage.setItem('feedScrollY:persist', y); const token=localStorage.getItem('token'); const headers: Record<string,string>=token?{Authorization:`Bearer ${token}`}:{ }; fetch(`/api/posts/${post.id}`,{headers}).catch(()=>{}); fetch(`/api/posts/${post.id}/comments`,{headers}).catch(()=>{}); } catch {} setIsCommentsOpen(true); }}
             >
               View all {post.commentsCount} comments
             </button>
@@ -642,6 +654,42 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
         )}
 
       </div>
+
+      <Dialog open={isCommentsOpen} onOpenChange={setIsCommentsOpen}>
+        <DialogContent
+          className="bg-background z-50 p-0 w-full max-w-none fixed inset-x-0 bottom-0 left-auto top-auto translate-x-0 translate-y-0 rounded-t-2xl
+                     max-h-[85vh] flex flex-col
+                     sm:max-w-lg sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:fixed sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg"
+        >
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle>Comments</DialogTitle>
+          </DialogHeader>
+          <div className="px-4 space-y-4 flex-1 overflow-y-auto">
+            <InlineComments postId={post.id} />
+          </div>
+          <DialogFooter className="px-4 pt-2 border-t border-border sticky bottom-0 bg-background pb-[calc(env(safe-area-inset-bottom)+12px)]">
+            {user && user.role !== 'viewer' ? (
+              <div className="flex items-center gap-2 w-full">
+                <Input
+                  value={inlineNewComment}
+                  onChange={(e) => setInlineNewComment(e.target.value)}
+                  placeholder="Add a comment..."
+                  className="flex-1"
+                />
+                <Button
+                  onClick={() => submitInlineComment(post.id, inlineNewComment, setInlineNewComment, queryClient)}
+                  disabled={!inlineNewComment.trim()}
+                  className="bg-accent hover:bg-accent/90"
+                  size="sm"
+                >
+                  Send
+                </Button>
+              </div>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
@@ -675,3 +723,81 @@ const PostCard = memo(PostCardInner, (prevProps, nextProps) => {
 });
 
 export default PostCard;
+
+function InlineComments({ postId }: { postId: string }) {
+  const { data: comments, isLoading } = useQuery({
+    queryKey: ["/api/posts", postId, "comments"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/posts/${postId}/comments`);
+      if (!res.ok) throw new Error("Failed to fetch comments");
+      return res.json();
+    },
+    staleTime: 10000,
+    gcTime: 60000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 py-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-muted rounded-full" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 bg-muted rounded w-1/3" />
+              <div className="h-3 bg-muted rounded w-2/3" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!comments || (comments as any[]).length === 0) {
+    return <div className="text-center py-8 text-muted-foreground">No comments yet. Be the first to comment!</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {(comments as any[]).map((c: any) => (
+        <div key={c.id} className="flex items-start space-x-3">
+          <Link href={`/profile/${c.user?.id}`}>
+            <AvatarWithFallback 
+              src={c.user?.profilePicUrl}
+              alt={c.user?.name || "User"}
+              size="sm"
+              className="cursor-pointer hover:opacity-80 transition-opacity"
+            />
+          </Link>
+          <div className="flex-1">
+            <div className="flex items-center space-x-2 mb-1">
+              <Link href={`/profile/${c.user?.id}`}>
+                <span className="font-medium text-sm text-foreground hover:text-accent cursor-pointer transition-colors">
+                  {c.user?.name || "Anonymous"}
+                </span>
+              </Link>
+              <span className="text-xs text-muted-foreground">{timeAgo(c.createdAt)}</span>
+            </div>
+            <p className="text-sm text-foreground">{c.content}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+async function submitInlineComment(
+  postId: string,
+  content: string,
+  reset: (v: string) => void,
+  queryClient: any
+) {
+  if (!content.trim()) return;
+  const res = await apiRequest("POST", `/api/posts/${postId}/comments`, { content: content.trim() });
+  if (res.ok) {
+    reset("");
+    queryClient.invalidateQueries({ queryKey: ["/api/posts", postId, "comments"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/posts", postId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/posts/feed"] });
+  }
+}

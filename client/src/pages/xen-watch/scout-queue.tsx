@@ -595,10 +595,10 @@ export default function ScoutReviewQueue() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Statistics Cards */}
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${user?.role === 'scout_admin' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6 mb-8`}>
+          <div className={`grid grid-cols-2 sm:grid-cols-2 ${user?.role === 'scout_admin' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4 sm:gap-6 mb-8`}>
             <Card className="bg-card border shadow-sm hover:shadow-md transition-shadow duration-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground">
+                <CardTitle className="text-xs sm:text-sm font-semibold text-foreground">
                   {user?.role === 'scout_admin' ? 'Pending Review' : 'Pending Reviews'}
                 </CardTitle>
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/30 dark:bg-blue-900/30 rounded-lg">
@@ -606,7 +606,7 @@ export default function ScoutReviewQueue() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl leading-tight tabular-nums font-bold text-blue-600 dark:text-blue-400 mb-1">
+                <div className="text-xl sm:text-3xl leading-tight tabular-nums font-bold text-blue-600 dark:text-blue-400 mb-1">
                   {stats.pending}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -617,7 +617,7 @@ export default function ScoutReviewQueue() {
             
             <Card className="bg-card border shadow-sm hover:shadow-md transition-shadow duration-200">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground">
+                <CardTitle className="text-xs sm:text-sm font-semibold text-foreground">
                   {user?.role === 'scout_admin' ? 'Ready to Finalize' : 'Completed Reviews'}
                 </CardTitle>
                 <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 dark:bg-emerald-900/30 rounded-lg">
@@ -625,7 +625,7 @@ export default function ScoutReviewQueue() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl leading-tight tabular-nums font-bold text-emerald-600 dark:text-emerald-400 mb-1">
+                <div className="text-xl sm:text-3xl leading-tight tabular-nums font-bold text-emerald-600 dark:text-emerald-400 mb-1">
                   {stats.completed}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -637,13 +637,13 @@ export default function ScoutReviewQueue() {
             {user?.role === 'scout_admin' && (
               <Card className="bg-card border shadow-sm hover:shadow-md transition-shadow duration-200">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-semibold text-foreground">Finalized</CardTitle>
+                  <CardTitle className="text-xs sm:text-sm font-semibold text-foreground">Finalized</CardTitle>
                   <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
                     <CheckCircle className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl sm:text-3xl leading-tight tabular-nums font-bold text-purple-600 dark:text-purple-400 mb-1">
+                  <div className="text-xl sm:text-3xl leading-tight tabular-nums font-bold text-purple-600 dark:text-purple-400 mb-1">
                     {stats.finalized}
                   </div>
                   <p className="text-xs text-muted-foreground">Completed submissions</p>
@@ -651,15 +651,15 @@ export default function ScoutReviewQueue() {
               </Card>
             )}
             
-            <Card className="bg-card border shadow-sm hover:shadow-md transition-shadow duration-200 sm:col-span-2 lg:col-span-1">
+            <Card className="bg-card border shadow-sm hover:shadow-md transition-shadow duration-200 lg:col-span-1">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground">Total Assigned</CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-semibold text-foreground">Total Assigned</CardTitle>
                 <div className="p-2 bg-muted rounded-lg">
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl sm:text-3xl leading-tight tabular-nums font-bold text-foreground mb-1">
+                <div className="text-xl sm:text-3xl leading-tight tabular-nums font-bold text-foreground mb-1">
                   {stats.total}
                 </div>
                 <p className="text-xs text-muted-foreground">Submissions assigned</p>

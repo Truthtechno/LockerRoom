@@ -468,27 +468,27 @@ export default function SchoolAdmin() {
             
             {/* Advanced KPI Cards */}
             {statsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
                 {[...Array(4)].map((_, i) => (
                   <Card key={i}>
                     <CardHeader className="pb-3">
-                      <Skeleton className="h-4 w-32 mb-2" />
-                      <Skeleton className="h-8 w-16" />
+                      <Skeleton className="h-4 w-24 sm:w-32 mb-2" />
+                      <Skeleton className="h-6 sm:h-8 w-12 sm:w-16" />
                     </CardHeader>
                   </Card>
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
                 <Card className="border-l-4 border-l-blue-500">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Posts</CardTitle>
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Total Posts</CardTitle>
                       <FileText className="h-4 w-4 text-blue-500" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{schoolStats?.totalPosts || 0}</div>
+                    <div className="text-xl sm:text-2xl font-bold">{schoolStats?.totalPosts || 0}</div>
                     <p className="text-xs text-muted-foreground mt-1">
                       {period === "week" ? "Last 7 days" : period === "month" ? "Last 30 days" : "All time"}
                       {postsTrend !== undefined && (
@@ -503,12 +503,12 @@ export default function SchoolAdmin() {
                 <Card className="border-l-4 border-l-green-500">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Active Players</CardTitle>
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Active Players</CardTitle>
                       <Activity className="h-4 w-4 text-green-500" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{activeStudentPercentage}%</div>
+                    <div className="text-xl sm:text-2xl font-bold">{activeStudentPercentage}%</div>
                     <p className="text-xs text-muted-foreground mt-1">
                       {studentEngagement?.activeStudents || 0} of {schoolStats?.totalStudents || 0} players
                       <span className="block mt-1">{period === "week" ? "Last 7 days" : period === "month" ? "Last 30 days" : "All time"}</span>
@@ -519,12 +519,12 @@ export default function SchoolAdmin() {
                 <Card className="border-l-4 border-l-purple-500">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Avg Engagement/Player</CardTitle>
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Avg Engagement/Player</CardTitle>
                       <Zap className="h-4 w-4 text-purple-500" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{avgEngagementPerStudent}</div>
+                    <div className="text-xl sm:text-2xl font-bold">{avgEngagementPerStudent}</div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Interactions per player
                       <span className="block mt-1">{period === "week" ? "Last 7 days" : period === "month" ? "Last 30 days" : "All time"}</span>
@@ -535,12 +535,12 @@ export default function SchoolAdmin() {
                 <Card className="border-l-4 border-l-amber-500">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Players</CardTitle>
+                      <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Total Players</CardTitle>
                       <Users className="h-4 w-4 text-amber-500" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{schoolStats?.totalStudents || 0}</div>
+                    <div className="text-xl sm:text-2xl font-bold">{schoolStats?.totalStudents || 0}</div>
                     <p className="text-xs text-muted-foreground mt-1">Registered to academy</p>
                   </CardContent>
                 </Card>
