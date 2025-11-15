@@ -45,6 +45,7 @@ const app = express();
 // Security middleware with Helmet
 app.use(helmet({
   contentSecurityPolicy: {
+    useDefaults: false,
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
@@ -56,13 +57,16 @@ app.use(helmet({
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
+      // Remove HTTPS auto-upgrade in development so Vite dev assets load over HTTP
+      "upgrade-insecure-requests": process.env.NODE_ENV === 'production' ? [] as any : null,
     },
   },
-  hsts: {
+  // Disable HSTS in development to avoid browsers force-upgrading http to https on :5174
+  hsts: process.env.NODE_ENV === 'production' ? {
     maxAge: 31536000, // 1 year
     includeSubDomains: true,
     preload: true,
-  },
+  } : false,
   noSniff: true,
   frameguard: { action: 'deny' },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
