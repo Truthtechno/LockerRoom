@@ -527,13 +527,34 @@ export default function ProfileById() {
     setShowShareDialog(true);
   };
 
-  const copyProfileLink = () => {
-    const profileUrl = `${window.location.origin}/profile/${studentProfile?.id}`;
-    navigator.clipboard.writeText(profileUrl);
-    toast({
-      title: "Link Copied",
-      description: "Profile link copied to clipboard!",
-    });
+  const copyProfileLink = async () => {
+    try {
+      const profileUrl = `${window.location.origin}/profile/${studentProfile?.id}`;
+      if (navigator && 'clipboard' in navigator && typeof navigator.clipboard?.writeText === 'function') {
+        await navigator.clipboard.writeText(profileUrl);
+      } else {
+        // Fallback for HTTP origins or unsupported browsers
+        const el = document.createElement('textarea');
+        el.value = profileUrl;
+        el.style.position = 'fixed';
+        el.style.left = '-9999px';
+        el.setAttribute('readonly', '');
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      toast({
+        title: "Link Copied",
+        description: "Profile link copied to clipboard!",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Copy failed",
+        description: err?.message || "Could not copy link. Please copy it manually.",
+        variant: "destructive",
+      });
+    }
   };
 
   const shareProfileNative = async () => {
@@ -739,13 +760,13 @@ export default function ProfileById() {
           </div>
           
           {postsLoading && (!postsData || postsData.pages.length === 0) ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 p-4">
+            <div className="grid grid-cols-3 gap-1 p-4">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="aspect-square bg-muted animate-pulse rounded-lg" />
               ))}
             </div>
           ) : allPosts && allPosts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
+            <div className="grid grid-cols-3 gap-1">
               {allPosts.map((post) => (
                 <div 
                   key={post.id} 

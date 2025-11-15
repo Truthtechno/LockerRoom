@@ -204,7 +204,10 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
       });
       return;
     }
-    // Navigate to post detail page instead of showing inline comment input
+    try {
+      sessionStorage.setItem('feedReturnPostId', post.id);
+      sessionStorage.setItem('feedScrollY', String(window.scrollY || window.pageYOffset || 0));
+    } catch {}
     window.location.href = `/post/${post.id}`;
   }, [user, post.id, toast]);
 
@@ -300,7 +303,7 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
   };
 
   return (
-    <div className={`bg-card border border-border rounded-xl mb-6 shadow-sm post-card transition-all duration-200 max-w-full ${
+    <div id={`post-${post.id}`} className={`bg-card border border-border rounded-xl mb-6 shadow-sm post-card transition-all duration-200 max-w-full ${
       isAnnouncement ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200 dark:from-yellow-900/20 dark:to-orange-900/20 dark:border-yellow-700' : ''
     }`}>
       {/* Announcement Header */}
@@ -368,7 +371,8 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
                 disabled={followMutation.isPending}
                 variant={isFollowing ? "outline" : "default"}
                 size="sm"
-                className={isFollowing ? "bg-background hover:bg-muted" : "bg-accent hover:bg-accent/90"}
+                // Hide on small screens to prevent squeeze; visible from sm+
+                className={(isFollowing ? "bg-background hover:bg-muted" : "bg-accent hover:bg-accent/90") + " hidden sm:inline-flex"}
                 data-testid={`follow-button-post-${post.id}`}
               >
                 {followMutation.isPending ? (
@@ -393,7 +397,23 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
                     <MoreHorizontal className="w-5 h-5" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-56">
+                  {/* Mobile follow/unfollow action */}
+                  {user && user.role === 'viewer' && (
+                    <DropdownMenuItem onClick={handleFollow} disabled={followMutation.isPending}>
+                      {isFollowing ? (
+                        <>
+                          <UserCheck className="w-4 h-4 mr-2" />
+                          Unfollow
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Follow
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={handleViewProfile}>
                     <User className="w-4 h-4 mr-2" />
                     View Profile
@@ -614,7 +634,7 @@ function PostCardInner({ post: initialPost, priority = false, skipCacheQuery = f
             <button 
               className="text-sm text-muted-foreground hover:text-foreground"
               data-testid={`button-view-comments-${post.id}`}
-              onClick={() => window.location.href = `/post/${post.id}`}
+              onClick={() => { try { sessionStorage.setItem('feedReturnPostId', post.id); sessionStorage.setItem('feedScrollY', String(window.scrollY || window.pageYOffset || 0)); } catch {} window.location.href = `/post/${post.id}`; }}
             >
               View all {post.commentsCount} comments
             </button>

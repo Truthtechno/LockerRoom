@@ -461,7 +461,7 @@ export default function PlatformAnalytics() {
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-8">
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-sm font-semibold">Total Users</CardTitle>
@@ -470,7 +470,7 @@ export default function PlatformAnalytics() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-1">{overview?.totals.users.toLocaleString() || 0}</div>
+                <div className="text-2xl sm:text-3xl leading-tight font-bold mb-1">{overview?.totals.users.toLocaleString() || 0}</div>
                 <div className="flex items-center gap-1 text-xs">
                   <span className={userGrowth.color}>{userGrowth.icon}</span>
                   <span className={userGrowth.color}>{userGrowth.text}</span>
@@ -487,7 +487,7 @@ export default function PlatformAnalytics() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-1">{overview?.activeUsers.monthly.toLocaleString() || 0}</div>
+                <div className="text-2xl sm:text-3xl leading-tight font-bold mb-1">{overview?.activeUsers.monthly.toLocaleString() || 0}</div>
                 <p className="text-xs text-muted-foreground">MAU (30 days)</p>
               </CardContent>
             </Card>
@@ -500,7 +500,7 @@ export default function PlatformAnalytics() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-1">{overview?.totals.schools.toLocaleString() || 0}</div>
+                <div className="text-2xl sm:text-3xl leading-tight font-bold mb-1">{overview?.totals.schools.toLocaleString() || 0}</div>
                 <p className="text-xs text-muted-foreground">{overview?.periodComparison.schools || 0} new this {period}</p>
               </CardContent>
             </Card>
@@ -513,7 +513,7 @@ export default function PlatformAnalytics() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-1">${(overview?.totals.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className="text-2xl sm:text-3xl leading-tight font-bold mb-1">${(overview?.totals.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <p className="text-xs text-muted-foreground">This {period} (Academies + Xen Watch)</p>
               </CardContent>
             </Card>
@@ -526,7 +526,7 @@ export default function PlatformAnalytics() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-1">{overview?.totals.posts.toLocaleString() || 0}</div>
+                <div className="text-2xl sm:text-3xl leading-tight font-bold mb-1">{overview?.totals.posts.toLocaleString() || 0}</div>
                 <p className="text-xs text-muted-foreground">{overview?.periodComparison.posts || 0} new this {period}</p>
               </CardContent>
             </Card>

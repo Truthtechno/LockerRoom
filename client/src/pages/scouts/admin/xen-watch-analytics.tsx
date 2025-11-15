@@ -441,14 +441,14 @@ export default function XenWatchAnalytics() {
           </div>
 
           {/* Key Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-xl sm:text-2xl leading-tight tabular-nums font-bold text-green-600">
                   ${(analytics?.totals.total_revenue || 0).toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -463,7 +463,7 @@ export default function XenWatchAnalytics() {
                 <BarChart3 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="text-xl sm:text-2xl leading-tight tabular-nums font-bold text-blue-600">
                   {analytics?.totals.total_submissions || 0}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -478,7 +478,7 @@ export default function XenWatchAnalytics() {
                 <Target className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-purple-600">
+                <div className="text-xl sm:text-2xl leading-tight tabular-nums font-bold text-purple-600">
                   {analytics?.totals.total_submissions 
                     ? Math.round(((analytics.totals.feedback_sent || 0) / analytics.totals.total_submissions) * 100)
                     : 0}%
@@ -495,7 +495,7 @@ export default function XenWatchAnalytics() {
                 <Star className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">
+                <div className="text-xl sm:text-2xl leading-tight tabular-nums font-bold text-yellow-600">
                   {analytics?.totals.avg_rating ? Number(analytics.totals.avg_rating).toFixed(1) : 'N/A'}
                 </div>
                 <p className="text-xs text-muted-foreground">
