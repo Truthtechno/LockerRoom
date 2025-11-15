@@ -202,11 +202,11 @@ export default function Login() {
   }, [toast]);
 
   const demoAccounts = [
-    { role: "System Admin", email: "sysadmin@lockerroom.com", password: "SuperSecure123!" },
     { role: "Scout Admin", email: "adminscout@xen.com", password: "123933" },
+    { role: "XEN Scout", email: "scout@xen.com", password: "288162" },
     { role: "School Admin", email: "godwin@xen-hub.com", password: "Admin123$" },
     { role: "Student", email: "thiago@gmail.com", password: "admin123" },
-    { role: "Public Viewer", email: "brayamooti@gmail.com", password: "Pkw0epLSFG" },
+    { role: "Public Viewer", email: "sarah.johnson@viewer.com", password: "viewer123" },
   ];
   
 
